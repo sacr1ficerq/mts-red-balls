@@ -462,69 +462,69 @@ class Config:
 ## Agent Loop (Flow Diagram)
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
+┌────────────────────────────────────────────────────────────────────────┐
 │                         AGENT EXECUTION LOOP                           │
-└─────────────────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
-                    ┌───────────────────────────────┐
+                    ┌─────────────────────────────┐
                     │     1. START with input     │
                     │   (user query or task)      │
-                    └───────────────────────────────┘
+                    └─────────────────────────────┘
                                     │
                                     ▼
-                    ┌───────────────────────────────┐
-                    │  2. LLM.chat(messages)      │
+                    ┌──────────────────────────────┐
+                    │  2. LLM.chat(messages)       │
                     │  ┌─────────────────────────┐ │
-                    │  │ system_prompt          │ │
-                    │  │ + history              │ │
-                    │  │ + user input           │ │
+                    │  │ system_prompt           │ │
+                    │  │ + history               │ │
+                    │  │ + user input            │ │
                     │  └─────────────────────────┘ │
-                    └───────────────────────────────┘
+                    └──────────────────────────────┘
                                     │
                                     ▼
                     ┌───────────────────────────────┐
-                    │  3. Parse LLM response      │
-                    │  to extract JSON action     │
+                    │  3. Parse LLM response        │
+                    │  to extract JSON action       │
                     └───────────────────────────────┘
                                     │
                     ┌───────────────┼───────────────┐
                     ▼               ▼               ▼
             ┌───────────┐   ┌───────────┐   ┌───────────┐
-            │  "done"  │   │  "tool"   │   │ "delegate"│
-            │  action  │   │  action   │   │  action   │
+            │  "done"   │   │  "tool"   │   │ "delegate"│
+            │  action   │   │  action   │   │  action   │
             └─────┬─────┘   └─────┬─────┘   └─────┬─────┘
                  │                │                │
                  ▼                ▼                ▼
       ┌──────────────────┐  ┌─────────────┐  ┌──────────────┐
-      │ Return result    │  │ Execute    │  │ Call target │
-      │ to caller       │  │ tool(...)  │  │ agent.run() │
-      │                 │  │             │  │             │
-      │ STATE: DONE    │  │ STATE: TOOL │  │STATE:DELEGATE│
-      └──────────────────┘  └──────┬──────┘  └──────┬──────┘
+      │ Return result    │  │ Execute     │  │ Call target  │
+      │ to caller        │  │ tool(...)   │  │ agent.run()  │
+      │                  │  │             │  │              │
+      │ STATE: DONE      │  │ STATE: TOOL │  │STATE:DELEGATE│
+      └──────────────────┘  └──────┬──────┘  └──────┬───────┘
                                    │                │
                                    ▼                │
-                        ┌──────────────────┐        │
-                        │ Add tool result │        │
-                        │ to messages     │        │
-                        │ as "tool" role │        │
-                        └────────┬────────┘        │
-                                 │                 │
-                                 └────────┬────────┘
+                        ┌─────────────────┐         │
+                        │ Add tool result │         │
+                        │ to messages     │         │
+                        │ as "tool" role  │         │
+                        └────────┬────────┘         │
+                                 │                  │
+                                 └────────┬─────────┘
                                           │
                                           ▼
                               ┌────────────────────────┐
-                              │   Check iterations    │
-                              │   < max_iterations?   │
+                              │   Check iterations     │
+                              │   < max_iterations?    │
                               └───────────┬────────────┘
                                           │
-                         ┌────────────────┴────────────────┐
+                         ┌────────────────┴───────────┐
                          │ NO                         │ YES
                          ▼                            ▼
               ┌──────────────────┐        ┌───────────────────────┐
-              │ STATE: ERROR    │        │ Back to step 2       │
-              │ "Max iterations │        │ LLM.chat(messages)    │
-              │  reached"       │        │ (loop continues)      │
+              │ STATE: ERROR     │        │ Back to step 2        │
+              │ "Max iterations  │        │ LLM.chat(messages)    │
+              │  reached"        │        │ (loop continues)      │
               └──────────────────┘        └───────────────────────┘
 
 
@@ -532,11 +532,11 @@ class Config:
 │                        STATE TRANSITIONS                                │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│   IDLE ──▶ THINKING ──▶ TOOL ──▶ THINKING ──▶ ... ──▶ DONE           │
-│                         │                                             │
-│                         └──▶ DELEGATING ──▶ THINKING ──▶ DONE        │
+│   IDLE ──▶ THINKING ──▶ TOOL ──▶ THINKING ──▶ ... ──▶ DONE              │
+│                         │                                               │
+│                         └──▶ DELEGATING ──▶ THINKING ──▶ DONE           │
 │                                                                         │
-│   Any state ──▶ ERROR (on failure)                                    │
+│   Any state ──▶ ERROR (on failure)                                      │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -550,32 +550,32 @@ Model Context Protocol (MCP) - connect to external tools/services.
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         MCP INTEGRATION                              │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐ │
-│  │   Agent    │────▶│  ToolRegistry    │────▶│   MCP Client   │ │
-│  │             │     │                  │     │                 │ │
-│  └─────────────┘     └──────────────────┘     └────────┬────────┘ │
-│                                                          │          │
-│                    ┌─────────────────────────────────────┼────────┐ │
-│                    │              MCP Servers            │        │ │
-│                    ├─────────────────────────────────────┼────────┤ │
-│                    │                                     │        │ │
-│                    │  ┌─────────┐  ┌─────────┐  ┌──────┴─┐      │ │
-│                    │  │  Files   │  │ GitHub  │  │Slack   │      │ │
-│                    │  │ Server   │  │ Server  │  │Server  │      │ │
-│                    │  └─────────┘  └─────────┘  └─────────┘      │ │
-│                    │                                             │ │
-│                    │  ┌─────────┐  ┌─────────┐  ┌─────────┐    │ │
-│                    │  │  Jira   │  │ Notion  │  │Custom   │    │ │
-│                    │  │ Server  │  │ Server  │  │Server  │    │ │
-│                    │  └─────────┘  └─────────┘     │ │
-│ └─────────┘                    │                                             │ │
-│                    └─────────────────────────────────────────────┘ │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         MCP INTEGRATION                          │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────┐     ┌──────────────────┐     ┌────────────────┐ │
+│  │   Agent     │────▶│  ToolRegistry    │────▶│   MCP Client   │ │
+│  │             │     │                  │     │                │ │
+│  └─────────────┘     └──────────────────┘     └───────┬────────┘ │
+│                                                       │          │
+│                  ┌────────────────────────────────────┼────────┐ │
+│                  │              MCP Servers           │        │ │
+│                  ├────────────────────────────────────┼────────┤ │
+│                  │                                    │        │ │
+│                  │  ┌─────────┐  ┌─────────┐  ┌──────┴─┐       │ │
+│                  │  │  Files  │  │ GitHub  │  │Slack   │       │ │
+│                  │  │ Server  │  │ Server  │  │Server  │       │ │
+│                  │  └─────────┘  └─────────┘  └────────┘       │ │
+│                  │                                             │ │
+│                  │  ┌─────────┐  ┌─────────┐  ┌────────┐       │ │
+│                  │  │  Jira   │  │ Notion  │  │Custom  │       │ │
+│                  │  │ Server  │  │ Server  │  │Server  │       │ │
+│                  │  └─────────┘  └─────────┘  └────────┘       │ │
+│                  │                                             │ │
+│                  └─────────────────────────────────────────────┘ │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ### MCP Client (mcp/client.py)
@@ -952,3 +952,19 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+### Old scripts exsemple paths
+
+Agent (base.py)	my_old/multi_agent_system/agents/base/base_agent.py
+ToolRegistry	my_old/multi_agent_system/tools/tools.py (класс Tool)
+Sandbox	my_old/multi_agent_system/utils/sandbox.py
+LLM	my_old/multi_agent_system/core/llm_engine.py
+Config	my_old/multi_agent_system/core/config.py + core/settings.py
+State	my_old/multi_agent_system/core/context_manager.py
+Orchestrator	my_old/multi_agent_system/core/orchestrator.py
+Coordinator	my_old/multi_agent_system/agents/base/coordinator.py
+CodeAgent	my_old/multi_agent_system/agents/base/base_agent.py
+SearchAgent	my_old/multi_agent_system/agents/base/search.py
+RAG	my_old/multi_agent_system/rag/rag_system.py
+Prompts	my_old/multi_agent_system/core/protocol_2026.py (patterns)
+Dashboard	my_old/multi_agent_system/dashboard.py
