@@ -23,7 +23,7 @@ class Sandbox:
         "mkdir", "rm", "rmdir", "cp", "mv",
         "curl", "wget", "tar", "unzip", "zip",
         "chmod", "chown", "echo", "pwd", "whoami",
-        "date", "time", "touch", "which"
+        "date", "time", "touch", "which", "cd", "exit"
     }
     
     BLOCKED_PATTERNS = [

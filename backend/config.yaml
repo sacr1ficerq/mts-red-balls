@@ -1,0 +1,80 @@
+llm:
+  model: "meta-llama/llama-3.1-8b-instruct"
+  temperature: 0.7
+  max_tokens: 1024
+  max_retries: 3
+  retry_delay: 1.0
+
+sandbox:
+  root: "./workspace"
+  timeout: 120
+  allowed_commands:
+    - python
+    - python3
+    - pip
+    - pip3
+    - ls
+    - cat
+    - head
+    - tail
+    - grep
+    - find
+    - mkdir
+    - rm
+    - rmdir
+    - cp
+    - mv
+    - curl
+    - wget
+    - tar
+    - unzip
+    - zip
+    - chmod
+    - chown
+    - echo
+    - pwd
+    - whoami
+    - date
+    - time
+    - touch
+    - which
+    - cd
+    - exit
+
+agents:
+  Coordinator:
+    role: "Plan and delegate tasks to solve the user's request"
+    tools: ["delegate", "message", "tool"]
+    max_iterations: 10
+  CodeAgent:
+    role: "Write and execute Python code in sandbox"
+    tools: ["console", "files"]
+    max_iterations: 5
+  SearchAgent:
+    role: "Search the web for information"
+    tools: ["search"]
+    max_iterations: 3
+  CriticAgent:
+    role: "Review and critique solutions"
+    tools: ["message", "search", "console"]
+    max_iterations: 3
+
+search:
+  model: "openai/gpt-4o-mini"
+  max_results: 8
+  relevance_filter: true
+
+rag:
+  chunk_size: 500
+  overlap: 50
+  top_k: 5
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins: ["*"]
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/server.log"

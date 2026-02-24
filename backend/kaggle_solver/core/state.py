@@ -25,6 +25,7 @@ class Session:
     artifacts: Dict[str, Any] = field(default_factory=dict)
     status: str = "running"
     events: List[Dict[str, Any]] = field(default_factory=list)
+    messages: List[Dict[str, str]] = field(default_factory=list)
 
     def add_step(self, agent: str, action: str, input: str, output: str, success: bool = True):
         step = Step(
@@ -40,6 +41,17 @@ class Session:
     def add_event(self, event: Dict[str, Any]):
         self.events.append(event)
 
+    def add_message(self, role: str, content: str):
+        self.messages.append({"role": role, "content": content})
+
+    def get_context(self) -> Dict[str, Any]:
+        """Get context for continuing conversation."""
+        return {
+            "session_id": self.id,
+            "history": self.messages[-10:] if self.messages else [],
+            "artifacts": self.artifacts
+        }
+
     def to_dict(self) -> Dict:
         return {
             "id": self.id,
@@ -48,6 +60,7 @@ class Session:
             "start_time": self.created_at,
             "task": self.query,
             "events": self.events,
+            "messages": self.messages,
             "steps": [
                 {"id": s.id, "agent": s.agent, "action": s.action,
                  "input": s.input, "output": s.output, "success": s.success}

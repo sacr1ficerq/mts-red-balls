@@ -15,9 +15,17 @@ from kaggle_solver.agents.registry import AgentRegistry
 
 logger = logging.getLogger(__name__)
 
-# Session logging setup
 LOG_DIR = Path(__file__).parent.parent.parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
+
+
+def _create_agent_factory(orchestrator, event_callback):
+    def agent_factory_fn(**kwargs):
+        agent_name = kwargs.get("name", "")
+        agent_role = kwargs.get("role", "")
+        agent_tools = kwargs.get("tools", ["tool"])
+        return orchestrator.create_agent(agent_name, agent_role, agent_tools, event_callback)
+    return agent_factory_fn
 
 
 class Orchestrator:
@@ -25,7 +33,7 @@ class Orchestrator:
         self.config = config or Config.load()
         self.state = StateManager()
         self.llm = LLM()
-        self.sandbox = Sandbox(Path(self.config.sandbox.root))
+        self.sandbox = Sandbox(Path(self.config.sandbox.root), timeout=self.config.sandbox.timeout)
         self.tool_registry = ToolRegistry
         self._event_callbacks: List[Callable] = []
 
@@ -45,64 +53,57 @@ class Orchestrator:
         name: str,
         role: str,
         tools: List[str],
-        event_callback: Optional[Callable] = None
+        event_callback: Optional[Callable] = None,
+        agent_factory: Optional[Callable] = None
     ) -> BaseAgent:
-        # Create agent factory closure for delegation
-        def agent_factory_fn(**kwargs):
-            agent_name = kwargs.get("name", kwargs.get("agent_name", ""))
-            agent_role = kwargs.get("role", kwargs.get("agent_role", ""))
-            agent_tools = kwargs.get("tools", kwargs.get("agent_tools", ["tool"]))
-            agent_event_callback = kwargs.get("event_callback", kwargs.get("agent_event_callback", None))
-            return self.create_agent(agent_name, agent_role, agent_tools, agent_event_callback)
+        if agent_factory is None:
+            agent_factory = _create_agent_factory(self, event_callback)
+        
+        max_iterations = 10
+        if name in self.config.agents:
+            max_iterations = self.config.agents[name].max_iterations
         
         if name in AgentRegistry.list_agents():
-            config = AgentConfig(
+            agent_config = AgentConfig(
                 name=name,
                 role=role,
                 tools=tools,
                 model=self.config.llm.model,
-                max_iterations=10,
+                max_iterations=max_iterations,
                 temperature=self.config.llm.temperature
             )
             return AgentRegistry.create(
-                name, config, self.llm, self.sandbox, self.tool_registry, event_callback, agent_factory_fn
+                name, agent_config, self.llm, self.sandbox, self.tool_registry, event_callback, agent_factory
             )
 
         class DynamicAgent(BaseAgent):
             def system_prompt(self) -> str:
                 return f"You are {name}. {role}"
 
-        config = AgentConfig(
+        agent_config = AgentConfig(
             name=name,
             role=role,
             tools=tools,
             model=self.config.llm.model,
-            max_iterations=10,
+            max_iterations=max_iterations,
             temperature=self.config.llm.temperature
         )
         
-        return DynamicAgent(config, self.llm, self.sandbox, self.tool_registry, event_callback)
+        return DynamicAgent(agent_config, self.llm, self.sandbox, self.tool_registry, event_callback, agent_factory)
 
-    def run(self, query: str, session_id: Optional[str] = None) -> Session:
-        session = self.state.create_session(query, session_id)
-        
-        # Session log file
+    def _create_session_callback(self, session: Session) -> Callable:
         session_log_file = LOG_DIR / f"session_{session.id}.log"
         
-        def log_event(event):
-            # Write to session log file
+        def log_event(event: Dict[str, Any]):
             try:
                 with open(session_log_file, "a") as f:
                     f.write(json.dumps(event, ensure_ascii=False) + "\n")
             except Exception:
                 pass
-            
-            # Also emit to websocket
             try:
                 self._emit_event(session.id, event)
             except Exception:
                 pass
-                
             session.add_event(event)
             session.add_step(
                 agent=event.get("agent", "System"),
@@ -111,15 +112,15 @@ class Orchestrator:
                 output=str(event.get("data", {}))
             )
         
-        def event_callback(event):
-            try:
-                log_event(event)
-            except Exception as e:
-                logger.warning(f"Event callback error: {e}")
+        return log_event
+
+    def run(self, query: str, session_id: Optional[str] = None) -> Session:
+        session = self.state.create_session(query, session_id)
+        event_callback = self._create_session_callback(session)
 
         coordinator = self.create_agent(
             name="Coordinator",
-            role="Plan and delegate tasks to solve the user's request",
+            role="Plan and delegate tasks",
             tools=["delegate", "message", "tool"],
             event_callback=event_callback
         )
@@ -143,6 +144,43 @@ class Orchestrator:
 
     def get_session(self, session_id: str) -> Optional[Session]:
         return self.state.get_session(session_id)
+
+    def continue_session(self, session_id: str, message: str) -> Session:
+        session = self.state.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session not found: {session_id}")
+        
+        session.add_message("user", message)
+        event_callback = self._create_session_callback(session)
+
+        coordinator = self.create_agent(
+            name="Coordinator",
+            role="Continue conversation with context",
+            tools=["delegate", "message", "tool"],
+            event_callback=event_callback
+        )
+        
+        for msg in session.messages[:-1]:
+            coordinator.add_message(msg["role"], msg["content"])
+        
+        start_time = time.time()
+        session.status = "running"
+        
+        try:
+            context = session.get_context()
+            result = coordinator.run(message, context)
+            session.status = "completed" if result.success else "error"
+            session.artifacts["result"] = result.output
+            session.artifacts["duration"] = result.duration
+            session.artifacts["steps"] = result.steps
+            session.add_message("assistant", result.output)
+        except Exception as e:
+            logger.error(f"Continue session error: {e}")
+            session.status = "error"
+            session.artifacts["error"] = str(e)
+        
+        session.artifacts["total_time"] = time.time() - start_time
+        return session
 
     def list_sessions(self) -> Dict[str, Any]:
         active = {k: v.to_dict() for k, v in self.state.sessions.items() if v.status == "running"}

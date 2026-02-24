@@ -1,19 +1,23 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 import asyncio
 import logging
 import json
 from pathlib import Path
 from datetime import datetime
 
+from kaggle_solver.core.config import ConfigHolder, Config
 from kaggle_solver.core.orchestrator import Orchestrator
 
 BASE_DIR = Path(__file__).parent.parent.resolve()
 FRONTEND_DIR = BASE_DIR / "frontend"
+CONFIG_PATH = Path(__file__).parent / "config.yaml"
+
+ConfigHolder().set_config(Config.load(str(CONFIG_PATH)))
 
 Path("logs").mkdir(exist_ok=True)
 log_file = f"logs/server_{datetime.now().strftime('%Y%m%d')}.log"
@@ -38,10 +42,24 @@ app.add_middleware(
 )
 
 if FRONTEND_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+    app.mount("/src", StaticFiles(directory=str(FRONTEND_DIR / "src")), name="src")
 
+
+@app.get("/")
+def serve_index():
+    index_path = FRONTEND_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return {"message": "Kaggle Solver API", "version": "1.0.0", "status": "running"}
+
+
+@app.get("/index.html")
+def serve_index_html():
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
+# Global orchestrator instance
 orchestrator: Optional[Orchestrator] = None
-websocket_connections: List[WebSocket] = []
 
 
 def get_orchestrator() -> Orchestrator:
@@ -64,18 +82,6 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Shutting down Kaggle Solver API")
-
-
-@app.get("/")
-def read_root():
-    index_path = FRONTEND_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    return {
-        "message": "Kaggle Solver API",
-        "version": "1.0.0",
-        "status": "running"
-    }
 
 
 @app.get("/api/health")
@@ -133,22 +139,48 @@ async def query(request: QueryRequest):
     try:
         orch = get_orchestrator()
         
+        # Create session first - return immediately with session_id
+        session = orch.state.create_session(request.query, request.session_id)
+        session_id = session.id
+        
+        # Define event callback to store events in session
         def event_callback(event):
-            for ws in websocket_connections:
-                try:
-                    asyncio.create_task(ws.send_json(event))
-                except Exception as e:
-                    logger.error(f"WebSocket send error: {e}")
+            event["session_id"] = session_id
+            session.add_event(event)
+            session.add_step(
+                agent=event.get("agent", "System"),
+                action=event.get("type", "event"),
+                input=str(event.get("data", {}).get("input", "")),
+                output=str(event.get("data", {}))
+            )
         
-        orch.add_event_callback(event_callback)
+        # Run in background thread - don't block
+        def run_in_background():
+            try:
+                coordinator = orch.create_agent(
+                    name="Coordinator",
+                    role="Plan and delegate tasks to solve the user's request",
+                    tools=["delegate", "message", "tool"],
+                    event_callback=event_callback
+                )
+                result = coordinator.run(request.query, {"session_id": session_id})
+                session.status = "completed" if result.success else "error"
+                session.artifacts["result"] = result.output
+                session.artifacts["duration"] = result.duration
+                session.artifacts["steps"] = result.steps
+            except Exception as e:
+                logger.error(f"Background task error: {e}")
+                session.status = "error"
+                session.artifacts["error"] = str(e)
         
-        session = orch.run(request.query, request.session_id)
+        import threading
+        thread = threading.Thread(target=run_in_background, daemon=True)
+        thread.start()
         
         return {
-            "session_id": session.id,
+            "session_id": session_id,
             "status": session.status,
-            "result": session.artifacts.get("result", "No result"),
-            "duration": session.artifacts.get("total_time", 0)
+            "result": "Task started"
         }
     except Exception as e:
         logger.error(f"Query error: {e}")
@@ -162,6 +194,27 @@ def get_session(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session.to_dict()
+
+
+class ContinueRequest(BaseModel):
+    message: str
+
+
+@app.post("/api/session/{session_id}/continue")
+async def continue_session(session_id: str, request: ContinueRequest):
+    try:
+        orch = get_orchestrator()
+        session = orch.continue_session(session_id, request.message)
+        return {
+            "session_id": session.id,
+            "status": session.status,
+            "result": session.artifacts.get("result", "No result")
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Continue error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/sessions")
@@ -179,6 +232,43 @@ def stop_session(session_id: str):
     return {"status": "stopped"}
 
 
+@app.get("/api/workspace/files")
+def list_workspace_files():
+    """List files in the workspace directory as a tree."""
+    orch = get_orchestrator()
+    try:
+        files = orch.sandbox.list(".")
+        
+        def build_tree(paths):
+            tree = {}
+            for p in paths:
+                parts = p.strip('/').split('/')
+                current = tree
+                for part in parts:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+            return tree
+        
+        def flatten_tree(tree, prefix=""):
+            result = []
+            for name, children in sorted(tree.items()):
+                path = prefix + "/" + name if prefix else name
+                if children:
+                    result.append({"name": name, "path": path, "type": "folder"})
+                    result.extend(flatten_tree(children, path))
+                else:
+                    result.append({"name": name, "path": path, "type": "file"})
+            return result
+        
+        tree = build_tree(files)
+        flat = flatten_tree(tree)
+        
+        return {"files": flat, "root": str(orch.sandbox.root), "tree": tree}
+    except Exception as e:
+        return {"files": [], "tree": {}, "error": str(e)}
+
+
 @app.get("/api/tools")
 def list_tools():
     orch = get_orchestrator()
@@ -189,47 +279,6 @@ def list_tools():
 def list_agents():
     from kaggle_solver.agents.registry import AgentRegistry
     return {"agents": AgentRegistry.list_agents()}
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    websocket_connections.append(websocket)
-    logger.info(f"WebSocket connected: {websocket.client}")
-    
-    try:
-        while True:
-            data = await websocket.receive_text()
-            try:
-                message = json.loads(data)
-                
-                if message.get("type") == "query":
-                    orch = get_orchestrator()
-                    
-                    def event_callback(event):
-                        asyncio.create_task(websocket.send_json(event))
-                    
-                    orch.add_event_callback(event_callback)
-                    
-                    query = message.get("query", "")
-                    session = orch.run(query)
-                    
-                    await websocket.send_json({
-                        "type": "session_created",
-                        "session_id": session.id
-                    })
-                
-                elif message.get("type") == "ping":
-                    await websocket.send_json({"type": "pong"})
-                    
-            except json.JSONDecodeError:
-                await websocket.send_json({"error": "Invalid JSON"})
-                
-    except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected: {websocket.client}")
-    finally:
-        if websocket in websocket_connections:
-            websocket_connections.remove(websocket)
 
 
 if __name__ == "__main__":

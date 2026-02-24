@@ -7,14 +7,18 @@ from kaggle_solver.tools.search import search_tool
 def get_rag_tool():
     from kaggle_solver.rag import rag_instance
     
-    def rag_tool(query: str) -> str:
+    def rag_tool(query: str, **kwargs) -> str:
         context = rag_instance.get_context(query)
         return context if context else "No relevant context found."
     
     return rag_tool
 
 
-ToolRegistry.register("rag", get_rag_tool())
+def register_rag_tool():
+    ToolRegistry.register("rag", get_rag_tool(), "Query local knowledge base")
+
+
+register_rag_tool()
 
 __all__ = [
     "ToolRegistry",

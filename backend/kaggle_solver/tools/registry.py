@@ -52,7 +52,26 @@ class ToolRegistry:
 
         try:
             func = cls._tools[name]
-            result = func(query=query, **kwargs)
+            
+            tool_kwargs = {}
+            if name in ("search", "rag"):
+                if "llm" in kwargs:
+                    tool_kwargs["llm"] = kwargs["llm"]
+            if name in ("console", "files"):
+                if "sandbox" in kwargs:
+                    tool_kwargs["sandbox"] = kwargs["sandbox"]
+            
+            if name == "files":
+                import json
+                try:
+                    parsed = json.loads(query) if query.startswith('{') else {"op": "read", "path": query}
+                    tool_kwargs.update(parsed)
+                except:
+                    tool_kwargs["op"] = "read"
+                    tool_kwargs["path"] = query
+                result = func(**tool_kwargs)
+            else:
+                result = func(query=query, **tool_kwargs)
             return ToolResult(
                 True,
                 output=str(result) if result is not None else "",

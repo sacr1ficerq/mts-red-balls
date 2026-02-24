@@ -1,5 +1,6 @@
 from kaggle_solver.tools.registry import create_tool
 from kaggle_solver.llm import LLM
+from kaggle_solver.core.config import ConfigHolder
 from typing import List, Dict
 import logging
 
@@ -14,11 +15,13 @@ except ImportError:
 
 def _translate_query(query: str, llm: LLM) -> str:
     """Translate query to English for better search results."""
+    config = ConfigHolder().search_config
+    model = config.get("model", "openai/gpt-oss-120b:free")
     prompt = f"""Translate this query to English. Return ONLY the translated query, nothing else.
 
 Query: {query}"""
     try:
-        return llm.generate(model="openai/gpt-4o-mini", prompt=prompt, max_tokens=50).strip()
+        return llm.generate(model=model, prompt=prompt, max_tokens=50).strip()
     except:
         return query
 
@@ -28,6 +31,8 @@ def _evaluate_relevance(query: str, results: List[Dict], llm: LLM) -> List[Dict]
     if not results:
         return []
     
+    config = ConfigHolder().search_config
+    model = config.get("model", "openai/gpt-oss-120b:free")
     results_subset = results[:5]
     
     results_text = "\n".join([
@@ -45,7 +50,7 @@ Respond ONLY with comma-separated numbers, nothing else. Example: 1,3,4"""
 
     try:
         response = llm.generate(
-            model="openai/gpt-4o-mini",
+            model=model,
             prompt=prompt,
             max_tokens=50
         )
@@ -64,7 +69,7 @@ Respond ONLY with comma-separated numbers, nothing else. Example: 1,3,4"""
 
 
 @create_tool(name="search", description="Web search using DuckDuckGo")
-def search_tool(query: str, llm=None) -> str:
+def search_tool(query: str, llm=None, sandbox=None) -> str:
     """Real web search using DuckDuckGo with relevance filtering."""
     if llm is None:
         return "Error: LLM not provided"

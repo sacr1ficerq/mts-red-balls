@@ -4,6 +4,8 @@ import logging
 import re
 import json
 
+from kaggle_solver.core.config import ConfigHolder
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,9 +23,10 @@ class Chunk:
 
 
 class RAG:
-    def __init__(self, chunk_size: int = 500, overlap: int = 50):
+    def __init__(self, chunk_size: int = 500, overlap: int = 50, llm=None):
         self.chunk_size = chunk_size
         self.overlap = overlap
+        self.llm = llm
         self.documents: Dict[str, Document] = {}
         self.chunks: List[Chunk] = []
 
@@ -79,6 +82,12 @@ class RAG:
         
         context_text = "\n\n".join([c["content"] for c in relevant_chunks])
         
+        if self.llm is None:
+            return f"Context: {context_text}\n\nQuestion: {query}"
+        
+        config = ConfigHolder().search_config
+        model = config.get("model", "openai/gpt-oss-120b:free")
+        
         prompt = f"""Based on the following context, answer the question.
 
 Context:
@@ -88,7 +97,15 @@ Question: {query}
 
 Answer:"""
         
-        return prompt
+        try:
+            return self.llm.generate(
+                model=model,
+                prompt=prompt,
+                max_tokens=500
+            )
+        except Exception as e:
+            logger.error(f"RAG answer error: {e}")
+            return f"Error generating answer: {e}"
 
     def get_context(self, query: str, max_chars: int = 2000) -> str:
         relevant_chunks = self.search(query, top_k=10)

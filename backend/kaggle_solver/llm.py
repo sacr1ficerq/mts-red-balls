@@ -5,14 +5,17 @@ import time
 import logging
 from pathlib import Path
 
+from kaggle_solver import get_project_root
+
 logger = logging.getLogger(__name__)
 
-# Load .env from project root
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-ENV_FILE = PROJECT_ROOT / ".env"
+ENV_FILE = get_project_root() / ".env"
 if ENV_FILE.exists():
-    from dotenv import load_dotenv
-    load_dotenv(ENV_FILE)
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(ENV_FILE)
+    except ImportError:
+        pass
 
 
 class LLMError(Exception):
