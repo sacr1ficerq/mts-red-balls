@@ -1,12 +1,827 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
     <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Svelte + FastAPI</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>МТС агентство «Красные яйца»</title>
+        
+        <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+        
+        <style>
+            [x-cloak] { display: none !important; }
+            .scrollbar-hide::-webkit-scrollbar { display: none; }
+            .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+            :root {
+                --mts-red: #E30613;
+                --mts-red-dark: #C40511;
+                --mts-red-light: #FDE8EA;
+                --mts-red-border: #F5B7BC;
+            }
+
+            .mts-red { background-color: var(--mts-red) !important; }
+            .mts-red-text { color: var(--mts-red) !important; }
+            .mts-hover:hover { background-color: var(--mts-red-dark) !important; }
+
+            .mts-logo { background-color: var(--mts-red); }
+
+            .btn-mts-primary {
+                background: linear-gradient(180deg, #E30613 0%, #C40511 100%);
+                color: #fff !important;
+                border: none;
+                transition: transform 0.15s ease, box-shadow 0.2s ease;
+            }
+            .btn-mts-primary:hover:not(:disabled) {
+                background: linear-gradient(180deg, #C40511 0%, #A8040E 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 14px rgba(227, 6, 19, 0.4);
+            }
+            .btn-mts-primary:active:not(:disabled) { transform: translateY(0); }
+
+            .btn-mts-secondary {
+                background: #fff;
+                color: #374151;
+                border: 2px solid #d1d5db;
+                font-weight: 600;
+                padding: 0.5rem 1rem;
+                border-radius: 0.75rem;
+                transition: border-color 0.2s, background 0.2s;
+            }
+            .btn-mts-secondary:hover {
+                border-color: var(--mts-red);
+                color: var(--mts-red);
+                background: var(--mts-red-light);
+            }
+
+            .btn-mts-icon {
+                background: #fff;
+                border: 2px solid #e5e7eb;
+                color: #4b5563;
+                width: 2.75rem;
+                min-width: 2.75rem;
+                height: 2.75rem;
+                border-radius: 0.75rem;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                transition: border-color 0.2s, color 0.2s, background 0.2s;
+            }
+            .btn-mts-icon:hover {
+                border-color: var(--mts-red);
+                color: var(--mts-red);
+                background: var(--mts-red-light);
+            }
+            .btn-mts-icon-active {
+                border-color: var(--mts-red);
+                color: var(--mts-red);
+                background: var(--mts-red-light);
+            }
+
+            .input-mts {
+                outline: none;
+                line-height: 1.5;
+                vertical-align: top;
+            }
+            textarea.input-mts {
+                padding-top: 0.75rem;
+                padding-bottom: 0.75rem;
+                min-height: 2.5rem;
+            }
+            .input-mts:focus {
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(227, 6, 19, 0.2);
+            }
+
+            .markdown-body pre { 
+                background-color: #f3f4f6; 
+                padding: 1rem; 
+                border-radius: 0.5rem; 
+                overflow-x: auto;
+                border: 1px solid #e5e7eb;
+            }
+
+            .markdown-body code { 
+                font-family: monospace; 
+                background-color: #f3f4f6; 
+                padding: 0.2rem 0.4rem; 
+                border-radius: 0.25rem; 
+            }
+
+            .token-stream { 
+                font-family: 'Courier New', monospace; 
+                background: #f8f9fa; 
+                border-left: 3px solid #E30613; 
+                padding: 0.5rem; 
+                margin: 0.5rem 0; 
+            }
+
+            .think-block {
+                background: #f8f9fa;
+                border: 1px solid #e5e7eb;
+                border-radius: 0.5rem;
+                padding: 0.75rem 1rem;
+                margin: 0.5rem 0;
+                color: #6b7280;
+                font-size: 0.875rem;
+                line-height: 1.5;
+            }
+
+            .agent-thinking {
+                border-left: 3px solid #8B5CF6;
+                background: #f8f7ff;
+            }
+
+            .tool-execution { 
+                border-left: 3px solid #F59E0B; 
+                background: #fffbeb; 
+            }
+
+            .validation-result { 
+                border-left: 3px solid #10B981; 
+                background: #f0fdf4; 
+            }
+
+            .error-highlight { 
+                border-left: 3px solid #EF4444; 
+                background: #fef2f2; 
+            }
+
+            .fade-in { animation: fadeIn 0.3s ease-in; }
+            @keyframes fadeIn { 
+                from { opacity: 0; transform: translateY(10px); } 
+                to { opacity: 1; transform: translateY(0); } 
+            }
+
+            .progress-bar { 
+                height: 100%; 
+                background: var(--mts-red); 
+                border-radius: 9999px;
+            }
+
+            @keyframes progress { 
+                0% { background-position: 0% 50%; } 
+                50% { background-position: 100% 50%; } 
+                100% { background-position: 0% 50%; } 
+            }
+
+            .file-manager-modal {
+                backdrop-filter: blur(5px);
+            }
+
+            .file-list-item {
+                transition: all 0.2s ease;
+            }
+
+            .file-list-item:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            }
+
+            .file-content-editor {
+                font-family: 'Courier New', monospace;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+
+            .status-indicator {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                display: inline-block;
+                margin-right: 8px;
+            }
+
+            .status-online { background-color: #10B981; }
+            .status-offline { background-color: #EF4444; }
+            .status-processing { background-color: #F59E0B; }
+
+            .agent-badge {
+                font-size: 0.75rem;
+                padding: 0.25rem 0.5rem;
+                border-radius: 9999px;
+                font-weight: 600;
+            }
+
+            .agent-badge-coordinator { background-color: #DBEAFE; color: #1E40AF; }
+            .agent-badge-agent { background-color: #F3E8FF; color: #7C3AED; }
+            .agent-badge-tool { background-color: #FEF3C7; color: #D97706; }
+
+            @media (max-width: 768px) {
+                .sidebar-collapsible {
+                    width: 100% !important;
+                    position: fixed;
+                    z-index: 40;
+                    height: 100%;
+                }
+                
+                .main-content-mobile {
+                    margin-left: 0 !important;
+                }
+            }
+
+            .loading-pulse {
+                animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.5; }
+            }
+
+            .custom-scrollbar::-webkit-scrollbar {
+                width: 8px;
+                height: 8px;
+            }
+
+            .custom-scrollbar::-webkit-scrollbar-track {
+                background: #f3f4f6;
+                border-radius: 4px;
+            }
+
+            .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: #E30613;
+                border-radius: 4px;
+            }
+
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: #C40511;
+            }
+
+            .sidebar-mts .file-list-item:active {
+                transform: none;
+            }
+
+            .line-clamp-2 {
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+        </style>
     </head>
-    <body>
-        <div id="app"></div>
-        <script type="module" src="/src/main.js"></script>
+    <body class="bg-gray-100 h-screen flex overflow-hidden" x-data="dashboard()">
+        
+        <!-- Sidebar -->
+        <div class="w-64 bg-white text-gray-800 flex flex-col flex-shrink-0 transition-all duration-300 border-r border-gray-200 shadow-lg sidebar-collapsible sidebar-mts" 
+             :class="{'w-64': sidebarOpen, 'w-16': !sidebarOpen}">
+            <div class="px-3 py-2.5 flex items-center justify-between border-b border-gray-200 bg-white gap-2 min-w-0">
+                <a href="/" class="flex items-center min-w-0 overflow-hidden" :class="sidebarOpen ? 'flex-1 space-x-2' : 'flex-1 justify-center'">
+                    <svg class="mts-logo-svg flex-shrink-0" :class="sidebarOpen ? 'h-6 w-auto' : 'h-6 w-7'" viewBox="0 0 393.75 98" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M995.009,182.253c-7.305,0-15.966,7.023-23.11,18.83-7.446,12.228-11.888,27.366-11.888,40.512,0,19.245,10.8,38.653,35,38.653,24.171,0,35-19.408,35-38.653,0-13.146-4.44-28.284-11.85-40.512C1010.95,189.276,1002.29,182.253,995.009,182.253ZM1184,211.127h24.5V275h26.25V211.127h24.49V187.5H1184v23.624Zm131.24,0h38.5V187.5h-38.5c-35.37,0-54.26,17.586-54.26,43.747S1279.87,275,1315.24,275h38.5V251.374h-38.5c-16.37,0-27.13-5.851-27.13-20.124S1298.87,211.127,1315.24,211.127ZM1130.61,187.5l-13.99,52.225L1102.63,187.5h-46.37V275h26.24V203.83L1101.57,275h30.1l19.08-71.213V275H1177V187.5h-46.39Z" transform="translate(-960 -182.25)" fill="#E30613"/>
+                    </svg>
+                    <span x-show="sidebarOpen" class="font-bold text-sm tracking-tight mts-red-text truncate">Красные яйца</span>
+                </a>
+                <button @click="sidebarOpen = !sidebarOpen" class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:mts-red-text focus:outline-none transition-colors" aria-label="Свернуть меню">
+                    <i class="fas text-xs" :class="sidebarOpen ? 'fa-chevron-left' : 'fa-bars'"></i>
+                </button>
+            </div>
+
+            <!-- Session History -->
+            <div class="flex-1 overflow-y-auto px-3 py-2 space-y-2 custom-scrollbar">
+                <div x-show="sidebarOpen" class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1 mt-3 flex items-center gap-2">
+                    <i class="fas fa-play-circle mts-red-text"></i> Активные сессии
+                </div>
+                <template x-for="session in activeSessions" :key="session.id">
+                    <div @click="selectSession(session.id)"
+                         class="cursor-pointer px-3 py-2.5 rounded-lg transition-colors duration-200 flex items-center gap-3 file-list-item"
+                         :class="currentSessionId === session.id ? 'mts-red text-white shadow-md' : 'hover:bg-red-50 text-gray-700 border border-transparent hover:border-red-100'">
+                        <div class="flex-shrink-0 w-2 h-2 rounded-full bg-white animate-pulse" x-show="currentSessionId === session.id"></div>
+                        <div class="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" x-show="currentSessionId !== session.id"></div>
+                        <div class="truncate text-sm font-medium" x-show="sidebarOpen" x-text="session.task"></div>
+                    </div>
+                </template>
+
+                <div x-show="sidebarOpen" class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1 mt-4 flex items-center gap-2">
+                    <i class="fas fa-clock-rotate-left text-gray-400"></i> История
+                </div>
+                <template x-for="session in historicalSessions" :key="session.id">
+                    <div @click="selectSession(session.id)"
+                         class="cursor-pointer px-3 py-2.5 rounded-lg transition-colors duration-200 flex items-center gap-3 file-list-item"
+                         :class="currentSessionId === session.id ? 'bg-gray-200 text-gray-900 border border-gray-300' : 'hover:bg-gray-50 text-gray-600 border border-transparent'">
+                        <i class="fas fa-file-lines text-xs text-gray-400 flex-shrink-0"></i>
+                        <div class="truncate text-sm" x-show="sidebarOpen" x-text="session.task"></div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- File structure (bottom of sidebar) -->
+            <div x-show="sidebarOpen" class="border-t border-gray-200 bg-white flex-shrink-0 overflow-hidden" style="max-height: 220px;">
+                <div class="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-50" @click="fileTreeOpen = !fileTreeOpen">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-folder-tree mts-red-text"></i> Структура файлов
+                    </span>
+                    <i class="fas text-gray-400 text-xs transition-transform" :class="fileTreeOpen ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                </div>
+                <div x-show="fileTreeOpen" class="overflow-y-auto custom-scrollbar px-3 pb-2 text-xs" style="max-height: 180px;">
+                    <template x-if="fileTree">
+                        <div class="space-y-0.5">
+                            <div class="font-medium text-gray-700 flex items-center gap-1.5 py-1">
+                                <i class="fas fa-folder text-amber-500"></i>
+                                <span x-text="fileTree?.name || 'sandbox_workspace'"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col min-w-0 bg-white main-content-mobile">
+            
+            <!-- Top Bar -->
+            <header class="bg-white border-b border-gray-200 min-h-[3.5rem] flex flex-wrap items-center justify-between gap-4 px-4 py-3 shadow-sm z-10">
+                <div class="min-w-0 flex-1" style="min-width: 0;">
+                    <h2 class="text-base font-bold text-gray-800 truncate" x-text="currentSession ? (currentSession.task || currentSession.id) : 'МТС агентство «Красные яйца»'"></h2>
+                    <div x-show="currentSession" class="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1.5">
+                        <span class="px-2 py-0.5 text-xs rounded-full font-medium border shrink-0"
+                              :class="{
+                                  'bg-red-50 text-red-700 border-red-200': currentSession?.status === 'running',
+                                  'bg-emerald-50 text-emerald-700 border-emerald-200': currentSession?.status === 'completed',
+                                  'bg-amber-50 text-amber-700 border-amber-200': currentSession?.status === 'cancelled',
+                                  'bg-red-100 text-red-800 border-red-200': currentSession?.status === 'error'
+                              }"
+                              x-text="currentSession?.status === 'running' ? 'В процессе' : currentSession?.status === 'completed' ? 'Готово' : currentSession?.status === 'cancelled' ? 'Прервано' : 'Ошибка'"></span>
+                        <span class="text-xs text-gray-500 shrink-0" x-text="formatDate(currentSession?.start_time)"></span>
+                        <span x-show="currentSession?.events" class="text-xs text-gray-500 shrink-0" x-text="currentSession.events.length + ' событий'"></span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 flex-wrap flex-shrink-0">
+                    <button @click="newChat"
+                            class="btn-mts-primary flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm hover:shadow transition-all h-10">
+                        <i class="fas fa-plus"></i>
+                        <span>Новая задача</span>
+                    </button>
+                    <div class="flex items-center gap-2 text-xs font-medium" title="Подключение">
+                        <span x-show="isConnected" class="text-emerald-600"><span class="status-indicator status-online"></span> Онлайн</span>
+                        <span x-show="!isConnected" class="text-red-600"><span class="status-indicator status-offline"></span> Офлайн</span>
+                    </div>
+                </div>
+            </header>
+
+            
+    <!-- Content Area -->
+    <main class="flex-1 overflow-hidden flex flex-col relative">
+        
+        <!-- Empty State / New Task Input -->
+        <div x-show="!currentSessionId" class="flex-1 flex flex-col items-center justify-center px-4 py-8 md:p-8 bg-gradient-to-b from-gray-50 to-white">
+            <div class="w-full max-w-2xl text-center space-y-6">
+                <div class="flex justify-center">
+                    <svg class="mts-logo-svg h-14 w-auto" viewBox="0 0 393.75 98" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M995.009,182.253c-7.305,0-15.966,7.023-23.11,18.83-7.446,12.228-11.888,27.366-11.888,40.512,0,19.245,10.8,38.653,35,38.653,24.171,0,35-19.408,35-38.653,0-13.146-4.44-28.284-11.85-40.512C1010.95,189.276,1002.29,182.253,995.009,182.253ZM1184,211.127h24.5V275h26.25V211.127h24.49V187.5H1184v23.624Zm131.24,0h38.5V187.5h-38.5c-35.37,0-54.26,17.586-54.26,43.747S1279.87,275,1315.24,275h38.5V251.374h-38.5c-16.37,0-27.13-5.851-27.13-20.124S1298.87,211.127,1315.24,211.127ZM1130.61,187.5l-13.99,52.225L1102.63,187.5h-46.37V275h26.24V203.83L1101.57,275h30.1l19.08-71.213V275H1177V187.5h-46.39Z" transform="translate(-960 -182.25)" fill="#E30613"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">МТС агентство «Красные яйца»</h1>
+                    <p class="text-base text-gray-600 mt-2">Опишите задачу — агенты спланируют и выполнят её.</p>
+                </div>
+                
+                <!-- Session History Quick Access -->
+                <div x-show="historicalSessions.length > 0" class="w-full max-w-md mx-auto text-left">
+                    <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i class="fas fa-clock-rotate-left mts-red-text"></i> Недавние сессии
+                    </div>
+                    <div class="space-y-2 max-h-44 overflow-y-auto custom-scrollbar">
+                        <template x-for="session in historicalSessions.slice(0, 5)" :key="session.id">
+                            <div @click="selectSession(session.id)"
+                                 class="cursor-pointer p-3 bg-white rounded-xl border border-gray-200 hover:border-red-200 hover:shadow-md transition-all text-left file-list-item">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="text-sm font-medium text-gray-800 truncate flex-1 min-w-0" x-text="session.task"></div>
+                                    <span class="flex-shrink-0 text-xs px-2.5 py-1 rounded-full font-semibold"
+                                          :class="session.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : session.status === 'cancelled' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'"
+                                          x-text="session.status === 'completed' ? 'Готово' : session.status === 'cancelled' ? 'Прервано' : 'Ошибка'"></span>
+                                </div>
+                                <div class="text-xs text-gray-500 flex justify-between mt-1">
+                                    <span x-text="formatDate(session.start_time || session.created_at)"></span>
+                                    <span x-text="session.events.length + ' событий'"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <div class="relative group w-full max-w-2xl mx-auto">
+                    <div class="absolute -inset-1 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl blur opacity-20 group-hover:opacity-35 transition duration-300"></div>
+                    <div class="relative bg-white rounded-2xl shadow-xl border-2 border-red-100 focus-within:border-red-300 transition-colors overflow-hidden">
+                        <label class="sr-only" for="new-task-input">Текст задачи</label>
+                        <textarea id="new-task-input"
+                                  x-model="newTaskInput"
+                                  @keydown.ctrl.enter="startTask()"
+                                  class="input-mts w-full p-5 text-lg border-0 focus:ring-0 resize-none text-gray-800 placeholder-gray-400"
+                                  rows="4"
+                                  placeholder="Например: найди последние новости о ИИ и напиши краткое резюме"></textarea>
+                        <div class="flex justify-between items-center gap-4 px-5 py-4 bg-gray-50 border-t border-gray-100">
+                            <div class="text-xs text-gray-500 flex items-center gap-2">
+                                <i class="fas fa-keyboard"></i>
+                                <span>Ctrl+Enter — запуск</span>
+                            </div>
+                            <button @click="startTask"
+                                    :disabled="!newTaskInput.trim()"
+                                    class="btn-mts-primary flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all h-11">
+                                <i class="fas fa-paper-plane"></i>
+                                <span>Запустить</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Session View -->
+        <div x-show="currentSessionId" class="flex-1 flex flex-col overflow-hidden bg-gray-50">
+            <div class="flex-1 flex min-w-0 overflow-hidden">
+                <!-- Left: events feed -->
+                <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+                    <div class="flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5 space-y-4 custom-scrollbar" id="events-feed">
+                        <!-- Task Header -->
+                        <div class="max-w-3xl mx-auto w-full">
+                            <div class="bg-white border-2 border-gray-200 rounded-xl shadow-sm p-4 w-full focus-within:border-red-200 transition-colors">
+                                <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                                    <i class="fas fa-bullseye mts-red-text"></i> Цель
+                                </div>
+                                <div class="text-gray-800 font-medium text-lg" x-text="currentSession?.task"></div>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Events -->
+                        <template x-for="event in currentSessionEvents" :key="event.id">
+                            <div class="max-w-4xl mx-auto w-full fade-in">
+                        
+                        <!-- Coordinator Thinking -->
+                        <template x-if="event.type === 'coordinator_thinking' || event.type === 'coordinator_decision' || event.type === 'planning_start' || event.type === 'planning_complete' || event.type === 'coordinator_continue_check' || event.type === 'coordinator_adjust_decision'">
+                            <div class="flex items-start space-x-4">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-red-50 flex items-center justify-center border-2 border-red-200">
+                                    <i class="fas fa-chess-queen mts-red-text text-sm"></i>
+                                </div>
+                                <div class="flex-1 bg-white rounded-xl border-2 border-gray-200 shadow-sm overflow-hidden">
+                                    <div class="bg-red-50 px-4 py-3 border-b border-red-100 flex justify-between items-center cursor-pointer"
+                                         @click="event.expanded = !event.expanded">
+                                        <div class="flex items-center space-x-3">
+                                            <span class="font-semibold text-red-800 text-sm" x-text="event.data.agent || 'Координатор'"></span>
+                                            <span class="text-xs mts-red-text bg-red-100 px-2 py-1 rounded-lg font-medium" x-text="getCoordinatorEventType(event.type)"></span>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="text-xs text-gray-500" x-text="formatTime(event.timestamp)"></span>
+                                            <i class="fas mts-red-text text-xs transition-transform"
+                                               :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                        </div>
+                                    </div>
+                                    <div class="p-4" x-show="event.expanded">
+                                        <p class="text-sm text-gray-700" x-text="event.data.content || event.data.raw_response || ''"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Thought -->
+                        <template x-if="event.type === 'thought'">
+                            <div class="flex items-start space-x-4">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border"
+                                     :class="event.data.agent === 'CriticAgent' ? 'bg-pink-100 border-pink-200' : 'bg-purple-100 border-purple-200'">
+                                    <i class="fas text-sm" :class="event.data.agent === 'CriticAgent' ? 'fa-check-double text-pink-600' : 'fa-brain text-purple-600'"></i>
+                                </div>
+                                <div class="flex-1 bg-white rounded-lg border shadow-sm overflow-hidden"
+                                     :class="event.data.agent === 'CriticAgent' ? 'border-pink-200' : 'border-gray-200'">
+                                    <div class="px-4 py-3 border-b flex justify-between items-center cursor-pointer"
+                                         :class="event.data.agent === 'CriticAgent' ? 'bg-pink-50 border-pink-100' : 'bg-purple-50 border-purple-100'"
+                                         @click="event.expanded = !event.expanded">
+                                        <div class="flex items-center space-x-3">
+                                            <span class="font-semibold text-sm" :class="event.data.agent === 'CriticAgent' ? 'text-pink-700' : 'text-purple-700'" x-text="event.data.agent || 'Agent'"></span>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="text-xs text-gray-400" x-text="formatTime(event.timestamp)"></span>
+                                            <i class="fas text-xs transition-transform duration-200" :class="[event.data.agent === 'CriticAgent' ? 'text-pink-500' : 'text-purple-500', event.expanded ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
+                                        </div>
+                                    </div>
+                                    <div class="p-4 transition-all duration-200" x-show="event.expanded">
+                                        <div class="text-gray-600 text-sm leading-relaxed markdown-body" x-text="event.data.content || ''"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Step -->
+                        <template x-if="event.type === 'step'">
+                            <div class="flex items-start space-x-4">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center border border-indigo-200">
+                                    <span class="text-xs font-bold text-indigo-700" x-text="event.data.step_number"></span>
+                                </div>
+                                <div class="flex-1 flex items-center gap-2 flex-wrap">
+                                    <span class="text-xs font-medium text-indigo-700" x-text="event.data.agent"></span>
+                                    <span class="text-gray-400">—</span>
+                                    <span class="text-sm text-gray-600 truncate max-w-xl" x-text="event.data.task"></span>
+                                    <span class="text-xs text-amber-600" x-show="event.data.status === 'running'"><i class="fas fa-spinner fa-spin"></i></span>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Step done -->
+                        <template x-if="event.type === 'step_done'">
+                            <div class="flex items-center space-x-3 text-sm">
+                                <span class="text-emerald-600" x-show="event.data.success"><i class="fas fa-check-circle" title="Успешно"></i></span>
+                                <span class="text-red-600" x-show="!event.data.success"><i class="fas fa-times-circle" title="Ошибка"></i></span>
+                                <span class="text-gray-600">Шаг <span x-text="event.data.step_number"></span> выполнен</span>
+                                <span class="text-xs text-gray-400" x-show="event.data.duration" x-text="event.data.duration + ' с'"></span>
+                            </div>
+                        </template>
+
+                        <!-- Tool -->
+                        <template x-if="event.type === 'tool'">
+                            <div class="flex items-start space-x-4">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border-2"
+                                     :class="event.data.tool_name === 'console' ? 'bg-emerald-100 border-emerald-200' : 'bg-amber-100 border-amber-200'">
+                                    <i class="fas text-sm" :class="event.data.tool_name === 'console' ? 'fa-terminal text-emerald-600' : 'fa-wrench text-amber-600'"></i>
+                                </div>
+                                <div class="flex-1 rounded-xl border-2 overflow-hidden"
+                                     :class="event.data.tool_name === 'console' ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200 shadow-sm'">
+                                    <div class="px-4 py-2.5 border-b flex justify-between items-center"
+                                         :class="event.data.tool_name === 'console' ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'">
+                                        <span class="font-mono text-xs font-bold" :class="event.data.tool_name === 'console' ? 'text-emerald-700' : 'text-amber-800'"
+                                              x-text="event.data.tool_name === 'console' ? 'Вывод программы (STDOUT/STDERR)' : event.data.tool_name"></span>
+                                        <span class="text-xs text-gray-500" x-text="formatTime(event.timestamp)"></span>
+                                    </div>
+                                    <div class="p-4">
+                                        <div x-show="event.data.tool_name === 'console'">
+                                            <div class="text-xs font-semibold text-gray-600 uppercase mb-1">Команда</div>
+                                            <pre class="bg-white text-gray-800 p-3 rounded font-mono text-xs overflow-x-auto border border-gray-200 mb-3" x-text="event.data.input || ''"></pre>
+                                        </div>
+                                        <div x-show="event.data.output">
+                                            <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Результат</div>
+                                            <pre class="bg-white text-gray-800 p-4 rounded font-mono text-xs overflow-x-auto overflow-y-auto max-h-96 border border-gray-200 whitespace-pre-wrap break-words" x-text="event.data.output || ''"></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- System -->
+                        <template x-if="event.type === 'system'">
+                            <div class="flex justify-center my-4">
+                                <span class="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full font-medium" x-text="event.data.message"></span>
+                            </div>
+                        </template>
+
+                        <!-- Error -->
+                        <template x-if="event.type === 'error'">
+                            <div class="flex items-start space-x-4">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center border border-red-200">
+                                    <i class="fas fa-exclamation-triangle text-red-600 text-sm"></i>
+                                </div>
+                                <div class="flex-1 bg-red-50 rounded-lg border border-red-200 overflow-hidden">
+                                    <div class="px-4 py-3 border-b border-red-100 flex justify-between items-center cursor-pointer"
+                                         @click="event.expanded = !event.expanded">
+                                        <span class="font-bold text-red-800 text-sm flex items-center gap-2"><i class="fas fa-circle-exclamation"></i> Ошибка</span>
+                                        <i class="fas text-red-500 text-xs transition-transform duration-200"
+                                           :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                    </div>
+                                    <div class="p-4">
+                                        <div class="text-red-700 text-sm mb-2" x-text="event.data.message"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Result -->
+                        <template x-if="event.type === 'result'">
+                            <div class="flex items-start space-x-4">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center border border-green-200">
+                                    <i class="fas fa-check text-green-600 text-sm"></i>
+                                </div>
+                                <div class="flex-1 bg-gradient-to-br from-white to-green-50 rounded-lg border border-green-200 shadow-md p-6">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h3 class="font-bold text-green-900">Финальный результат</h3>
+                                        <span class="text-xs text-green-600 font-medium px-2 py-1 bg-green-100 rounded">Завершено</span>
+                                    </div>
+                                    <div class="prose prose-sm max-w-none text-gray-800 markdown-body" x-text="event.data.content || ''"></div>
+                                </div>
+                            </div>
+                        </template>
+
+                            </div>
+                        </template>
+
+                        <!-- Loading -->
+                        <div x-show="currentSession?.status === 'running' && !currentSessionEvents.some(e => e.type === 'thought' && (e.data?.content || '').length > 0)" class="flex justify-center py-6">
+                            <div class="flex items-center gap-2 text-gray-500 text-sm font-medium">
+                                <i class="fas fa-circle-notch fa-spin mts-red-text"></i>
+                                <span>Генерация...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Input Bar -->
+                    <div x-show="currentSessionId" class="flex-shrink-0 bg-white border-t border-gray-200 px-4 py-3">
+                        <div class="max-w-4xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+                            <div class="flex items-center gap-1.5">
+                                <button x-show="currentSession?.status === 'running'" @click="stopTask()"
+                                        class="btn-mts-icon bg-red-100 border-red-300 text-red-700 hover:bg-red-200"
+                                        title="Прервать выполнение">
+                                    <i class="fas fa-stop"></i>
+                                </button>
+                                <button @click="scrollToBottom" class="btn-mts-icon" title="В конец">
+                                    <i class="fas fa-arrow-down"></i>
+                                </button>
+                            </div>
+                            <div class="flex-1 flex gap-2">
+                                <textarea x-model="newTaskInput"
+                                          @keydown.ctrl.enter="startTask()"
+                                          class="input-mts flex-1 p-3 text-sm border-2 border-gray-200 rounded-xl focus:border-red-300 resize-none"
+                                          placeholder="Введите сообщение..."
+                                          rows="1"></textarea>
+                                <button @click="startTask"
+                                        :disabled="!newTaskInput.trim()"
+                                        class="btn-mts-primary px-4 rounded-xl">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+    </div>
+
+    <script>
+        function dashboard() {
+            return {
+                socket: null,
+                eventSource: null,
+                isConnected: false,
+                sidebarOpen: true,
+                newTaskInput: '',
+                currentSessionId: null,
+                activeSessions: {},
+                historicalSessions: [],
+                metrics: { total_tokens: 0, total_cost: 0 },
+                autoScrollEnabled: true,
+                fileTree: null,
+                fileTreeOpen: true,
+                fileTreeOpenPaths: {},
+
+                init() {
+                    this.fetchSessions();
+                    setInterval(() => this.fetchSessions(), 5000);
+                },
+
+                async fetchSessions() {
+                    try {
+                        const res = await fetch('/api/sessions');
+                        const data = await res.json();
+                        this.activeSessions = data.active || {};
+                        this.historicalSessions = data.historical || [];
+                    } catch(e) {
+                        console.log('Waiting for backend...');
+                    }
+                },
+
+                async startTask() {
+                    if (!this.newTaskInput.trim()) return;
+                    
+                    const task = this.newTaskInput;
+                    this.newTaskInput = '';
+
+                    try {
+                        const res = await fetch('/api/query', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ query: task })
+                        });
+                        const data = await res.json();
+                        this.currentSessionId = data.session_id;
+                        this.connectSSE(data.session_id);
+                        this.fetchSessions();
+                    } catch(e) {
+                        console.error('Error starting task:', e);
+                    }
+                },
+
+                connectSSE(sessionId) {
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                    }
+                    
+                    this.eventSource = new EventSource(`/api/sse/${sessionId}`);
+                    
+                    this.eventSource.onmessage = (e) => {
+                        try {
+                            const event = JSON.parse(e.data);
+                            if (event.type === 'session_done') {
+                                this.fetchSessions();
+                                this.eventSource.close();
+                                return;
+                            }
+                            
+                            // Add event to current session
+                            if (this.currentSessionId === sessionId && this.currentSession) {
+                                if (!this.currentSession.events) {
+                                    this.currentSession.events = [];
+                                }
+                                this.currentSession.events.push(event);
+                            }
+                            
+                            this.fetchSessions();
+                        } catch(err) {
+                            console.error('SSE parse error:', err);
+                        }
+                    };
+                    
+                    this.eventSource.onerror = () => {
+                        this.eventSource.close();
+                    };
+                },
+
+                get currentSession() {
+                    if (!this.currentSessionId) return null;
+                    return this.activeSessions[this.currentSessionId] || this.historicalSessions.find(s => s.id === this.currentSessionId);
+                },
+
+                get currentSessionEvents() {
+                    if (!this.currentSession || !this.currentSession.events) return [];
+                    return this.currentSession.events;
+                },
+
+                selectSession(id) {
+                    this.currentSessionId = id;
+                    this.connectSSE(id);
+                },
+
+                newChat() {
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                        this.eventSource = null;
+                    }
+                    this.currentSessionId = null;
+                    this.newTaskInput = '';
+                },
+
+                async startTask() {
+                    if (!this.newTaskInput.trim()) return;
+                    
+                    const task = this.newTaskInput;
+                    this.newTaskInput = '';
+
+                    try {
+                        const res = await fetch('/api/query', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ query: task })
+                        });
+                        const data = await res.json();
+                        this.currentSessionId = data.session_id;
+                        this.fetchSessions();
+                    } catch(e) {
+                        console.error('Error starting task:', e);
+                    }
+                },
+
+                async stopTask() {
+                    if (!this.currentSessionId) return;
+                    try {
+                        await fetch(`/api/session/${this.currentSessionId}/stop`, { method: 'POST' });
+                        this.fetchSessions();
+                    } catch(e) {}
+                },
+
+                formatTime(timestamp) {
+                    if (!timestamp) return '';
+                    return new Date(timestamp).toLocaleTimeString();
+                },
+
+                formatDate(timestamp) {
+                    if (!timestamp) return '';
+                    return new Date(timestamp).toLocaleString();
+                },
+
+                formatNumber(num) {
+                    return new Intl.NumberFormat().format(num || 0);
+                },
+
+                getCoordinatorEventType(type) {
+                    const types = {
+                        'coordinator_thinking': 'Анализ',
+                        'coordinator_decision': 'Решение',
+                        'planning_start': 'Планирование',
+                        'planning_complete': 'План готов',
+                        'coordinator_continue_check': 'Проверка',
+                        'coordinator_adjust_decision': 'Корректировка'
+                    };
+                    return types[type] || type;
+                },
+
+                scrollToBottom() {
+                    const el = document.getElementById('events-feed');
+                    if (el) el.scrollTop = el.scrollHeight;
+                }
+            };
+        }
+    </script>
     </body>
 </html>

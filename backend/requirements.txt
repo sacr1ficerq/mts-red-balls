@@ -1,2 +1,8 @@
 fastapi
 uvicorn
+openai
+pydantic
+pyyaml
+pytest
+python-dotenv
+duckduckgo-search
