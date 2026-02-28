@@ -136,7 +136,10 @@ window.dashboard = function() {
                     console.log('SSE event:', event);
                     
                     if (event.type === 'session_done') {
-                        this.fetchSessions();
+                        // Just update status locally - don't refetch everything!
+                        if (this.activeSessions[sessionId]) {
+                            this.activeSessions[sessionId].status = event.status || 'completed';
+                        }
                         return;
                     }
                     
@@ -148,12 +151,11 @@ window.dashboard = function() {
                             this.activeSessions[sessionId].events = [];
                         }
                         
-                        // Determine default expanded state
+                        // Determine default expanded state - tools/delegate/results expanded, thoughts collapsed
                         const eventIndex = this.activeSessions[sessionId].events.length;
                         const eventKey = `${sessionId}-${eventIndex}`;
                         
                         if (!this.expandedEvents.hasOwnProperty(eventKey)) {
-                            // Expand results, errors, tools, and delegates by default. Collapse thoughts.
                             this.expandedEvents[eventKey] = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
                         }
                         
@@ -275,6 +277,33 @@ window.dashboard = function() {
                 'coordinator_adjust_decision': 'Корректировка'
             };
             return types[type] || type;
+        },
+        
+        formatContent(content) {
+            if (!content) return '';
+            // Try to parse JSON and format nicely
+            try {
+                const json = JSON.parse(content);
+                // If it has action/result, format as readable text
+                if (json.action === 'done' && json.result) {
+                    return json.result;
+                }
+                if (json.action === 'delegate' && json.agent && json.task) {
+                    return `Делегирование: ${json.agent}\nЗадача: ${json.task}`;
+                }
+                if (json.action === 'tool' && json.tool) {
+                    let text = `Инструмент: ${json.tool}`;
+                    if (json.query) text += `\nЗапрос: ${json.query}`;
+                    if (json.op) text += `\nОперация: ${json.op}`;
+                    if (json.path) text += `\nПуть: ${json.path}`;
+                    return text;
+                }
+                // Return formatted JSON for other cases
+                return JSON.stringify(json, null, 2);
+            } catch {
+                // Not JSON, return as is
+                return content;
+            }
         },
 
         scrollToBottom() {
