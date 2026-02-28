@@ -56,13 +56,21 @@ Respond ONLY with comma-separated numbers, nothing else. Example: 1,3,4"""
         )
         
         relevant = set()
-        for part in response.replace(",", " ").split():
+        # More robust parsing: find all numbers in the response
+        import re
+        numbers = re.findall(r'\d+', response)
+        for num in numbers:
             try:
-                relevant.add(int(part.strip()) - 1)
+                idx = int(num) - 1
+                if 0 <= idx < len(results_subset):
+                    relevant.add(idx)
             except ValueError:
                 pass
         
-        return [results_subset[i] for i in relevant if i < len(results_subset)]
+        if not relevant:
+             return results_subset[:3]
+
+        return [results_subset[i] for i in sorted(list(relevant))]
     except Exception as e:
         logger.warning(f"Relevance evaluation failed: {e}")
         return results_subset[:3]

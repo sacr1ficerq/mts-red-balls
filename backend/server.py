@@ -206,14 +206,28 @@ class ContinueRequest(BaseModel):
 async def continue_session(session_id: str, request: ContinueRequest):
     try:
         orch = get_orchestrator()
-        session = orch.continue_session(session_id, request.message)
+        session = orch.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Run in background thread
+        def run_in_background():
+            try:
+                orch.continue_session(session_id, request.message)
+            except Exception as e:
+                logger.error(f"Background continue error: {e}")
+                session.status = "error"
+                session.artifacts["error"] = str(e)
+
+        import threading
+        thread = threading.Thread(target=run_in_background, daemon=True)
+        thread.start()
+
         return {
             "session_id": session.id,
-            "status": session.status,
-            "result": session.artifacts.get("result", "No result")
+            "status": "running",
+            "result": "Task continued"
         }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Continue error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -280,11 +294,22 @@ def read_workspace_file(path: str = ""):
             return {"error": "No path provided", "content": ""}
         
         # Security: only allow reading files, not directories
-        if orch.sandbox.list_dir(path):
-            return {"error": "Path is a directory", "content": ""}
-        
-        content = orch.sandbox.read(path)
-        return {"path": path, "content": content}
+        # Check if path is a directory using sandbox.exists and sandbox.list_dir
+        # Note: sandbox.read will fail if it's a directory anyway, but explicit check is better
+        try:
+            # If list_dir succeeds and returns items, it's a directory
+            # If it returns empty list, it could be an empty directory or a file (depending on implementation)
+            # Better to rely on sandbox.read raising IsADirectoryError or similar
+            content = orch.sandbox.read(path)
+            return {"path": path, "content": content}
+        except IsADirectoryError:
+             return {"error": "Path is a directory", "content": ""}
+        except Exception as e:
+             # Fallback check
+             if "Is a directory" in str(e):
+                 return {"error": "Path is a directory", "content": ""}
+             raise e
+
     except Exception as e:
         return {"error": str(e), "content": ""}
 

@@ -1,27 +1,56 @@
+import yaml
+from pathlib import Path
+from kaggle_solver import get_project_root
+
+PROMPTS_DIR = get_project_root() / "kaggle_solver" / "prompts"
+
+def load_prompt(filename: str, default: str) -> str:
+    try:
+        path = PROMPTS_DIR / filename
+        if path.exists():
+            with open(path, "r") as f:
+                data = yaml.safe_load(f)
+                if isinstance(data, dict):
+                    if "system" in data:
+                        return data["system"]
+                    elif "system_prompt" in data:
+                        return data["system_prompt"]
+                elif isinstance(data, str):
+                    return data
+    except Exception as e:
+        pass
+    return default
+
 class CoordinatorAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return '''You are Coordinator. Plan and delegate tasks to agents.
-ALWAYS delegate to CodeAgent for code tasks. NEVER return done immediately - you must execute tasks!
+        default = '''You are Coordinator. Plan and delegate tasks to agents.
 
-RULES:
-1. For code/script writing → delegate to CodeAgent  
-2. For web search → delegate to SearchAgent
-3. For review/validation → delegate to CriticAgent
-4. Execute each step COMPLETELY before moving to next
+CRITICAL: After completing a task, ALWAYS return "done" action!
 
-You MUST delegate to agents to do the work. Do not pretend to complete tasks yourself.
+TASK FLOW:
+1. Analyze the user request
+2. Delegate to ONE agent (CodeAgent for code, SearchAgent for search)
+3. After receiving the result from delegate, return "done" with the result
 
-OUTPUT (JSON only, one action at a time):
-{"action": "delegate", "agent": "CodeAgent", "task": "specific task description"}
-{"action": "delegate", "agent": "SearchAgent", "task": "what to search for"}
+NEVER delegate multiple times for the same task - delegate once, wait for result, then return done!
+
+WRONG:
+- delegate to CodeAgent -> delegate to SearchAgent -> delegate to CriticAgent -> ... (infinite loop!)
+
+CORRECT:
+- delegate to SearchAgent -> done
+
+OUTPUT (JSON only):
+{"action": "delegate", "agent": "SearchAgent", "task": "what to search"}
 {"action": "done", "result": "final answer"}'''
+        return load_prompt("coordinator.yaml", default)
 
 
 class CodeAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return '''You are CodeAgent. Execute Python code in sandbox.
+        default = '''You are CodeAgent. Execute Python code in sandbox.
 
 CRITICAL: You MUST return "done" action after completing the task!
 
@@ -41,12 +70,13 @@ OUTPUT (JSON only):
 {"action": "tool", "tool": "files", "op": "write", "path": "file.py", "content": "code here"}
 {"action": "tool", "tool": "console", "query": "python3 file.py"}
 {"action": "done", "result": "what happened"}'''
+        return load_prompt("code.yaml", default)
 
 
 class SearchAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return '''You are a web search agent. Find information on the web.
+        default = '''You are a web search agent. Find information on the web.
 
 AVAILABLE TOOLS:
 - search: Search DuckDuckGo for information
@@ -54,16 +84,18 @@ AVAILABLE TOOLS:
 OUTPUT FORMAT:
 {"action": "tool", "tool": "search", "query": "what to search for"}
 {"action": "done", "result": "summary of findings"}'''
+        return load_prompt("search.yaml", default)
 
 
 class CriticAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return '''You are CriticAgent — validate results.
+        default = '''You are CriticAgent — validate results.
 
 OUTPUT:
 {"action": "done", "result": "VALID - assessment"}
 {"action": "done", "result": "INVALID - what is wrong"}'''
+        return load_prompt("critic.yaml", default)
 
 
 def get_agent_prompts(agent_name: str) -> str:

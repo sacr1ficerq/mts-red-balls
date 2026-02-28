@@ -100,6 +100,11 @@ class BaseAgent(ABC):
             
             action = self._parse(resp)
             
+            # Check for infinite loops or repeated failures
+            if self._iteration > 1 and self.messages[-2].get("role") == "assistant" and self.messages[-2].get("content") == resp:
+                 logger.warning("Agent is repeating itself. Forcing a stop.")
+                 return AgentResult(success=False, error="Agent stuck in a loop", duration=time.time() - start)
+
             if action.get("action") == "tool":
                 tool_name = action.get("tool", "")
                 
@@ -155,37 +160,57 @@ class BaseAgent(ABC):
 
     def _parse(self, response: str) -> Dict[str, Any]:
         import re
+        import json
         
-        # Find all JSON objects
-        json_matches = re.findall(r'\{[^{}]*\}', response)
+        # Try to find JSON block using a stack-based approach for nested braces
+        def extract_json_objects(text):
+            objects = []
+            stack = []
+            start_index = -1
+            
+            for i, char in enumerate(text):
+                if char == '{':
+                    if not stack:
+                        start_index = i
+                    stack.append(char)
+                elif char == '}':
+                    if stack:
+                        stack.pop()
+                        if not stack:
+                            try:
+                                json_str = text[start_index:i+1]
+                                obj = json.loads(json_str)
+                                objects.append(obj)
+                            except json.JSONDecodeError:
+                                pass
+            return objects
+
+        json_objects = extract_json_objects(response)
         
-        # First, check for "done" action - prefer completion
-        for m in json_matches:
-            try:
-                obj = json.loads(m)
-                if isinstance(obj, dict) and obj.get("action") == "done":
-                    return obj
-            except:
-                continue
+        # If simple extraction failed, try regex for markdown code blocks
+        if not json_objects:
+            code_blocks = re.findall(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
+            for block in code_blocks:
+                try:
+                    json_objects.append(json.loads(block))
+                except:
+                    pass
+
+        # Prioritize actions
+        for obj in json_objects:
+            if isinstance(obj, dict) and obj.get("action") == "done":
+                return obj
         
-        # Second, try to find action=tool or action=delegate
-        for m in json_matches:
-            try:
-                obj = json.loads(m)
-                if isinstance(obj, dict) and "action" in obj:
-                    action = obj.get("action", "")
-                    if action in ("tool", "delegate"):
-                        return obj
-            except:
-                continue
-        
-        # If no tool/delegate found, return first JSON with any action
-        for m in json_matches:
-            try:
-                obj = json.loads(m)
-                if isinstance(obj, dict) and "action" in obj:
-                    return obj
-            except:
-                continue
+        for obj in json_objects:
+            if isinstance(obj, dict) and obj.get("action") in ("tool", "delegate"):
+                return obj
+                
+        for obj in json_objects:
+            if isinstance(obj, dict) and "action" in obj:
+                return obj
+
+        # If no valid JSON action found, but it looks like they tried (contains "action":),
+        # we might want to retry. But for now, fallback to text result.
+        # Improvement: If response is short and looks like a thought, maybe continue?
         
         return {"action": "done", "result": response}

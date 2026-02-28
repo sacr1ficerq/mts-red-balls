@@ -28,11 +28,13 @@ class Sandbox:
     }
     
     BLOCKED_PATTERNS = [
-        "; rm -rf", "&& rm -rf", "| rm -rf",
+        "rm -rf /", "rm -rf *", "rm -rf .",
         "> /dev/sd", "dd if=",
         "mkfs", "dd if=/dev/zero",
-        "chmod 777 /", "chown -R",
+        "chmod 777", "chown -R",
         ":(){:|:&};:", "fork()",
+        "/bin/sh", "/bin/bash", "nc -e", "socat",
+        "wget http", "curl http", # Prevent downloading from arbitrary URLs if strict
     ]
 
     def __init__(self, root: Path, timeout: int = 60):
@@ -54,6 +56,10 @@ class Sandbox:
         for pattern in self.BLOCKED_PATTERNS:
             if pattern in cmd_lower:
                 return False
+        
+        if ";" in command:
+             return False
+             
         return True
 
     def read(self, path: str, encoding: str = "utf-8") -> str:
@@ -100,12 +106,25 @@ class Sandbox:
         if not self._is_command_safe(command):
             return Result(False, error="Command contains blocked patterns", return_code=1)
 
-        cmd = command.strip().split()
-        if not cmd:
+        try:
+            cmd_parts = command.replace("&&", " ").replace("||", " ").replace("|", " ").split()
+        except:
+            cmd_parts = command.split()
+            
+        if not cmd_parts:
             return Result(False, error="Empty command")
 
-        if cmd[0] not in self.ALLOWED_COMMANDS:
-            return Result(False, error=f"Command not allowed: {cmd[0]}")
+        first_cmd = cmd_parts[0]
+        if first_cmd not in self.ALLOWED_COMMANDS and not first_cmd.startswith("./"):
+             return Result(False, error=f"Command not allowed: {first_cmd}")
+
+        separators = {"&&", "||", "|"}
+        parts = command.split()
+        for i, part in enumerate(parts):
+            if part in separators and i + 1 < len(parts):
+                next_cmd = parts[i+1]
+                if next_cmd not in self.ALLOWED_COMMANDS and not next_cmd.startswith("./"):
+                    return Result(False, error=f"Command not allowed in chain: {next_cmd}")
 
         if " /" in command or command.startswith("/"):
             return Result(False, error="Absolute paths not allowed", return_code=1)
@@ -139,10 +158,12 @@ class Sandbox:
             return Result(False, error=str(e), return_code=1)
 
     def execute_python(self, code: str, timeout: int = None) -> Result:
-        script_path = self.root / "_temp_script.py"
+        import uuid
+        script_name = f"_temp_script_{uuid.uuid4().hex}.py"
+        script_path = self.root / script_name
         script_path.write_text(code)
         try:
-            result = self.execute(f"python3 {script_path.name}", timeout=timeout)
+            result = self.execute(f"python3 {script_name}", timeout=timeout)
             return result
         finally:
             if script_path.exists():

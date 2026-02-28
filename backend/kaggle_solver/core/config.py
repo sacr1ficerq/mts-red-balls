@@ -25,6 +25,8 @@ class AgentSettings:
     role: str = ""
     tools: List[str] = field(default_factory=list)
     max_iterations: int = 10
+    model: Optional[str] = None
+    temperature: Optional[float] = None
 
 
 @dataclass
@@ -76,7 +78,9 @@ class Config:
             agents[name] = AgentSettings(
                 role=cfg.get("role", ""),
                 tools=cfg.get("tools", []),
-                max_iterations=cfg.get("max_iterations", 10)
+                max_iterations=cfg.get("max_iterations", 10),
+                model=cfg.get("model"),
+                temperature=cfg.get("temperature")
             )
 
         return cls(

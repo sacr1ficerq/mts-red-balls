@@ -7,6 +7,7 @@
         
         <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
         <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
@@ -16,75 +17,75 @@
         <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
         <style>[x-cloak] { display: none !important; }</style>
     </head>
-    <body class="bg-gray-100 h-screen flex overflow-hidden" x-data="dashboard()" x-cloak>
+    <body class="bg-gray-50 h-screen flex overflow-hidden text-sm" x-data="dashboard()" x-cloak>
         
         <!-- Sidebar -->
-        <div class="w-64 bg-white text-gray-800 flex flex-col flex-shrink-0 transition-all duration-300 border-r border-gray-200 shadow-lg sidebar-collapsible sidebar-mts" 
+        <div class="w-64 bg-white text-gray-800 flex flex-col flex-shrink-0 transition-all duration-300 border-r border-gray-200 shadow-sm sidebar-collapsible sidebar-mts" 
              :class="{'w-64': sidebarOpen, 'w-16': !sidebarOpen}">
-            <div class="px-3 py-2.5 flex items-center justify-between border-b border-gray-200 bg-white gap-2 min-w-0">
+            <div class="px-3 py-3 flex items-center justify-between border-b border-gray-100 bg-white gap-2 min-w-0 h-14">
                 <a href="/" class="flex items-center min-w-0 overflow-hidden" :class="sidebarOpen ? 'flex-1 space-x-2' : 'flex-1 justify-center'">
                     <svg class="mts-logo-svg flex-shrink-0" :class="sidebarOpen ? 'h-6 w-auto' : 'h-6 w-7'" viewBox="0 0 393.75 98" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M995.009,182.253c-7.305,0-15.966,7.023-23.11,18.83-7.446,12.228-11.888,27.366-11.888,40.512,0,19.245,10.8,38.653,35,38.653,24.171,0,35-19.408,35-38.653,0-13.146-4.44-28.284-11.85-40.512C1010.95,189.276,1002.29,182.253,995.009,182.253ZM1184,211.127h24.5V275h26.25V211.127h24.49V187.5H1184v23.624Zm131.24,0h38.5V187.5h-38.5c-35.37,0-54.26,17.586-54.26,43.747S1279.87,275,1315.24,275h38.5V251.374h-38.5c-16.37,0-27.13-5.851-27.13-20.124S1298.87,211.127,1315.24,211.127ZM1130.61,187.5l-13.99,52.225L1102.63,187.5h-46.37V275h26.24V203.83L1101.57,275h30.1l19.08-71.213V275H1177V187.5h-46.39Z" transform="translate(-960 -182.25)" fill="#E30613"/>
                     </svg>
                     <span x-show="sidebarOpen" class="font-bold text-sm tracking-tight mts-red-text truncate">Красные яйца</span>
                 </a>
-                <button @click="sidebarOpen = !sidebarOpen" class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:mts-red-text focus:outline-none transition-colors" aria-label="Свернуть меню">
+                <button @click="sidebarOpen = !sidebarOpen" class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:mts-red-text focus:outline-none transition-colors" aria-label="Свернуть меню">
                     <i class="fas text-xs" :class="sidebarOpen ? 'fa-chevron-left' : 'fa-bars'"></i>
                 </button>
             </div>
 
             <!-- Session History -->
-            <div class="flex-1 overflow-y-auto px-3 py-2 space-y-2 custom-scrollbar">
-                <div x-show="sidebarOpen" class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1 mt-3 flex items-center gap-2">
-                    <i class="fas fa-play-circle mts-red-text"></i> Активные сессии
+            <div class="flex-1 overflow-y-auto px-2 py-2 space-y-1 custom-scrollbar">
+                <div x-show="sidebarOpen" class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-2 mt-2 flex items-center gap-2">
+                    Активные
                 </div>
                 <template x-for="session in activeSessions" :key="session.id">
                     <div @click="selectSession(session.id)"
-                         class="cursor-pointer px-3 py-2.5 rounded-lg transition-colors duration-200 flex items-center gap-3 file-list-item"
-                         :class="currentSessionId === session.id ? 'mts-red text-white shadow-md' : 'hover:bg-red-50 text-gray-700 border border-transparent hover:border-red-100'">
-                        <div class="flex-shrink-0 w-2 h-2 rounded-full bg-white animate-pulse" x-show="currentSessionId === session.id"></div>
-                        <div class="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" x-show="currentSessionId !== session.id"></div>
-                        <div class="truncate text-sm font-medium" x-show="sidebarOpen" x-text="session.task"></div>
+                         class="cursor-pointer px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2 group"
+                         :class="currentSessionId === session.id ? 'bg-red-50 text-red-700' : 'hover:bg-gray-50 text-gray-600'">
+                        <div class="flex-shrink-0 w-1.5 h-1.5 rounded-full" 
+                             :class="currentSessionId === session.id ? 'bg-red-500' : 'bg-emerald-500'"></div>
+                        <div class="truncate text-xs font-medium" x-show="sidebarOpen" x-text="session.task || 'Новая задача'"></div>
                     </div>
                 </template>
 
-                <div x-show="sidebarOpen" class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1 mt-4 flex items-center gap-2">
-                    <i class="fas fa-clock-rotate-left text-gray-400"></i> История
+                <div x-show="sidebarOpen" class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-2 mt-4 flex items-center gap-2">
+                    История
                 </div>
                 <template x-for="session in historicalSessions" :key="session.id">
                     <div @click="selectSession(session.id)"
-                         class="cursor-pointer px-3 py-2.5 rounded-lg transition-colors duration-200 flex items-center gap-3 file-list-item"
-                         :class="currentSessionId === session.id ? 'bg-gray-200 text-gray-900 border border-gray-300' : 'hover:bg-gray-50 text-gray-600 border border-transparent'">
-                        <i class="fas fa-file-lines text-xs text-gray-400 flex-shrink-0"></i>
-                        <div class="truncate text-sm" x-show="sidebarOpen" x-text="session.task"></div>
+                         class="cursor-pointer px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-2 group"
+                         :class="currentSessionId === session.id ? 'bg-gray-100 text-gray-900' : 'hover:bg-gray-50 text-gray-500'">
+                        <i class="fas fa-history text-[10px] flex-shrink-0 opacity-50"></i>
+                        <div class="truncate text-xs" x-show="sidebarOpen" x-text="session.task || 'Без названия'"></div>
                     </div>
                 </template>
             </div>
 
             <!-- File structure (bottom of sidebar) -->
-            <div x-show="sidebarOpen" class="border-t border-gray-200 bg-white flex-shrink-0 overflow-hidden" style="max-height: 220px;">
-                <div class="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-50" @click="fileTreeOpen = !fileTreeOpen">
-                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                        <i class="fas fa-folder-tree mts-red-text"></i> Структура файлов
+            <div x-show="sidebarOpen" class="border-t border-gray-100 bg-gray-50 flex-shrink-0 overflow-hidden" style="max-height: 30%;">
+                <div class="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-100" @click="fileTreeOpen = !fileTreeOpen">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-folder-tree"></i> Файлы
                     </span>
-                    <i class="fas text-gray-400 text-xs transition-transform" :class="fileTreeOpen ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                    <i class="fas text-gray-400 text-[10px] transition-transform" :class="fileTreeOpen ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                 </div>
-                <div x-show="fileTreeOpen" class="overflow-y-auto custom-scrollbar px-3 pb-2 text-xs" style="max-height: 180px;" x-data="{ selectedFile: null, fileContent: '', loading: false }">
+                <div x-show="fileTreeOpen" class="overflow-y-auto custom-scrollbar px-2 pb-2 text-xs" x-data="{ selectedFile: null, fileContent: '', loading: false }">
                     <template x-if="fileTree && Object.keys(fileTree).length > 0">
                         <div class="space-y-0.5">
                             <template x-for="(value, key) in fileTree" :key="key">
                                 <div>
-                                    <div class="flex items-center gap-1 py-0.5 cursor-pointer hover:bg-gray-100 rounded" 
+                                    <div class="flex items-center gap-1.5 py-1 px-2 cursor-pointer hover:bg-gray-200 rounded-md transition-colors" 
                                          @click="if(value && Object.keys(value).length > 0) { toggleFolder(key); } else { loading=true; readFile(key).then(c => { selectedFile=key; fileContent=c; loading=false; }) }">
-                                        <i class="fas text-gray-400" :class="fileTreeOpenPaths[key] ? 'fa-folder-open text-amber-500' : (value && Object.keys(value).length > 0 ? 'fa-folder text-amber-500' : 'fa-file text-gray-400')"></i>
-                                        <span x-text="key" class="truncate"></span>
+                                        <i class="fas text-[10px]" :class="fileTreeOpenPaths[key] ? 'fa-folder-open text-amber-500' : (value && Object.keys(value).length > 0 ? 'fa-folder text-amber-500' : 'fa-file-code text-gray-400')"></i>
+                                        <span x-text="key" class="truncate text-gray-600"></span>
                                     </div>
-                                    <div x-show="fileTreeOpenPaths[key]" class="pl-4 border-l border-gray-200 ml-1">
+                                    <div x-show="fileTreeOpenPaths[key]" class="pl-3 border-l border-gray-200 ml-2 mt-0.5">
                                         <template x-for="(v2, k2) in value" :key="k2">
-                                            <div class="flex items-center gap-1 py-0.5 cursor-pointer hover:bg-gray-100 rounded"
+                                            <div class="flex items-center gap-1.5 py-1 px-2 cursor-pointer hover:bg-gray-200 rounded-md transition-colors"
                                                  @click="loading=true; readFile(key + '/' + k2).then(c => { selectedFile=key+'/'+k2; fileContent=c; loading=false; })">
-                                                <i class="fas text-gray-400" :class="v2 && Object.keys(v2).length > 0 ? 'fa-folder text-amber-500' : 'fa-file text-gray-400'"></i>
-                                                <span x-text="k2" class="truncate"></span>
+                                                <i class="fas text-[10px]" :class="v2 && Object.keys(v2).length > 0 ? 'fa-folder text-amber-500' : 'fa-file-code text-gray-400'"></i>
+                                                <span x-text="k2" class="truncate text-gray-600"></span>
                                             </div>
                                         </template>
                                     </div>
@@ -93,21 +94,26 @@
                         </div>
                     </template>
                     <template x-if="!fileTree || Object.keys(fileTree).length === 0">
-                        <div class="text-gray-400 text-xs">Нет файлов</div>
+                        <div class="text-gray-400 text-xs px-2 py-1">Нет файлов</div>
                     </template>
                     
                     <!-- File content modal -->
-                    <div x-show="selectedFile" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="selectedFile = null">
-                        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col" @click.stop>
-                            <div class="px-4 py-3 border-b flex justify-between items-center">
-                                <span class="font-bold truncate" x-text="selectedFile"></span>
-                                <button @click="selectedFile = null" class="text-gray-500 hover:text-gray-700">
+                    <div x-show="selectedFile" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm" @click="selectedFile = null">
+                        <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col overflow-hidden" @click.stop>
+                            <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-file-code text-gray-400"></i>
+                                    <span class="font-mono text-sm font-medium text-gray-700" x-text="selectedFile"></span>
+                                </div>
+                                <button @click="selectedFile = null" class="text-gray-400 hover:text-gray-600 transition-colors">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
-                            <div class="p-4 overflow-auto flex-1">
-                                <div x-show="loading" class="text-gray-500">Загрузка...</div>
-                                <pre x-show="!loading" class="whitespace-pre-wrap text-xs bg-gray-50 p-2 rounded" x-text="fileContent"></pre>
+                            <div class="p-0 overflow-auto flex-1 bg-gray-50">
+                                <div x-show="loading" class="flex items-center justify-center h-32 text-gray-400">
+                                    <i class="fas fa-circle-notch fa-spin mr-2"></i> Загрузка...
+                                </div>
+                                <pre x-show="!loading" class="text-xs font-mono p-4 text-gray-700 leading-relaxed" x-text="fileContent"></pre>
                             </div>
                         </div>
                     </div>
@@ -120,312 +126,266 @@
         <div class="flex-1 flex flex-col min-w-0 bg-white main-content-mobile">
             
             <!-- Top Bar -->
-            <header class="bg-white border-b border-gray-200 min-h-[3.5rem] flex flex-wrap items-center justify-between gap-4 px-4 py-3 shadow-sm z-10">
-                <div class="min-w-0 flex-1" style="min-width: 0;">
-                    <h2 class="text-base font-bold text-gray-800 truncate" x-text="currentSession ? (currentSession.task || currentSession.id) : 'МТС агентство «Красные яйца»'"></h2>
-                    <div x-show="currentSession" class="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1.5">
-                        <span class="px-2 py-0.5 text-xs rounded-full font-medium border shrink-0"
+            <header class="bg-white border-b border-gray-100 h-14 flex items-center justify-between px-4 shadow-sm z-10">
+                <div class="min-w-0 flex-1 flex items-center gap-3">
+                    <h2 class="text-sm font-bold text-gray-800 truncate" x-text="currentSession ? (currentSession.task || currentSession.id) : 'Новая задача'"></h2>
+                    <div x-show="currentSession" class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 text-[10px] rounded-full font-medium border uppercase tracking-wide"
                               :class="{
-                                  'bg-red-50 text-red-700 border-red-200': currentSession?.status === 'running',
-                                  'bg-emerald-50 text-emerald-700 border-emerald-200': currentSession?.status === 'completed',
-                                  'bg-amber-50 text-amber-700 border-amber-200': currentSession?.status === 'cancelled',
-                                  'bg-red-100 text-red-800 border-red-200': currentSession?.status === 'error'
+                                  'bg-blue-50 text-blue-600 border-blue-100': currentSession?.status === 'running',
+                                  'bg-emerald-50 text-emerald-600 border-emerald-100': currentSession?.status === 'completed',
+                                  'bg-amber-50 text-amber-600 border-amber-100': currentSession?.status === 'cancelled',
+                                  'bg-red-50 text-red-600 border-red-100': currentSession?.status === 'error'
                               }"
-                              x-text="currentSession?.status === 'running' ? 'В процессе' : currentSession?.status === 'completed' ? 'Готово' : currentSession?.status === 'cancelled' ? 'Прервано' : 'Ошибка'"></span>
-                        <span class="text-xs text-gray-500 shrink-0" x-text="formatDate(currentSession?.start_time)"></span>
-                        <span x-show="currentSession?.events" class="text-xs text-gray-500 shrink-0" x-text="(currentSession?.events?.length || 0) + ' событий'"></span>
+                              x-text="currentSession?.status === 'running' ? 'В работе' : currentSession?.status === 'completed' ? 'Готово' : currentSession?.status === 'cancelled' ? 'Отмена' : 'Ошибка'"></span>
                     </div>
                 </div>
-                <div class="flex items-center gap-3 flex-wrap flex-shrink-0">
+                <div class="flex items-center gap-3">
                     <button @click="newChat"
-                            class="btn-mts-primary flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm hover:shadow transition-all h-10">
+                            class="text-gray-500 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-2">
                         <i class="fas fa-plus"></i>
-                        <span>Новая задача</span>
+                        <span>Новый чат</span>
                     </button>
-                    <div class="flex items-center gap-2 text-xs font-medium" title="Подключение">
-                        <span x-show="isConnected" class="text-emerald-600"><span class="status-indicator status-online"></span> Онлайн</span>
-                        <span x-show="!isConnected" class="text-red-600"><span class="status-indicator status-offline"></span> Офлайн</span>
+                    <div class="w-px h-4 bg-gray-200"></div>
+                    <div class="flex items-center gap-1.5 text-[10px] font-medium" title="Статус подключения">
+                        <span class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-emerald-500' : 'bg-red-500'"></span>
                     </div>
                 </div>
             </header>
 
             
     <!-- Content Area -->
-    <main class="flex-1 overflow-hidden flex flex-col relative">
+    <main class="flex-1 overflow-hidden flex flex-col relative bg-gray-50">
         
-        <!-- Empty State / New Task Input -->
-        <div x-show="!currentSessionId" class="flex-1 flex flex-col items-center justify-center px-4 py-8 md:p-8 bg-gradient-to-b from-gray-50 to-white">
-            <div class="w-full max-w-2xl text-center space-y-6">
-                <div class="flex justify-center">
-                    <svg class="mts-logo-svg h-14 w-auto" viewBox="0 0 393.75 98" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M995.009,182.253c-7.305,0-15.966,7.023-23.11,18.83-7.446,12.228-11.888,27.366-11.888,40.512,0,19.245,10.8,38.653,35,38.653,24.171,0,35-19.408,35-38.653,0-13.146-4.44-28.284-11.85-40.512C1010.95,189.276,1002.29,182.253,995.009,182.253ZM1184,211.127h24.5V275h26.25V211.127h24.49V187.5H1184v23.624Zm131.24,0h38.5V187.5h-38.5c-35.37,0-54.26,17.586-54.26,43.747S1279.87,275,1315.24,275h38.5V251.374h-38.5c-16.37,0-27.13-5.851-27.13-20.124S1298.87,211.127,1315.24,211.127ZM1130.61,187.5l-13.99,52.225L1102.63,187.5h-46.37V275h26.24V203.83L1101.57,275h30.1l19.08-71.213V275H1177V187.5h-46.39Z" transform="translate(-960 -182.25)" fill="#E30613"/>
-                    </svg>
-                </div>
-                <div>
-                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">МТС агентство «Красные яйца»</h1>
-                    <p class="text-base text-gray-600 mt-2">Опишите задачу — агенты спланируют и выполнят её.</p>
-                </div>
-                
-                <!-- Session History Quick Access -->
-                <div x-show="historicalSessions.length > 0" class="w-full max-w-md mx-auto text-left">
-                    <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                        <i class="fas fa-clock-rotate-left mts-red-text"></i> Недавние сессии
-                    </div>
-                    <div class="space-y-2 max-h-44 overflow-y-auto custom-scrollbar">
-                        <template x-for="session in historicalSessions.slice(0, 5)" :key="session.id">
-                            <div @click="selectSession(session.id)"
-                                 class="cursor-pointer p-3 bg-white rounded-xl border border-gray-200 hover:border-red-200 hover:shadow-md transition-all text-left file-list-item">
-                                <div class="flex items-start justify-between gap-2">
-                                    <div class="text-sm font-medium text-gray-800 truncate flex-1 min-w-0" x-text="session.task"></div>
-                                    <span class="flex-shrink-0 text-xs px-2.5 py-1 rounded-full font-semibold"
-                                          :class="session.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : session.status === 'cancelled' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'"
-                                          x-text="session.status === 'completed' ? 'Готово' : session.status === 'cancelled' ? 'Прервано' : 'Ошибка'"></span>
-                                </div>
-                                <div class="text-xs text-gray-500 flex justify-between mt-1">
-                                    <span x-text="formatDate(session.start_time || session.created_at)"></span>
-                                    <span x-text="(session.events?.length || 0) + ' событий'"></span>
-                                </div>
-                            </div>
-                        </template>
+        <!-- Empty State -->
+        <div x-show="!currentSessionId" class="flex-1 flex flex-col items-center justify-center px-4">
+            <div class="w-full max-w-xl text-center space-y-8">
+                <div class="flex justify-center mb-4">
+                    <div class="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center shadow-sm">
+                        <i class="fas fa-robot text-3xl mts-red-text"></i>
                     </div>
                 </div>
                 
-                <div class="relative group w-full max-w-2xl mx-auto">
-                    <div class="absolute -inset-1 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl blur opacity-20 group-hover:opacity-35 transition duration-300"></div>
-                    <div class="relative bg-white rounded-2xl shadow-xl border-2 border-red-100 focus-within:border-red-300 transition-colors overflow-hidden">
-                        <label class="sr-only" for="new-task-input">Текст задачи</label>
+                <h1 class="text-2xl font-bold text-gray-900">Чем могу помочь?</h1>
+                
+                <div class="relative group w-full">
+                    <div class="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-pink-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                    <div class="relative bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
                         <textarea id="new-task-input"
                                   x-model="newTaskInput"
                                   @keydown.ctrl.enter="startTask()"
-                                  class="input-mts w-full p-5 text-lg border-0 focus:ring-0 resize-none text-gray-800 placeholder-gray-400"
-                                  rows="4"
-                                  placeholder="Например: найди последние новости о ИИ и напиши краткое резюме"></textarea>
-                        <div class="flex justify-between items-center gap-4 px-5 py-4 bg-gray-50 border-t border-gray-100">
-                            <div class="text-xs text-gray-500 flex items-center gap-2">
-                                <i class="fas fa-keyboard"></i>
-                                <span>Ctrl+Enter — запуск</span>
-                            </div>
+                                  class="w-full p-4 text-base border-0 focus:ring-0 resize-none text-gray-800 placeholder-gray-400 bg-transparent"
+                                  rows="3"
+                                  placeholder="Опишите задачу, например: 'Проанализируй данные из файла data.csv'"></textarea>
+                        <div class="flex justify-between items-center px-4 py-3 bg-gray-50 border-t border-gray-100">
+                            <span class="text-[10px] text-gray-400">Ctrl + Enter для отправки</span>
                             <button @click="startTask"
                                     :disabled="!newTaskInput.trim()"
-                                    class="btn-mts-primary flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all h-11">
-                                <i class="fas fa-paper-plane"></i>
+                                    class="bg-gray-900 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
                                 <span>Запустить</span>
+                                <i class="fas fa-arrow-right"></i>
                             </button>
                         </div>
                     </div>
                 </div>
+
+                <!-- Quick Prompts -->
+                <div class="grid grid-cols-2 gap-3 text-left">
+                    <button @click="newTaskInput = 'Напиши скрипт на Python для парсинга новостей'; startTask()" class="p-3 bg-white border border-gray-200 rounded-lg hover:border-red-200 hover:shadow-sm transition-all group">
+                        <div class="text-xs font-medium text-gray-800 group-hover:text-red-600 mb-1">Python скрипт</div>
+                        <div class="text-[10px] text-gray-500">Напиши парсер новостей</div>
+                    </button>
+                    <button @click="newTaskInput = 'Найди информацию о последних моделях LLM'; startTask()" class="p-3 bg-white border border-gray-200 rounded-lg hover:border-red-200 hover:shadow-sm transition-all group">
+                        <div class="text-xs font-medium text-gray-800 group-hover:text-red-600 mb-1">Поиск информации</div>
+                        <div class="text-[10px] text-gray-500">Последние модели LLM</div>
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- Session View -->
-        <div x-show="currentSessionId" class="flex-1 flex flex-col overflow-hidden bg-gray-50">
-            <div class="flex-1 flex min-w-0 overflow-hidden">
-                <!-- Left: events feed -->
-                <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-                    <div class="flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5 space-y-4 custom-scrollbar" id="events-feed">
-                        <!-- Task Header -->
-                        <div class="max-w-3xl mx-auto w-full">
-                            <div class="bg-white border-2 border-gray-200 rounded-xl shadow-sm p-4 w-full focus-within:border-red-200 transition-colors">
-                                <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
-                                    <i class="fas fa-bullseye mts-red-text"></i> Цель
-                                </div>
-                                <div class="text-gray-800 font-medium text-lg" x-text="currentSession?.task"></div>
-                            </div>
-                        </div>
-
-                        <!-- Dynamic Events -->
-                        <template x-for="(event, index) in currentSessionEvents" :key="index">
-                            <div class="max-w-4xl mx-auto w-full fade-in">
+        <!-- Session Feed -->
+        <div x-show="currentSessionId" class="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div class="flex-1 overflow-y-auto px-4 py-6 space-y-6 custom-scrollbar scroll-smooth" id="events-feed">
+                
+                <!-- Events Loop -->
+                <template x-for="(event, index) in currentSessionEvents" :key="index">
+                    <div class="max-w-3xl mx-auto w-full fade-in">
                         
-                        <!-- Coordinator Thinking -->
-                        <template x-if="event.type === 'coordinator_thinking' || event.type === 'coordinator_decision' || event.type === 'planning_start' || event.type === 'planning_complete' || event.type === 'coordinator_continue_check' || event.type === 'coordinator_adjust_decision'">
-                            <div class="flex items-start space-x-4">
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-red-50 flex items-center justify-center border-2 border-red-200">
-                                    <i class="fas fa-chess-queen mts-red-text text-sm"></i>
+                        <!-- Coordinator (System) -->
+                        <template x-if="['coordinator_thinking', 'coordinator_decision', 'planning_start', 'planning_complete'].includes(event.type)">
+                            <div class="flex gap-4 group">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
+                                        <i class="fas fa-sitemap text-[10px] text-gray-500"></i>
+                                    </div>
                                 </div>
-                                <div class="flex-1 bg-white rounded-xl border-2 border-gray-200 shadow-sm overflow-hidden">
-                                    <div class="bg-red-50 px-4 py-3 border-b border-red-100 flex justify-between items-center cursor-pointer"
-                                         @click="event.expanded = !event.expanded">
-                                        <div class="flex items-center space-x-3">
-                                            <span class="font-semibold text-red-800 text-sm" x-text="event.data.agent || 'Координатор'"></span>
-                                            <span class="text-xs mts-red-text bg-red-100 px-2 py-1 rounded-lg font-medium" x-text="getCoordinatorEventType(event.type)"></span>
-                                        </div>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="text-xs text-gray-500" x-text="formatTime(event.timestamp)"></span>
-                                            <i class="fas mts-red-text text-xs transition-transform"
+                                <div class="flex-1 min-w-0">
+                                    <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                                        <div class="px-3 py-2 bg-gray-50 border-b border-gray-100 flex justify-between items-center cursor-pointer hover:bg-gray-100 transition-colors"
+                                             @click="toggleEvent(currentSessionId, index)">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs font-semibold text-gray-700">Координатор</span>
+                                                <span class="text-[10px] text-gray-400" x-text="getCoordinatorEventType(event.type)"></span>
+                                            </div>
+                                            <i class="fas text-[10px] text-gray-400 transition-transform" 
                                                :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                                         </div>
-                                    </div>
-                                    <div class="p-4" x-show="event.expanded">
-                                        <p class="text-sm text-gray-700" x-text="event.data.content || event.data.raw_response || ''"></p>
+                                        <div x-show="event.expanded" class="p-3 text-xs text-gray-600 leading-relaxed border-t border-gray-100">
+                                            <div x-text="event.data.content || event.data.raw_response"></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </template>
 
-                        <!-- Thought -->
+                        <!-- Agent Thought -->
                         <template x-if="event.type === 'thought'">
-                            <div class="flex items-start space-x-4">
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border"
-                                     :class="event.data.agent === 'CriticAgent' ? 'bg-pink-100 border-pink-200' : 'bg-purple-100 border-purple-200'">
-                                    <i class="fas text-sm" :class="event.data.agent === 'CriticAgent' ? 'fa-check-double text-pink-600' : 'fa-brain text-purple-600'"></i>
-                                </div>
-                                <div class="flex-1 bg-white rounded-lg border shadow-sm overflow-hidden"
-                                     :class="event.data.agent === 'CriticAgent' ? 'border-pink-200' : 'border-gray-200'">
-                                    <div class="px-4 py-3 border-b flex justify-between items-center cursor-pointer"
-                                         :class="event.data.agent === 'CriticAgent' ? 'bg-pink-50 border-pink-100' : 'bg-purple-50 border-purple-100'"
-                                         @click="event.expanded = !event.expanded">
-                                        <div class="flex items-center space-x-3">
-                                            <span class="font-semibold text-sm" :class="event.data.agent === 'CriticAgent' ? 'text-pink-700' : 'text-purple-700'" x-text="event.data.agent || 'Agent'"></span>
-                                        </div>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="text-xs text-gray-400" x-text="formatTime(event.timestamp)"></span>
-                                            <i class="fas text-xs transition-transform duration-200" :class="[event.data.agent === 'CriticAgent' ? 'text-pink-500' : 'text-purple-500', event.expanded ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
-                                        </div>
-                                    </div>
-                                    <div class="p-4 transition-all duration-200" x-show="event.expanded">
-                                        <div class="text-gray-600 text-sm leading-relaxed markdown-body" x-text="event.data.content || ''"></div>
+                            <div class="flex gap-4 group">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-6 h-6 rounded-full flex items-center justify-center border shadow-sm"
+                                         :class="event.data.agent === 'CriticAgent' ? 'bg-pink-50 border-pink-200' : 'bg-indigo-50 border-indigo-200'">
+                                        <i class="fas text-[10px]" :class="event.data.agent === 'CriticAgent' ? 'fa-glasses text-pink-600' : 'fa-brain text-indigo-600'"></i>
                                     </div>
                                 </div>
-                            </div>
-                        </template>
-
-                        <!-- Step -->
-                        <template x-if="event.type === 'step'">
-                            <div class="flex items-start space-x-4">
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center border border-indigo-200">
-                                    <span class="text-xs font-bold text-indigo-700" x-text="event.data.step_number"></span>
+                                <div class="flex-1 min-w-0">
+                                    <div class="bg-white border rounded-lg shadow-sm overflow-hidden transition-all hover:shadow-md"
+                                         :class="event.data.agent === 'CriticAgent' ? 'border-pink-100' : 'border-indigo-100'">
+                                        <div class="px-3 py-2 flex justify-between items-center cursor-pointer"
+                                             :class="event.data.agent === 'CriticAgent' ? 'bg-pink-50/50' : 'bg-indigo-50/50'"
+                                             @click="toggleEvent(currentSessionId, index)">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs font-bold" :class="event.data.agent === 'CriticAgent' ? 'text-pink-700' : 'text-indigo-700'" x-text="event.data.agent"></span>
+                                                <span class="text-[10px] text-gray-400">думает...</span>
+                                            </div>
+                                            <i class="fas text-[10px] opacity-50 transition-transform" 
+                                               :class="[event.data.agent === 'CriticAgent' ? 'text-pink-400' : 'text-indigo-400', event.expanded ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
+                                        </div>
+                                        <div x-show="event.expanded" class="p-3 text-xs text-gray-700 leading-relaxed markdown-body bg-white">
+                                            <div x-html="DOMPurify.sanitize(marked.parse(event.data.content || ''))"></div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="flex-1 flex items-center gap-2 flex-wrap">
-                                    <span class="text-xs font-medium text-indigo-700" x-text="event.data.agent"></span>
-                                    <span class="text-gray-400">—</span>
-                                    <span class="text-sm text-gray-600 truncate max-w-xl" x-text="event.data.task"></span>
-                                    <span class="text-xs text-amber-600" x-show="event.data.status === 'running'"><i class="fas fa-spinner fa-spin"></i></span>
-                                </div>
                             </div>
                         </template>
 
-                        <!-- Step done -->
-                        <template x-if="event.type === 'step_done'">
-                            <div class="flex items-center space-x-3 text-sm">
-                                <span class="text-emerald-600" x-show="event.data.success"><i class="fas fa-check-circle" title="Успешно"></i></span>
-                                <span class="text-red-600" x-show="!event.data.success"><i class="fas fa-times-circle" title="Ошибка"></i></span>
-                                <span class="text-gray-600">Шаг <span x-text="event.data.step_number"></span> выполнен</span>
-                                <span class="text-xs text-gray-400" x-show="event.data.duration" x-text="event.data.duration + ' с'"></span>
-                            </div>
-                        </template>
-
-                        <!-- Tool -->
+                        <!-- Tool Execution -->
                         <template x-if="event.type === 'tool'">
-                            <div class="flex items-start space-x-4">
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border-2"
-                                     :class="event.data.tool_name === 'console' ? 'bg-emerald-100 border-emerald-200' : 'bg-amber-100 border-amber-200'">
-                                    <i class="fas text-sm" :class="event.data.tool_name === 'console' ? 'fa-terminal text-emerald-600' : 'fa-wrench text-amber-600'"></i>
-                                </div>
-                                <div class="flex-1 rounded-xl border-2 overflow-hidden"
-                                     :class="event.data.tool_name === 'console' ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200 shadow-sm'">
-                                    <div class="px-4 py-2.5 border-b flex justify-between items-center"
-                                         :class="event.data.tool_name === 'console' ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'">
-                                        <span class="font-mono text-xs font-bold" :class="event.data.tool_name === 'console' ? 'text-emerald-700' : 'text-amber-800'"
-                                              x-text="event.data.tool_name === 'console' ? 'Вывод программы (STDOUT/STDERR)' : event.data.tool_name"></span>
-                                        <span class="text-xs text-gray-500" x-text="formatTime(event.timestamp)"></span>
+                            <div class="flex gap-4 group">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-6 h-6 rounded-full bg-amber-50 flex items-center justify-center border border-amber-200">
+                                        <i class="fas fa-terminal text-[10px] text-amber-600"></i>
                                     </div>
-                                    <div class="p-4">
-                                        <div x-show="event.data.tool_name === 'console'">
-                                            <div class="text-xs font-semibold text-gray-600 uppercase mb-1">Команда</div>
-                                            <pre class="bg-white text-gray-800 p-3 rounded font-mono text-xs overflow-x-auto border border-gray-200 mb-3" x-text="event.data.input || ''"></pre>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="bg-white border border-amber-100 rounded-lg shadow-sm overflow-hidden">
+                                        <div class="px-3 py-2 bg-amber-50/30 flex justify-between items-center cursor-pointer hover:bg-amber-50/50 transition-colors"
+                                             @click="toggleEvent(currentSessionId, index)">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs font-bold text-amber-700 font-mono" x-text="event.data.tool_name"></span>
+                                                <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-700">TOOL</span>
+                                            </div>
+                                            <i class="fas text-[10px] text-amber-400 transition-transform" 
+                                               :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                                         </div>
-                                        <div x-show="event.data.output">
-                                            <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Результат</div>
-                                            <pre class="bg-white text-gray-800 p-4 rounded font-mono text-xs overflow-x-auto overflow-y-auto max-h-96 border border-gray-200 whitespace-pre-wrap break-words" x-text="event.data.output || ''"></pre>
+                                        <div x-show="event.expanded" class="p-0">
+                                            <div class="border-b border-amber-50 p-2 bg-gray-50">
+                                                <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Входные данные</div>
+                                                <pre class="text-[10px] font-mono text-gray-600 whitespace-pre-wrap break-all" x-text="event.data.input"></pre>
+                                            </div>
+                                            <div class="p-2" x-show="event.data.output">
+                                                <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Результат</div>
+                                                <pre class="text-[10px] font-mono text-gray-800 whitespace-pre-wrap break-all max-h-60 overflow-y-auto custom-scrollbar" x-text="event.data.output"></pre>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </template>
 
-                        <!-- System -->
+                        <!-- System Message -->
                         <template x-if="event.type === 'system'">
-                            <div class="flex justify-center my-4">
-                                <span class="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full font-medium" x-text="event.data.message"></span>
+                            <div class="flex justify-center py-2">
+                                <div class="bg-gray-100 text-gray-500 text-[10px] px-3 py-1 rounded-full border border-gray-200 shadow-sm flex items-center gap-2">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span x-text="event.data.message"></span>
+                                </div>
                             </div>
                         </template>
 
                         <!-- Error -->
                         <template x-if="event.type === 'error'">
-                            <div class="flex items-start space-x-4">
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center border border-red-200">
-                                    <i class="fas fa-exclamation-triangle text-red-600 text-sm"></i>
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center border border-red-200">
+                                        <i class="fas fa-exclamation text-[10px] text-red-600"></i>
+                                    </div>
                                 </div>
-                                <div class="flex-1 bg-red-50 rounded-lg border border-red-200 overflow-hidden">
-                                    <div class="px-4 py-3 border-b border-red-100 flex justify-between items-center cursor-pointer"
-                                         @click="event.expanded = !event.expanded">
-                                        <span class="font-bold text-red-800 text-sm flex items-center gap-2"><i class="fas fa-circle-exclamation"></i> Ошибка</span>
-                                        <i class="fas text-red-500 text-xs transition-transform duration-200"
-                                           :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                                    </div>
-                                    <div class="p-4">
-                                        <div class="text-red-700 text-sm mb-2" x-text="event.data.message"></div>
-                                    </div>
+                                <div class="flex-1 bg-red-50 border border-red-100 rounded-lg p-3 shadow-sm">
+                                    <div class="text-xs font-bold text-red-800 mb-1">Ошибка выполнения</div>
+                                    <div class="text-xs text-red-700" x-text="event.data.message"></div>
                                 </div>
                             </div>
                         </template>
 
-                        <!-- Result -->
+                        <!-- Final Result -->
                         <template x-if="event.type === 'result'">
-                            <div class="flex items-start space-x-4">
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center border border-green-200">
-                                    <i class="fas fa-check text-green-600 text-sm"></i>
-                                </div>
-                                <div class="flex-1 bg-gradient-to-br from-white to-green-50 rounded-lg border border-green-200 shadow-md p-6">
-                                    <div class="flex justify-between items-center mb-4">
-                                        <h3 class="font-bold text-green-900">Финальный результат</h3>
-                                        <span class="text-xs text-green-600 font-medium px-2 py-1 bg-green-100 rounded">Завершено</span>
+                            <div class="flex gap-4 mt-4 mb-8">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center border border-emerald-200 shadow-sm">
+                                        <i class="fas fa-check text-sm text-emerald-600"></i>
                                     </div>
-                                    <div class="prose prose-sm max-w-none text-gray-800 markdown-body" x-text="event.data.content || ''"></div>
+                                </div>
+                                <div class="flex-1 bg-white border border-emerald-100 rounded-xl shadow-md overflow-hidden ring-1 ring-emerald-50">
+                                    <div class="px-4 py-3 bg-emerald-50/50 border-b border-emerald-100 flex justify-between items-center">
+                                        <h3 class="text-sm font-bold text-emerald-900">Результат</h3>
+                                        <span class="text-[10px] font-medium text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Готово</span>
+                                    </div>
+                                    <div class="p-5 prose prose-sm max-w-none text-gray-800">
+                                        <div x-html="DOMPurify.sanitize(marked.parse(event.data.content || ''))"></div>
+                                    </div>
                                 </div>
                             </div>
                         </template>
 
-                            </div>
-                        </template>
-
-                        <!-- Loading -->
-                        <div x-show="currentSession?.status === 'running' && !currentSessionEvents.some(e => e.type === 'thought' && (e.data?.content || '').length > 0)" class="flex justify-center py-6">
-                            <div class="flex items-center gap-2 text-gray-500 text-sm font-medium">
-                                <i class="fas fa-circle-notch fa-spin mts-red-text"></i>
-                                <span>Генерация...</span>
-                            </div>
-                        </div>
                     </div>
+                </template>
 
-                    <!-- Input Bar -->
-                    <div x-show="currentSessionId" class="flex-shrink-0 bg-white border-t border-gray-200 px-4 py-3">
-                        <div class="max-w-4xl mx-auto flex items-center justify-between gap-4 flex-wrap">
-                            <div class="flex items-center gap-1.5">
-                                <button x-show="currentSession?.status === 'running'" @click="stopTask()"
-                                        class="btn-mts-icon bg-red-100 border-red-300 text-red-700 hover:bg-red-200"
-                                        title="Прервать выполнение">
-                                    <i class="fas fa-stop"></i>
-                                </button>
-                                <button @click="scrollToBottom" class="btn-mts-icon" title="В конец">
-                                    <i class="fas fa-arrow-down"></i>
-                                </button>
-                            </div>
-                            <div class="flex-1 flex gap-2">
-                                <textarea x-model="newTaskInput"
-                                          @keydown.ctrl.enter="startTask()"
-                                          class="input-mts flex-1 p-3 text-sm border-2 border-gray-200 rounded-xl focus:border-red-300 resize-none"
-                                          placeholder="Введите сообщение..."
-                                          rows="1"></textarea>
-                                <button @click="startTask"
-                                        :disabled="!newTaskInput.trim()"
-                                        class="btn-mts-primary px-4 rounded-xl">
-                                    <i class="fas fa-paper-plane"></i>
-                                </button>
-                            </div>
+                <!-- Loading Indicator -->
+                <div x-show="currentSession?.status === 'running'" class="flex justify-center py-4">
+                    <div class="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm border border-gray-100">
+                        <div class="flex space-x-1">
+                            <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style="animation-delay: 0s"></div>
+                            <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                            <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
                         </div>
+                        <span class="text-xs font-medium text-gray-500">Агенты работают...</span>
                     </div>
+                </div>
+                
+                <div class="h-12"></div> <!-- Spacer -->
+            </div>
+
+            <!-- Input Bar -->
+            <div x-show="currentSessionId" class="flex-shrink-0 bg-white border-t border-gray-100 px-4 py-3 z-10">
+                <div class="max-w-3xl mx-auto flex items-end gap-3">
+                    <div class="flex-1 relative">
+                        <textarea x-model="newTaskInput"
+                                  @keydown.ctrl.enter="startTask()"
+                                  class="w-full pl-4 pr-12 py-3 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-red-300 focus:ring-2 focus:ring-red-50 resize-none transition-all shadow-sm"
+                                  placeholder="Отправить сообщение..."
+                                  rows="1"
+                                  style="min-height: 44px; max-height: 120px;"></textarea>
+                        <button @click="startTask"
+                                :disabled="!newTaskInput.trim()"
+                                class="absolute right-2 bottom-2 p-1.5 text-gray-400 hover:text-red-600 disabled:opacity-50 transition-colors">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <button x-show="currentSession?.status === 'running'" @click="stopTask()"
+                            class="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                            title="Остановить">
+                        <i class="fas fa-stop text-xs"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -433,6 +393,6 @@
     </main>
     </div>
 
-    <script src="src/app.js?v=3"></script>
+    <script src="src/app.js?v=4"></script>
     </body>
 </html>

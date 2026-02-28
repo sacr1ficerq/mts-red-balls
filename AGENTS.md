@@ -103,7 +103,7 @@ class BaseAgent(ABC):
     
     @abstractmethod
     def system_prompt(self) -> str:
-        """Return agent-specific system prompt"""
+        """Return agent-specific system prompt""" 
         pass
     
     def run(self, user_input: str) -> str:

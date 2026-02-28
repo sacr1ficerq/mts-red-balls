@@ -353,8 +353,11 @@ class TestBaseAgentRun:
     
     def test_run_max_iterations(self, agent, mock_llm):
         """Agent should stop after max iterations when action not done/tool/delegate."""
-        # Return unknown action that doesn't trigger exit
-        mock_llm.chat.return_value = '{"action": "unknown", "data": "test"}'
+        # Return different unknown actions to avoid loop detection
+        mock_llm.chat.side_effect = [
+            '{"action": "unknown", "data": "test1"}',
+            '{"action": "unknown", "data": "test2"}'
+        ]
         
         agent.config.max_iterations = 2
         
@@ -388,8 +391,8 @@ class TestBaseAgentRun:
         def side_effect(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] < 3:
-                # Return unknown action to continue loop
-                return '{"action": "unknown", "data": "test"}'
+                # Return different unknown actions to avoid loop detection
+                return f'{{"action": "unknown", "data": "test{call_count[0]}"}}'
             return '{"action": "done", "result": "finished"}'
         
         mock_llm.chat.side_effect = side_effect

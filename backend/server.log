@@ -1,0 +1,61 @@
+/Users/baratelia/Hse/agents/mts-red-balls/backend/server.py:77: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+/Users/baratelia/Hse/agents/mts-red-balls/backend/server.py:82: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("shutdown")
+INFO:     Started server process [96606]
+INFO:     Waiting for application startup.
+2026-02-28 23:56:19,420 - __main__ - INFO - Starting Kaggle Solver API
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:61523 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61524 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61553 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61554 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61584 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61585 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61619 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61620 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61648 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61649 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61680 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61681 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61726 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61727 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61734 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61735 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61735 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61734 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61740 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61741 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61741 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61740 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61740 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61748 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61748 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61756 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61756 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61748 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61748 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61756 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61756 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61748 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61748 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61756 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61756 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61756 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61766 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61773 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61773 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61766 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61766 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61778 - "GET /api/workspace/files HTTP/1.1" 200 OK

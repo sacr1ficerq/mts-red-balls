@@ -14,6 +14,7 @@ window.dashboard = function() {
         fileTree: null,
         fileTreeOpen: true,
         fileTreeOpenPaths: {},
+        expandedEvents: {}, // Stores the expanded state of events
 
         init() {
             this.fetchSessions();
@@ -60,11 +61,34 @@ window.dashboard = function() {
             try {
                 const res = await fetch('/api/sessions');
                 const data = await res.json();
+                
+                const prevExpanded = {};
+                
+                // Save expanded state from current session before replacing
+                if (this.currentSessionId && this.activeSessions[this.currentSessionId]?.events) {
+                    this.activeSessions[this.currentSessionId].events.forEach((e, i) => {
+                        if (e && e.expanded !== undefined) {
+                            prevExpanded[i] = e.expanded;
+                        }
+                    });
+                }
+                
                 this.activeSessions = data.active || {};
                 this.historicalSessions = data.historical || [];
                 
-                // Update current session if it's running
-                if (this.currentSessionId && this.activeSessions[this.currentSessionId]) {
+                // Restore expanded state to current session events
+                if (this.currentSessionId && this.activeSessions[this.currentSessionId]?.events) {
+                    const events = this.activeSessions[this.currentSessionId].events;
+                    events.forEach((event, index) => {
+                        if (prevExpanded.hasOwnProperty(index)) {
+                            event.expanded = prevExpanded[index];
+                        } else if (event.expanded === undefined) {
+                            // Default: expand results, errors, tools; collapse thoughts
+                            event.expanded = ['result', 'error', 'tool', 'system'].includes(event.type);
+                        }
+                    });
+                    // Force Alpine.js reactivity by reassigning
+                    this.activeSessions[this.currentSessionId].events = [...events];
                     this.currentSession = this.activeSessions[this.currentSessionId];
                 }
             } catch(e) {
@@ -79,7 +103,6 @@ window.dashboard = function() {
             this.newTaskInput = '';
 
             try {
-                // First fetch sessions to ensure we have the latest
                 await this.fetchSessions();
                 
                 const res = await fetch('/api/query', {
@@ -90,10 +113,7 @@ window.dashboard = function() {
                 const data = await res.json();
                 this.currentSessionId = data.session_id;
                 
-                // Fetch again to get the new session
                 await this.fetchSessions();
-                
-                // Now connect SSE after session exists
                 this.connectSSE(data.session_id);
             } catch(e) {
                 console.error('Error starting task:', e);
@@ -101,16 +121,13 @@ window.dashboard = function() {
         },
 
         connectSSE(sessionId) {
-            // Close existing connection
             if (this.eventSource) {
                 this.eventSource.close();
                 this.eventSource = null;
             }
             
-            // First fetch session data directly
             this.fetchSessionData(sessionId);
             
-            // Then connect to SSE for live updates
             this.eventSource = new EventSource(`/api/sse/${sessionId}`);
             
             this.eventSource.onmessage = (e) => {
@@ -130,6 +147,17 @@ window.dashboard = function() {
                         if (!this.activeSessions[sessionId].events) {
                             this.activeSessions[sessionId].events = [];
                         }
+                        
+                        // Determine default expanded state
+                        const eventIndex = this.activeSessions[sessionId].events.length;
+                        const eventKey = `${sessionId}-${eventIndex}`;
+                        
+                        if (!this.expandedEvents.hasOwnProperty(eventKey)) {
+                            // Expand results, errors, and tool outputs by default. Collapse thoughts.
+                            this.expandedEvents[eventKey] = ['result', 'error', 'tool'].includes(event.type);
+                        }
+                        
+                        event.expanded = this.expandedEvents[eventKey];
                         this.activeSessions[sessionId].events.push(event);
                         this.$nextTick(() => this.scrollToBottom());
                     }
@@ -143,7 +171,6 @@ window.dashboard = function() {
             this.eventSource.onerror = () => {
                 console.log('SSE connection error, retrying...');
                 this.eventSource.close();
-                // Retry after a delay
                 setTimeout(() => {
                     if (this.currentSessionId === sessionId && this.currentSession?.status === 'running') {
                         this.connectSSE(sessionId);
@@ -156,10 +183,40 @@ window.dashboard = function() {
             try {
                 const res = await fetch(`/api/session/${sessionId}`);
                 const data = await res.json();
-                // Update the session in activeSessions
+                
+                // Restore expanded state
+                if (data.events) {
+                    data.events.forEach((event, index) => {
+                        const eventKey = `${sessionId}-${index}`;
+                        if (this.expandedEvents.hasOwnProperty(eventKey)) {
+                            event.expanded = this.expandedEvents[eventKey];
+                        } else {
+                            // Default state logic
+                            event.expanded = ['result', 'error', 'tool'].includes(event.type);
+                            this.expandedEvents[eventKey] = event.expanded;
+                        }
+                    });
+                }
+                
                 this.activeSessions[sessionId] = data;
             } catch(e) {
                 console.log('Error fetching session:', e);
+            }
+        },
+
+        toggleEvent(sessionId, index) {
+            const eventKey = `${sessionId}-${index}`;
+            const currentState = this.expandedEvents[eventKey];
+            // If undefined, use default logic to determine current state, then toggle
+            const isExpanded = currentState !== undefined ? currentState : ['result', 'error', 'tool'].includes(this.currentSession?.events?.[index]?.type);
+            
+            this.expandedEvents[eventKey] = !isExpanded;
+            
+            // Update the event object directly to trigger reactivity
+            if (this.currentSession && this.currentSession.events && this.currentSession.events[index]) {
+                this.currentSession.events[index].expanded = !isExpanded;
+                // Force Alpine.js reactivity by reassigning the events array
+                this.currentSession.events = [...this.currentSession.events];
             }
         },
 
@@ -198,12 +255,12 @@ window.dashboard = function() {
 
         formatTime(timestamp) {
             if (!timestamp) return '';
-            return new Date(timestamp).toLocaleTimeString();
+            return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         },
 
         formatDate(timestamp) {
             if (!timestamp) return '';
-            return new Date(timestamp).toLocaleString();
+            return new Date(timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         },
 
         formatNumber(num) {
@@ -224,7 +281,13 @@ window.dashboard = function() {
 
         scrollToBottom() {
             const el = document.getElementById('events-feed');
-            if (el) el.scrollTop = el.scrollHeight;
+            if (el) {
+                // Only scroll if we are already near the bottom or it's a new session
+                const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+                if (isNearBottom || this.currentSessionEvents.length < 2) {
+                    el.scrollTop = el.scrollHeight;
+                }
+            }
         }
     };
 }

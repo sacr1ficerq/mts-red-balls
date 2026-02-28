@@ -33,9 +33,14 @@ class Orchestrator:
         self.config = config or Config.load()
         self.state = StateManager()
         self.llm = LLM()
-        self.sandbox = Sandbox(Path(self.config.sandbox.root), timeout=self.config.sandbox.timeout)
+        # Sandbox root is the base directory. Sessions will use subdirectories.
+        self.base_sandbox_path = Path(self.config.sandbox.root)
+        self.base_sandbox_path.mkdir(parents=True, exist_ok=True)
+        # Default sandbox for general tasks (or backward compatibility)
+        self.sandbox = Sandbox(self.base_sandbox_path, timeout=self.config.sandbox.timeout)
         self.tool_registry = ToolRegistry
         self._event_callbacks: List[Callable] = []
+        self._session_sandboxes: Dict[str, Sandbox] = {}
 
     def add_event_callback(self, callback: Callable):
         self._event_callbacks.append(callback)
@@ -54,10 +59,19 @@ class Orchestrator:
         role: str,
         tools: List[str],
         event_callback: Optional[Callable] = None,
-        agent_factory: Optional[Callable] = None
+        agent_factory: Optional[Callable] = None,
+        sandbox: Optional[Sandbox] = None
     ) -> BaseAgent:
         if agent_factory is None:
-            agent_factory = _create_agent_factory(self, event_callback)
+            # We need to pass the sandbox to the factory so sub-agents use the same sandbox
+            def agent_factory_fn(**kwargs):
+                agent_name = kwargs.get("name", "")
+                agent_role = kwargs.get("role", "")
+                agent_tools = kwargs.get("tools", ["tool"])
+                return self.create_agent(agent_name, agent_role, agent_tools, event_callback, None, sandbox)
+            agent_factory = agent_factory_fn
+        
+        current_sandbox = sandbox or self.sandbox
         
         max_iterations = 10
         if name in self.config.agents:
@@ -73,7 +87,7 @@ class Orchestrator:
                 temperature=self.config.llm.temperature
             )
             return AgentRegistry.create(
-                name, agent_config, self.llm, self.sandbox, self.tool_registry, event_callback, agent_factory
+                name, agent_config, self.llm, current_sandbox, self.tool_registry, event_callback, agent_factory
             )
 
         class DynamicAgent(BaseAgent):
@@ -89,7 +103,7 @@ class Orchestrator:
             temperature=self.config.llm.temperature
         )
         
-        return DynamicAgent(agent_config, self.llm, self.sandbox, self.tool_registry, event_callback, agent_factory)
+        return DynamicAgent(agent_config, self.llm, current_sandbox, self.tool_registry, event_callback, agent_factory)
 
     def _create_session_callback(self, session: Session) -> Callable:
         session_log_file = LOG_DIR / f"session_{session.id}.log"
@@ -118,11 +132,17 @@ class Orchestrator:
         session = self.state.create_session(query, session_id)
         event_callback = self._create_session_callback(session)
 
+        # Create session-specific sandbox
+        session_sandbox_path = self.base_sandbox_path / session.id
+        session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout)
+        self._session_sandboxes[session.id] = session_sandbox
+
         coordinator = self.create_agent(
             name="Coordinator",
             role="Plan and delegate tasks",
             tools=["delegate", "message", "tool"],
-            event_callback=event_callback
+            event_callback=event_callback,
+            sandbox=session_sandbox
         )
 
         start_time = time.time()
@@ -153,11 +173,20 @@ class Orchestrator:
         session.add_message("user", message)
         event_callback = self._create_session_callback(session)
 
+        # Retrieve or recreate session sandbox
+        if session_id in self._session_sandboxes:
+            session_sandbox = self._session_sandboxes[session_id]
+        else:
+            session_sandbox_path = self.base_sandbox_path / session.id
+            session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout)
+            self._session_sandboxes[session.id] = session_sandbox
+
         coordinator = self.create_agent(
             name="Coordinator",
             role="Continue conversation with context",
             tools=["delegate", "message", "tool"],
-            event_callback=event_callback
+            event_callback=event_callback,
+            sandbox=session_sandbox
         )
         
         for msg in session.messages[:-1]:
