@@ -305,6 +305,17 @@ window.dashboard = function() {
                 return content;
             }
         },
+        
+        getAgentStyle(agent) {
+            const styles = {
+                'CriticAgent': { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-700', icon: 'fa-glasses', iconColor: 'text-pink-600' },
+                'SearchAgent': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: 'fa-search', iconColor: 'text-blue-600' },
+                'CodeAgent': { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', icon: 'fa-code', iconColor: 'text-green-600' },
+                'Coordinator': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', icon: 'fa-sitemap', iconColor: 'text-purple-600' }
+            };
+            const defaultStyle = { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', icon: 'fa-robot', iconColor: 'text-indigo-600' };
+            return styles[agent] || defaultStyle;
+        },
 
         scrollToBottom() {
             const el = document.getElementById('events-feed');
