@@ -59,7 +59,8 @@ class BaseAgent(ABC):
 
     def _emit(self, event_type: str, data: Dict[str, Any]):
         if self.event_callback:
-            self.event_callback({"type": event_type, "data": data, "agent": self.config.name})
+            data["expanded"] = True
+            self.event_callback({"type": event_type, "data": data, "agent": self.config.name, "timestamp": __import__("datetime").datetime.now().isoformat()})
 
     def add_message(self, role: str, content: str):
         self.messages.append({"role": role, "content": content})
@@ -80,7 +81,7 @@ class BaseAgent(ABC):
             system += f"\n\nContext: {json.dumps(context)}"
         
         full = [{"role": "system", "content": system}] + self.messages
-        self._emit("start", {"input": user_input})
+        self._emit("system", {"message": f"Starting: {user_input}"})
 
         for self._iteration in range(1, self.config.max_iterations + 1):
             try:
@@ -95,51 +96,91 @@ class BaseAgent(ABC):
                 return AgentResult(success=False, error=str(e), duration=time.time() - start)
 
             self.add_message("assistant", resp)
-            self._emit("thought", {"content": resp})
-
+            self._emit("thought", {"content": resp, "raw_response": resp, "expanded": True})
+            
             action = self._parse(resp)
             
             if action.get("action") == "tool":
-                self._emit("tool_start", {"tool": action.get("tool"), "input": action.get("query", "")})
+                tool_name = action.get("tool", "")
+                
+                # Build kwargs based on tool type
+                kwargs = {}
+                if tool_name == "console":
+                    kwargs["query"] = action.get("query", "")
+                elif tool_name == "files":
+                    kwargs["op"] = action.get("op", "read")
+                    kwargs["path"] = action.get("path", "")
+                    kwargs["content"] = action.get("content", "")
+                else:
+                    for k, v in action.items():
+                        if k not in ["action", "tool"]:
+                            kwargs[k] = v
+                
+                self._emit("tool", {"tool_name": tool_name, "input": str(kwargs), "status": "running", "expanded": True})
                 
                 result = self.tools.execute(
-                    action.get("tool", ""),
-                    query=action.get("query", ""),
+                    tool_name,
                     sandbox=self.sandbox,
-                    llm=self.llm
+                    llm=self.llm,
+                    **kwargs
                 )
                 
                 output = result.output if result.success else f"Error: {result.error}"
-                self._emit("tool_end", {"tool": action.get("tool"), "output": output[:200]})
+                self._emit("tool", {"tool_name": tool_name, "input": str(kwargs), "output": output[:1000], "status": "completed", "expanded": True})
                 
                 self.add_message("tool", f"{action.get('tool')}: {output}")
                 full.append({"role": "tool", "content": f"{action.get('tool')}: {output}"})
                 
-                self._emit("done", {"result": output})
-                return AgentResult(success=result.success, output=output, duration=time.time() - start)
+                # Continue loop to process tool result - don't return here!
 
             elif action.get("action") == "delegate" and self.agent_factory:
                 target = action.get("agent", "")
                 task = action.get("task", "")
-                self._emit("delegate_start", {"to": target, "task": task})
+                self._emit("system", {"message": f"Delegating to {target}: {task[:50]}..."})
                 
                 sub = self.agent_factory(name=target, role=f"Execute {target}", tools=["tool"])
                 sub_result = sub.run(task)
                 
-                self._emit("delegate_end", {"to": target, "result": sub_result.output, "success": sub_result.success})
-                self._emit("done", {"result": sub_result.output})
-                return AgentResult(success=sub_result.success, output=sub_result.output, duration=time.time() - start)
+                self._emit("tool", {"tool_name": "delegate", "output": sub_result.output[:500], "status": "completed"})
+                
+                # Add delegate result to messages and continue loop
+                self.add_message("tool", f"delegate to {target}: {sub_result.output}")
+                full.append({"role": "tool", "content": f"delegate to {target}: {sub_result.output}"})
 
             elif action.get("action") == "done":
-                self._emit("done", {"result": action.get("result", "")})
+                self._emit("result", {"content": action.get("result", "")})
                 return AgentResult(success=True, output=action.get("result", ""), duration=time.time() - start)
 
         return AgentResult(success=False, error="Max iterations", duration=time.time() - start)
 
     def _parse(self, response: str) -> Dict[str, Any]:
-        matches = re.findall(r'\{[^{}]*\}', response)
+        import re
         
-        for m in reversed(matches):
+        # Find all JSON objects
+        json_matches = re.findall(r'\{[^{}]*\}', response)
+        
+        # First, check for "done" action - prefer completion
+        for m in json_matches:
+            try:
+                obj = json.loads(m)
+                if isinstance(obj, dict) and obj.get("action") == "done":
+                    return obj
+            except:
+                continue
+        
+        # Second, try to find action=tool or action=delegate
+        for m in json_matches:
+            try:
+                obj = json.loads(m)
+                if isinstance(obj, dict) and "action" in obj:
+                    action = obj.get("action", "")
+                    if action in ("tool", "delegate"):
+                        return obj
+            except:
+                continue
+        
+        # If no tool/delegate found, return first JSON with any action
+        for m in json_matches:
             try:
                 obj = json.loads(m)
                 if isinstance(obj, dict) and "action" in obj:

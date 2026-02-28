@@ -62,13 +62,9 @@ class ToolRegistry:
                     tool_kwargs["sandbox"] = kwargs["sandbox"]
             
             if name == "files":
-                import json
-                try:
-                    parsed = json.loads(query) if query.startswith('{') else {"op": "read", "path": query}
-                    tool_kwargs.update(parsed)
-                except:
-                    tool_kwargs["op"] = "read"
-                    tool_kwargs["path"] = query
+                tool_kwargs["op"] = kwargs.get("op", "read")
+                tool_kwargs["path"] = kwargs.get("path", "")
+                tool_kwargs["content"] = kwargs.get("content", "")
                 result = func(**tool_kwargs)
             else:
                 result = func(query=query, **tool_kwargs)

@@ -6,8 +6,6 @@
         <title>МТС агентство «Красные яйца»</title>
         
         <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
-        <script src="src/app.js?v=2"></script>
-        <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -15,8 +13,10 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
         
         <link rel="stylesheet" href="src/css/styles.css">
+        <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+        <style>[x-cloak] { display: none !important; }</style>
     </head>
-    <body class="bg-gray-100 h-screen flex overflow-hidden" x-data="dashboard()">
+    <body class="bg-gray-100 h-screen flex overflow-hidden" x-data="dashboard()" x-cloak>
         
         <!-- Sidebar -->
         <div class="w-64 bg-white text-gray-800 flex flex-col flex-shrink-0 transition-all duration-300 border-r border-gray-200 shadow-lg sidebar-collapsible sidebar-mts" 
@@ -69,15 +69,48 @@
                     </span>
                     <i class="fas text-gray-400 text-xs transition-transform" :class="fileTreeOpen ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                 </div>
-                <div x-show="fileTreeOpen" class="overflow-y-auto custom-scrollbar px-3 pb-2 text-xs" style="max-height: 180px;">
-                    <template x-if="fileTree">
+                <div x-show="fileTreeOpen" class="overflow-y-auto custom-scrollbar px-3 pb-2 text-xs" style="max-height: 180px;" x-data="{ selectedFile: null, fileContent: '', loading: false }">
+                    <template x-if="fileTree && Object.keys(fileTree).length > 0">
                         <div class="space-y-0.5">
-                            <div class="font-medium text-gray-700 flex items-center gap-1.5 py-1">
-                                <i class="fas fa-folder text-amber-500"></i>
-                                <span x-text="fileTree?.name || 'sandbox_workspace'"></span>
-                            </div>
+                            <template x-for="(value, key) in fileTree" :key="key">
+                                <div>
+                                    <div class="flex items-center gap-1 py-0.5 cursor-pointer hover:bg-gray-100 rounded" 
+                                         @click="if(value && Object.keys(value).length > 0) { toggleFolder(key); } else { loading=true; readFile(key).then(c => { selectedFile=key; fileContent=c; loading=false; }) }">
+                                        <i class="fas text-gray-400" :class="fileTreeOpenPaths[key] ? 'fa-folder-open text-amber-500' : (value && Object.keys(value).length > 0 ? 'fa-folder text-amber-500' : 'fa-file text-gray-400')"></i>
+                                        <span x-text="key" class="truncate"></span>
+                                    </div>
+                                    <div x-show="fileTreeOpenPaths[key]" class="pl-4 border-l border-gray-200 ml-1">
+                                        <template x-for="(v2, k2) in value" :key="k2">
+                                            <div class="flex items-center gap-1 py-0.5 cursor-pointer hover:bg-gray-100 rounded"
+                                                 @click="loading=true; readFile(key + '/' + k2).then(c => { selectedFile=key+'/'+k2; fileContent=c; loading=false; })">
+                                                <i class="fas text-gray-400" :class="v2 && Object.keys(v2).length > 0 ? 'fa-folder text-amber-500' : 'fa-file text-gray-400'"></i>
+                                                <span x-text="k2" class="truncate"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </template>
+                    <template x-if="!fileTree || Object.keys(fileTree).length === 0">
+                        <div class="text-gray-400 text-xs">Нет файлов</div>
+                    </template>
+                    
+                    <!-- File content modal -->
+                    <div x-show="selectedFile" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="selectedFile = null">
+                        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col" @click.stop>
+                            <div class="px-4 py-3 border-b flex justify-between items-center">
+                                <span class="font-bold truncate" x-text="selectedFile"></span>
+                                <button @click="selectedFile = null" class="text-gray-500 hover:text-gray-700">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="p-4 overflow-auto flex-1">
+                                <div x-show="loading" class="text-gray-500">Загрузка...</div>
+                                <pre x-show="!loading" class="whitespace-pre-wrap text-xs bg-gray-50 p-2 rounded" x-text="fileContent"></pre>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -100,7 +133,7 @@
                               }"
                               x-text="currentSession?.status === 'running' ? 'В процессе' : currentSession?.status === 'completed' ? 'Готово' : currentSession?.status === 'cancelled' ? 'Прервано' : 'Ошибка'"></span>
                         <span class="text-xs text-gray-500 shrink-0" x-text="formatDate(currentSession?.start_time)"></span>
-                        <span x-show="currentSession?.events" class="text-xs text-gray-500 shrink-0" x-text="currentSession.events.length + ' событий'"></span>
+                        <span x-show="currentSession?.events" class="text-xs text-gray-500 shrink-0" x-text="(currentSession?.events?.length || 0) + ' событий'"></span>
                     </div>
                 </div>
                 <div class="flex items-center gap-3 flex-wrap flex-shrink-0">
@@ -150,7 +183,7 @@
                                 </div>
                                 <div class="text-xs text-gray-500 flex justify-between mt-1">
                                     <span x-text="formatDate(session.start_time || session.created_at)"></span>
-                                    <span x-text="session.events.length + ' событий'"></span>
+                                    <span x-text="(session.events?.length || 0) + ' событий'"></span>
                                 </div>
                             </div>
                         </template>
@@ -201,7 +234,7 @@
                         </div>
 
                         <!-- Dynamic Events -->
-                        <template x-for="event in currentSessionEvents" :key="event.id">
+                        <template x-for="(event, index) in currentSessionEvents" :key="index">
                             <div class="max-w-4xl mx-auto w-full fade-in">
                         
                         <!-- Coordinator Thinking -->
@@ -400,5 +433,6 @@
     </main>
     </div>
 
+    <script src="src/app.js?v=3"></script>
     </body>
 </html>

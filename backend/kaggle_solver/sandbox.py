@@ -23,7 +23,8 @@ class Sandbox:
         "mkdir", "rm", "rmdir", "cp", "mv",
         "curl", "wget", "tar", "unzip", "zip",
         "chmod", "chown", "echo", "pwd", "whoami",
-        "date", "time", "touch", "which", "cd", "exit"
+        "date", "time", "touch", "which", "cd", "exit",
+        "docker", "node", "npm", "npx"
     }
     
     BLOCKED_PATTERNS = [
@@ -70,13 +71,13 @@ class Sandbox:
     def list(self, path: str = ".") -> list:
         p = self._secure_path(path)
         if p.is_dir():
-            return [str(x.relative_to(self.root)) for x in p.rglob("*")]
+            return [str(x.relative_to(self.root)) for x in p.rglob("*") if not x.name.startswith('.') and x.name not in ('__pycache__', 'node_modules', '.git')]
         return []
 
     def list_dir(self, path: str = ".") -> list:
         p = self._secure_path(path)
         if p.is_dir():
-            return [str(x.relative_to(self.root)) for x in p.iterdir()]
+            return [str(x.relative_to(self.root)) for x in p.iterdir() if not x.name.startswith('.') and x.name not in ('__pycache__', 'node_modules', '.git')]
         return []
 
     def delete(self, path: str):
@@ -87,6 +88,15 @@ class Sandbox:
             shutil.rmtree(p)
 
     def execute(self, command: str, timeout: int = None) -> Result:
+        # Fix: replace 'python' with 'python3' (python may not exist)
+        if command.startswith("python "):
+            command = "python3" + command[6:]
+        
+        # Fix: handle escaped newlines and literal newlines in strings
+        # Agent may send: 'hello\nworld' which should stay as literal
+        # or actual newlines which break shell
+        command = command.replace('\\n', '\\\\n').replace('\\r', '\\\\r')
+        
         if not self._is_command_safe(command):
             return Result(False, error="Command contains blocked patterns", return_code=1)
 
@@ -103,6 +113,8 @@ class Sandbox:
         timeout = timeout or self.timeout
         
         try:
+            env = {**os.environ, "HOME": str(self.root)}
+            env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + env.get("PATH", "")
             r = run(
                 command,
                 shell=True,
@@ -110,7 +122,8 @@ class Sandbox:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                env={**os.environ, "HOME": str(self.root)}
+                env=env,
+                executable="/bin/bash"
             )
             output = r.stdout + (r.stderr if r.stderr else "")
             return Result(
@@ -129,7 +142,7 @@ class Sandbox:
         script_path = self.root / "_temp_script.py"
         script_path.write_text(code)
         try:
-            result = self.execute(f"python {script_path.name}", timeout=timeout)
+            result = self.execute(f"python3 {script_path.name}", timeout=timeout)
             return result
         finally:
             if script_path.exists():

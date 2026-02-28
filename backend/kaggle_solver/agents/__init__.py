@@ -27,9 +27,6 @@ AgentRegistry.register("Coordinator", CoordinatorAgent)
 AgentRegistry.register("CodeAgent", CodeAgent)
 AgentRegistry.register("SearchAgent", SearchAgent)
 AgentRegistry.register("CriticAgent", CriticAgent)
-AgentRegistry.register("Code", CodeAgent)
-AgentRegistry.register("Search", SearchAgent)
-AgentRegistry.register("Critic", CriticAgent)
 
 __all__ = [
     "BaseAgent",

@@ -6,3 +6,5 @@ pyyaml
 pytest
 python-dotenv
 duckduckgo-search
+numpy
+pandas

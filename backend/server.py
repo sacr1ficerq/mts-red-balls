@@ -98,9 +98,10 @@ async def sse_session_events(session_id: str):
     orch = get_orchestrator()
     session = orch.get_session(session_id)
     if not session:
-        return {"error": "Session not found"}
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"error": "Session not found"}, status_code=404)
     
-    initial_events = session.events
+    initial_events = list(session.events)
     
     async def event_generator():
         # Send initial events
@@ -113,6 +114,7 @@ async def sse_session_events(session_id: str):
             await asyncio.sleep(0.5)
             session = orch.get_session(session_id)
             if not session:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Session not found'})}\n\n"
                 break
             if len(session.events) > last_idx:
                 for event in session.events[last_idx:]:
@@ -267,6 +269,24 @@ def list_workspace_files():
         return {"files": flat, "root": str(orch.sandbox.root), "tree": tree}
     except Exception as e:
         return {"files": [], "tree": {}, "error": str(e)}
+
+
+@app.get("/api/workspace/read")
+def read_workspace_file(path: str = ""):
+    """Read a file from workspace."""
+    orch = get_orchestrator()
+    try:
+        if not path:
+            return {"error": "No path provided", "content": ""}
+        
+        # Security: only allow reading files, not directories
+        if orch.sandbox.list_dir(path):
+            return {"error": "Path is a directory", "content": ""}
+        
+        content = orch.sandbox.read(path)
+        return {"path": path, "content": content}
+    except Exception as e:
+        return {"error": str(e), "content": ""}
 
 
 @app.get("/api/tools")

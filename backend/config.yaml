@@ -40,6 +40,10 @@ sandbox:
     - which
     - cd
     - exit
+    - docker
+    - node
+    - npm
+    - npx
 
 agents:
   Coordinator:
