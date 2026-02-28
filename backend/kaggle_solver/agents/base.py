@@ -201,13 +201,14 @@ class BaseAgent(ABC):
                 except:
                     pass
 
-        # Prioritize actions
+        # Prioritize: tool/delegate FIRST, then done
+        # This ensures we execute tools before finishing
         for obj in json_objects:
-            if isinstance(obj, dict) and obj.get("action") == "done":
+            if isinstance(obj, dict) and obj.get("action") in ("tool", "delegate"):
                 return obj
         
         for obj in json_objects:
-            if isinstance(obj, dict) and obj.get("action") in ("tool", "delegate"):
+            if isinstance(obj, dict) and obj.get("action") == "done":
                 return obj
                 
         for obj in json_objects:
