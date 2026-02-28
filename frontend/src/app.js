@@ -83,8 +83,8 @@ window.dashboard = function() {
                         if (prevExpanded.hasOwnProperty(index)) {
                             event.expanded = prevExpanded[index];
                         } else if (event.expanded === undefined) {
-                            // Default: expand results, errors, tools; collapse thoughts
-                            event.expanded = ['result', 'error', 'tool', 'system'].includes(event.type);
+                            // Default: expand results, errors, tools, delegates; collapse thoughts
+                            event.expanded = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
                         }
                     });
                     // Force Alpine.js reactivity by reassigning
@@ -153,8 +153,8 @@ window.dashboard = function() {
                         const eventKey = `${sessionId}-${eventIndex}`;
                         
                         if (!this.expandedEvents.hasOwnProperty(eventKey)) {
-                            // Expand results, errors, and tool outputs by default. Collapse thoughts.
-                            this.expandedEvents[eventKey] = ['result', 'error', 'tool'].includes(event.type);
+                            // Expand results, errors, tools, and delegates by default. Collapse thoughts.
+                            this.expandedEvents[eventKey] = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
                         }
                         
                         event.expanded = this.expandedEvents[eventKey];
@@ -190,7 +190,7 @@ window.dashboard = function() {
                             event.expanded = this.expandedEvents[eventKey];
                         } else {
                             // Default state logic
-                            event.expanded = ['result', 'error', 'tool'].includes(event.type);
+                            event.expanded = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
                             this.expandedEvents[eventKey] = event.expanded;
                         }
                     });
@@ -206,7 +206,7 @@ window.dashboard = function() {
             const eventKey = `${sessionId}-${index}`;
             const currentState = this.expandedEvents[eventKey];
             // If undefined, use default logic to determine current state, then toggle
-            const isExpanded = currentState !== undefined ? currentState : ['result', 'error', 'tool'].includes(this.currentSession?.events?.[index]?.type);
+            const isExpanded = currentState !== undefined ? currentState : ['result', 'error', 'tool', 'delegate', 'system'].includes(this.currentSession?.events?.[index]?.type);
             
             this.expandedEvents[eventKey] = !isExpanded;
             

@@ -121,8 +121,6 @@ class BaseAgent(ABC):
                         if k not in ["action", "tool"]:
                             kwargs[k] = v
                 
-                self._emit("tool", {"tool_name": tool_name, "input": str(kwargs), "status": "running", "expanded": True})
-                
                 result = self.tools.execute(
                     tool_name,
                     sandbox=self.sandbox,
@@ -131,7 +129,13 @@ class BaseAgent(ABC):
                 )
                 
                 output = result.output if result.success else f"Error: {result.error}"
-                self._emit("tool", {"tool_name": tool_name, "input": str(kwargs), "output": output[:1000], "status": "completed", "expanded": True})
+                self._emit("tool", {
+                    "tool_name": tool_name, 
+                    "input": str(kwargs), 
+                    "output": output[:2000],
+                    "success": result.success,
+                    "expanded": True
+                })
                 
                 self.add_message("tool", f"{action.get('tool')}: {output}")
                 full.append({"role": "tool", "content": f"{action.get('tool')}: {output}"})
@@ -141,14 +145,15 @@ class BaseAgent(ABC):
             elif action.get("action") == "delegate" and self.agent_factory:
                 target = action.get("agent", "")
                 task = action.get("task", "")
-                self._emit("system", {"message": f"Delegating to {target}: {task[:50]}..."})
+                self._emit("delegate", {
+                    "target_agent": target, 
+                    "task": task,
+                    "expanded": True
+                })
                 
                 sub = self.agent_factory(name=target, role=f"Execute {target}", tools=["tool"])
                 sub_result = sub.run(task)
                 
-                self._emit("tool", {"tool_name": "delegate", "output": sub_result.output[:500], "status": "completed"})
-                
-                # Add delegate result to messages and continue loop
                 self.add_message("tool", f"delegate to {target}: {sub_result.output}")
                 full.append({"role": "tool", "content": f"delegate to {target}: {sub_result.output}"})
 

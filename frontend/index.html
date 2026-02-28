@@ -243,22 +243,47 @@
                             <div class="flex gap-4 group">
                                 <div class="flex-shrink-0 mt-1">
                                     <div class="w-6 h-6 rounded-full flex items-center justify-center border shadow-sm"
-                                         :class="event.data.agent === 'CriticAgent' ? 'bg-pink-50 border-pink-200' : 'bg-indigo-50 border-indigo-200'">
-                                        <i class="fas text-[10px]" :class="event.data.agent === 'CriticAgent' ? 'fa-glasses text-pink-600' : 'fa-brain text-indigo-600'"></i>
+                                         :class="{
+                                             'bg-pink-50 border-pink-200': event.data.agent === 'CriticAgent',
+                                             'bg-blue-50 border-blue-200': event.data.agent === 'SearchAgent',
+                                             'bg-green-50 border-green-200': event.data.agent === 'CodeAgent',
+                                             'bg-indigo-50 border-indigo-200': !['CriticAgent', 'SearchAgent', 'CodeAgent'].includes(event.data.agent)
+                                         }">
+                                        <i class="fas text-[10px]" :class="{
+                                            'fa-glasses text-pink-600': event.data.agent === 'CriticAgent',
+                                            'fa-search text-blue-600': event.data.agent === 'SearchAgent',
+                                            'fa-code text-green-600': event.data.agent === 'CodeAgent',
+                                            'fa-brain text-indigo-600': !['CriticAgent', 'SearchAgent', 'CodeAgent'].includes(event.data.agent)
+                                        }"></i>
                                     </div>
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <div class="bg-white border rounded-lg shadow-sm overflow-hidden transition-all hover:shadow-md"
-                                         :class="event.data.agent === 'CriticAgent' ? 'border-pink-100' : 'border-indigo-100'">
+                                         :class="{
+                                             'border-pink-100': event.data.agent === 'CriticAgent',
+                                             'border-blue-100': event.data.agent === 'SearchAgent',
+                                             'border-green-100': event.data.agent === 'CodeAgent',
+                                             'border-indigo-100': !['CriticAgent', 'SearchAgent', 'CodeAgent'].includes(event.data.agent)
+                                         }">
                                         <div class="px-3 py-2 flex justify-between items-center cursor-pointer"
-                                             :class="event.data.agent === 'CriticAgent' ? 'bg-pink-50/50' : 'bg-indigo-50/50'"
+                                             :class="{
+                                                 'bg-pink-50/50': event.data.agent === 'CriticAgent',
+                                                 'bg-blue-50/50': event.data.agent === 'SearchAgent',
+                                                 'bg-green-50/50': event.data.agent === 'CodeAgent',
+                                                 'bg-indigo-50/50': !['CriticAgent', 'SearchAgent', 'CodeAgent'].includes(event.data.agent)
+                                             }"
                                              @click="toggleEvent(currentSessionId, index)">
                                             <div class="flex items-center gap-2">
-                                                <span class="text-xs font-bold" :class="event.data.agent === 'CriticAgent' ? 'text-pink-700' : 'text-indigo-700'" x-text="event.data.agent"></span>
+                                                <span class="text-xs font-bold" :class="{
+                                                    'text-pink-700': event.data.agent === 'CriticAgent',
+                                                    'text-blue-700': event.data.agent === 'SearchAgent',
+                                                    'text-green-700': event.data.agent === 'CodeAgent',
+                                                    'text-indigo-700': !['CriticAgent', 'SearchAgent', 'CodeAgent'].includes(event.data.agent)
+                                                }" x-text="event.data.agent || 'Agent'"></span>
                                                 <span class="text-[10px] text-gray-400">думает...</span>
                                             </div>
                                             <i class="fas text-[10px] opacity-50 transition-transform" 
-                                               :class="[event.data.agent === 'CriticAgent' ? 'text-pink-400' : 'text-indigo-400', event.expanded ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
+                                               :class="[event.expanded ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
                                         </div>
                                         <div x-show="event.expanded" class="p-3 text-xs text-gray-700 leading-relaxed markdown-body bg-white">
                                             <div x-html="DOMPurify.sanitize(marked.parse(event.data.content || ''))"></div>
@@ -283,19 +308,48 @@
                                             <div class="flex items-center gap-2">
                                                 <span class="text-xs font-bold text-amber-700 font-mono" x-text="event.data.tool_name"></span>
                                                 <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-700">TOOL</span>
+                                                <span x-show="event.data.success === false" class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-red-100 text-red-700">ОШИБКА</span>
                                             </div>
                                             <i class="fas text-[10px] text-amber-400 transition-transform" 
                                                :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                                         </div>
                                         <div x-show="event.expanded" class="p-0">
                                             <div class="border-b border-amber-50 p-2 bg-gray-50">
-                                                <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Входные данные</div>
+                                                <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Параметры</div>
                                                 <pre class="text-[10px] font-mono text-gray-600 whitespace-pre-wrap break-all" x-text="event.data.input"></pre>
                                             </div>
                                             <div class="p-2" x-show="event.data.output">
                                                 <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Результат</div>
                                                 <pre class="text-[10px] font-mono text-gray-800 whitespace-pre-wrap break-all max-h-60 overflow-y-auto custom-scrollbar" x-text="event.data.output"></pre>
                                             </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Delegate -->
+                        <template x-if="event.type === 'delegate'">
+                            <div class="flex gap-4 group">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-6 h-6 rounded-full bg-purple-50 flex items-center justify-center border border-purple-200">
+                                        <i class="fas fa-share-alt text-[10px] text-purple-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="bg-white border border-purple-100 rounded-lg shadow-sm overflow-hidden">
+                                        <div class="px-3 py-2 bg-purple-50/30 flex justify-between items-center cursor-pointer hover:bg-purple-50/50 transition-colors"
+                                             @click="toggleEvent(currentSessionId, index)">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs font-bold text-purple-700">Делегирование</span>
+                                                <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-purple-100 text-purple-700" x-text="event.data.target_agent"></span>
+                                            </div>
+                                            <i class="fas text-[10px] text-purple-400 transition-transform" 
+                                               :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                        </div>
+                                        <div x-show="event.expanded" class="p-3">
+                                            <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Задача</div>
+                                            <div class="text-xs text-gray-700" x-text="event.data.task"></div>
                                         </div>
                                     </div>
                                 </div>
