@@ -12,6 +12,7 @@ from datetime import datetime
 
 from kaggle_solver.core.config import ConfigHolder, Config
 from kaggle_solver.core.orchestrator import Orchestrator
+import kaggle_solver.tools  # noqa: F401 - triggers tool registration
 
 BASE_DIR = Path(__file__).parent.parent.resolve()
 FRONTEND_DIR = BASE_DIR / "frontend"

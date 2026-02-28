@@ -8,14 +8,17 @@ class TestSandboxSecurity:
         return Sandbox(tmp_path)
 
     def test_blocked_patterns_bypass(self, sandbox):
-        # Try to bypass blocked patterns
-        
-        # Semicolons should be blocked to prevent command chaining
-        result = sandbox.execute("python3 -c \"import os; print('I am root')\"")
+        # Try to bypass blocked patterns using shell command chaining with semicolons
+        # Shell semicolons should still be blocked
+        result = sandbox.execute("echo hello; whoami")
         assert not result.success
         assert "Command contains blocked patterns" in result.error
         
-        # But running a script file should work (if content is safe)
+        # But Python with semicolons should work (common pattern for inline code)
+        result = sandbox.execute("python3 -c \"import os; print('hello')\"")
+        assert result.success
+        
+        # Running a script file should work (if content is safe)
         sandbox.write("script.py", "print('hello')")
         result = sandbox.execute("python3 script.py")
         assert result.success

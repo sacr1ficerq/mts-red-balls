@@ -57,9 +57,11 @@ class Sandbox:
             if pattern in cmd_lower:
                 return False
         
-        if ";" in command:
-             return False
-             
+        # Allow semicolons in Python -c commands (e.g., python3 -c "import x; print(x)")
+        # But block them in shell commands for chaining
+        if ";" in command and not command.strip().startswith("python"):
+            return False
+            
         return True
 
     def read(self, path: str, encoding: str = "utf-8") -> str:

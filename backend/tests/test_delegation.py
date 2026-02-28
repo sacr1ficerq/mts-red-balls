@@ -12,37 +12,43 @@ class TestDelegation:
         factory = Mock()
         return factory
 
-    def test_circular_delegation_limit(self, agent_factory):
-        # Simulate A -> B -> A -> ...
-        # We can't easily simulate full recursion without a real factory logic,
-        # but we can check if the agent handles delegation correctly.
+    def test_delegation_creates_sub_agent(self, agent_factory):
+        # Test that delegation creates and runs a sub-agent
         
-        # If we want to prevent infinite recursion, we might need a depth limit.
-        # Currently, BaseAgent doesn't have a depth limit, but Python recursion limit applies.
-        # Or max_iterations applies to the *current* agent.
-        
-        # Let's verify that delegation creates a NEW agent and runs it.
-        
-        config = AgentConfig(name="AgentA", role="Role", tools=[])
+        config = AgentConfig(name="AgentA", role="Role", tools=[], max_iterations=2)
         agent = ConcreteAgent(config, Mock(), Mock(), Mock(), agent_factory=agent_factory)
         
-        # Mock LLM to delegate
-        agent.llm.chat.return_value = '{"action": "delegate", "agent": "AgentB", "task": "task"}'
+        # First call returns delegate, second call returns done
+        agent.llm.chat.side_effect = [
+            '{"action": "delegate", "agent": "AgentB", "task": "task"}',
+            '{"action": "done", "result": "delegation completed"}'
+        ]
         
         # Mock factory to return a mock agent
         sub_agent = Mock()
-        sub_agent.run.return_value = AgentResult(success=True, output="result")
+        sub_agent.run.return_value = AgentResult(success=True, output="AgentB result")
         agent_factory.side_effect = lambda **kwargs: sub_agent
         
         result = agent.run("start")
         
+        # Agent should complete successfully
         assert result.success
-        assert result.output == "result"
+        # The final result comes from the LLM's "done" response
+        assert "delegation completed" in result.output
+        # But the factory was called to create the sub-agent
         agent_factory.assert_called()
+
+    def test_delegation_without_factory(self):
+        # Test behavior when delegation is requested but no factory exists
         
-        # To test infinite recursion, we'd need the factory to return an agent that delegates again.
-        # This is hard to unit test without blowing up the stack.
-        # But we can check if we can pass a "depth" parameter?
-        # BaseAgent doesn't support depth.
+        config = AgentConfig(name="AgentA", role="Role", tools=[], max_iterations=2)
+        agent = ConcreteAgent(config, Mock(), Mock(), Mock(), agent_factory=None)
         
-        # Recommendation: Add depth limit to BaseAgent or Orchestrator.
+        # LLM returns delegate action, but no factory to handle it
+        # Agent should detect it's repeating and stop
+        agent.llm.chat.return_value = '{"action": "delegate", "agent": "AgentB", "task": "task"}'
+        
+        result = agent.run("start")
+        
+        # Without factory, delegate is ignored, agent loops and eventually detects repetition
+        assert result.error in ["Agent stuck in a loop", "Max iterations"]
