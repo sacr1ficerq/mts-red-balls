@@ -201,11 +201,19 @@ class BaseAgent(ABC):
                 except:
                     pass
 
-        # Prioritize: tool/delegate FIRST, then done
-        # This ensures we execute tools before finishing
+        # Take ONLY THE FIRST valid action - execute one at a time
+        # This prevents infinite loops and ensures proper iteration
         for obj in json_objects:
-            if isinstance(obj, dict) and obj.get("action") in ("tool", "delegate"):
-                return obj
+            if isinstance(obj, dict) and "action" in obj:
+                action = obj.get("action", "")
+                if action in ("tool", "delegate"):
+                    return obj
+                elif action == "done":
+                    return obj
+        
+        # Fallback: return first object with any action
+        if json_objects:
+            return json_objects[0]
         
         for obj in json_objects:
             if isinstance(obj, dict) and obj.get("action") == "done":

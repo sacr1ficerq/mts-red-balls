@@ -142,47 +142,36 @@ async def query(request: QueryRequest):
     try:
         orch = get_orchestrator()
         
-        # Create session first - return immediately with session_id
-        session = orch.state.create_session(request.query, request.session_id)
-        session_id = session.id
+        # Run the task in background using orchestrator's run method
+        # This properly handles session creation, event callbacks, and sandbox
         
-        # Define event callback to store events in session
-        def event_callback(event):
-            event["session_id"] = session_id
-            session.add_event(event)
-            session.add_step(
-                agent=event.get("agent", "System"),
-                action=event.get("type", "event"),
-                input=str(event.get("data", {}).get("input", "")),
-                output=str(event.get("data", {}))
-            )
-        
-        # Run in background thread - don't block
         def run_in_background():
             try:
-                coordinator = orch.create_agent(
-                    name="Coordinator",
-                    role="Plan and delegate tasks to solve the user's request",
-                    tools=["delegate", "message", "tool"],
-                    event_callback=event_callback
-                )
-                result = coordinator.run(request.query, {"session_id": session_id})
-                session.status = "completed" if result.success else "error"
-                session.artifacts["result"] = result.output
-                session.artifacts["duration"] = result.duration
-                session.artifacts["steps"] = result.steps
+                session = orch.run(request.query, request.session_id)
+                logger.info(f"Task completed: {session.id}, status: {session.status}")
             except Exception as e:
                 logger.error(f"Background task error: {e}")
-                session.status = "error"
-                session.artifacts["error"] = str(e)
         
         import threading
         thread = threading.Thread(target=run_in_background, daemon=True)
         thread.start()
         
+        # Get the session that was just created
+        sessions = orch.state.sessions
+        session_id = None
+        for sid in sessions:
+            # Find the most recent session with this query
+            if sessions[sid].query == request.query:
+                session_id = sid
+                break
+        
+        # If not found, get the first one (most recent)
+        if not session_id and sessions:
+            session_id = max(sessions.keys())
+        
         return {
             "session_id": session_id,
-            "status": session.status,
+            "status": "running",
             "result": "Task started"
         }
     except Exception as e:
