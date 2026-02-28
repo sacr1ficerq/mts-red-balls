@@ -161,8 +161,6 @@ window.dashboard = function() {
                         this.activeSessions[sessionId].events.push(event);
                         this.$nextTick(() => this.scrollToBottom());
                     }
-                    
-                    this.fetchSessions();
                 } catch(err) {
                     console.error('SSE parse error:', err);
                 }
