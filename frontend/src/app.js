@@ -1,4 +1,4 @@
-// Main application logic
+// Main application - delegates to modules
 window.dashboard = function() {
     return {
         // State
@@ -29,8 +29,7 @@ window.dashboard = function() {
         // Session management
         async fetchSessions() {
             try {
-                const res = await fetch('/api/sessions');
-                const data = await res.json();
+                const data = await API.fetchSessions();
                 
                 const savedExpanded = {};
                 if (this.currentSessionId) {
@@ -49,7 +48,7 @@ window.dashboard = function() {
                         this.expandedEvents[key] = savedExpanded[key];
                     }
                 }
-                
+
                 if (this.currentSessionId && this.activeSessions[this.currentSessionId]?.events) {
                     const events = this.activeSessions[this.currentSessionId].events;
                     events.forEach((event, index) => {
@@ -83,8 +82,7 @@ window.dashboard = function() {
 
         async fetchSessionData(sessionId) {
             try {
-                const res = await fetch(`/api/session/${sessionId}`);
-                const data = await res.json();
+                const data = await API.fetchSessionData(sessionId);
                 
                 if (data.events) {
                     data.events.forEach((event, index) => {
@@ -217,7 +215,7 @@ window.dashboard = function() {
         async stopSession() {
             if (!this.currentSessionId) return;
             try {
-                await fetch(`/api/session/${this.currentSessionId}/stop`, { method: 'POST' });
+                await API.stopSession(this.currentSessionId);
                 if (this.eventSource) {
                     this.eventSource.close();
                     this.eventSource = null;
@@ -231,12 +229,7 @@ window.dashboard = function() {
         async selectOption(event, option) {
             if (!this.currentSessionId) return;
             try {
-                const res = await fetch(`/api/session/${this.currentSessionId}/select`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ selected: option })
-                });
-                const data = await res.json();
+                await API.selectOption(this.currentSessionId, option);
                 await this.fetchSessions();
             } catch(e) {
                 console.error('Error selecting option:', e);
@@ -250,12 +243,7 @@ window.dashboard = function() {
             this.newTaskInput = '';
             
             try {
-                const res = await fetch('/api/query', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: task })
-                });
-                const data = await res.json();
+                const data = await API.startTask(task);
                 this.currentSessionId = data.session_id;
                 
                 await this.fetchSessions();
@@ -338,8 +326,7 @@ window.dashboard = function() {
 
         async fetchFileTree() {
             try {
-                const res = await fetch('/api/workspace/files');
-                const data = await res.json();
+                const data = await API.fetchFileTree();
                 this.fileTree = data.tree || {};
             } catch(e) {
                 console.log('Error fetching files:', e);
@@ -348,8 +335,7 @@ window.dashboard = function() {
 
         async readFile(path) {
             try {
-                const res = await fetch(`/api/workspace/read?path=${encodeURIComponent(path)}`);
-                const data = await res.json();
+                const data = await API.readFile(path);
                 return data.content || data.error || 'Пустой файл';
             } catch(e) {
                 return 'Ошибка чтения файла';
@@ -377,20 +363,6 @@ window.dashboard = function() {
             }
         },
 
-        formatTime(timestamp) {
-            if (!timestamp) return '';
-            return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        },
-
-        formatDate(timestamp) {
-            if (!timestamp) return '';
-            return new Date(timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        },
-
-        formatNumber(num) {
-            return new Intl.NumberFormat().format(num || 0);
-        },
-
         scrollToBottom() {
             const el = document.getElementById('events-feed');
             if (el) {
@@ -405,205 +377,53 @@ window.dashboard = function() {
             this.fetchFileTree();
         },
 
-        // Agent functions
+        // Delegate to modules
         getAgentDisplayName(agent) {
-            if (!agent) return 'Агент';
-            const names = {
-                'Coordinator': 'Планировщик',
-                'CoordinatorAgent': 'Планировщик',
-                'CodeAgent': 'Программист',
-                'Code': 'Программист',
-                'SearchAgent': 'Поисковик',
-                'Search': 'Поисковик',
-                'CriticAgent': 'Критик',
-                'Critic': 'Критик',
-                'CreatorAgent': 'Создатель',
-                'Creator': 'Создатель',
-                'Analyst': 'Аналитик'
-            };
-            return names[agent] || agent;
+            return Styles.getAgentDisplayName(agent);
         },
 
         getAgentIcon(agent) {
-            const icons = {
-                'Coordinator': 'fa-sitemap',
-                'CodeAgent': 'fa-code',
-                'SearchAgent': 'fa-search',
-                'CriticAgent': 'fa-glasses',
-                'Creator': 'fa-pen',
-                'Analyst': 'fa-chart-line'
-            };
-            return icons[agent] || 'fa-robot';
+            return Styles.getAgentIcon(agent);
         },
 
         getAgentStyle(agent) {
-            return { 
-                bg: 'bg-blue-50', 
-                border: 'border-blue-200', 
-                text: 'text-blue-700', 
-                icon: this.getAgentIcon(agent),
-                iconColor: 'text-blue-600',
-                headerBg: 'bg-blue-50'
-            };
+            return Styles.getAgentStyle(agent);
         },
 
         getUserStyle() {
-            return {
-                icon: 'fa-user',
-                bg: 'bg-red-50',
-                border: 'border-red-200',
-                headerBg: 'bg-red-50',
-                text: 'text-red-700',
-                iconColor: 'text-red-600'
-            };
+            return Styles.getUserStyle();
         },
 
         getToolStyle(toolName) {
-            return {
-                icon: toolName === 'search' ? 'fa-search' : toolName === 'console' ? 'fa-terminal' : 'fa-file-code',
-                bg: 'bg-emerald-50',
-                border: 'border-emerald-200',
-                headerBg: 'bg-emerald-50',
-                text: 'text-emerald-700',
-                iconColor: 'text-emerald-600'
-            };
+            return Styles.getToolStyle(toolName);
         },
 
         getDelegateStyle() {
-            return {
-                icon: 'fa-share-alt',
-                bg: 'bg-purple-50',
-                border: 'border-purple-200',
-                headerBg: 'bg-purple-50',
-                text: 'text-purple-700',
-                iconColor: 'text-purple-600'
-            };
+            return Styles.getDelegateStyle();
         },
 
         escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+            return Formatters.escapeHtml(text);
         },
 
         formatToolInput(input) {
-            if (!input) return '';
-            try {
-                const obj = typeof input === 'string' ? JSON.parse(input) : input;
-                let html = '<div class="tool-params">';
-                for (const [key, value] of Object.entries(obj)) {
-                    let valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-                    if (valStr.length > 200) valStr = valStr.substring(0, 200) + '...';
-                    html += `<div class="param-row"><span class="param-key">${key}:</span> <span class="param-value">${this.escapeHtml(valStr)}</span></div>`;
-                }
-                html += '</div>';
-                return html;
-            } catch {
-                return this.escapeHtml(String(input));
-            }
+            return Formatters.formatToolInput(input);
         },
 
         formatToolOutput(output, toolName) {
-            if (!output) return '';
-            
-            if (toolName === 'search') {
-                const lines = output.split('\n');
-                let html = '<div class="search-results-container">';
-                let inResult = false;
-                let resultNum = 0;
-                let currentTitle = '';
-                let currentSource = '';
-                let currentBody = [];
-                
-                for (const line of lines) {
-                    if (line.match(/^\d+\.\s/)) {
-                        if (inResult && currentTitle) {
-                            html += this.buildSearchResultCard(resultNum, currentTitle, currentSource, currentBody);
-                        }
-                        resultNum++;
-                        currentTitle = line.replace(/^\d+\.\s*/, '').trim();
-                        currentSource = '';
-                        currentBody = [];
-                        inResult = true;
-                    } else if (line.startsWith('   Source:')) {
-                        currentSource = line.replace('   Source:', '').trim();
-                    } else if (line.trim() && !line.startsWith('Search results')) {
-                        const body = line.replace(/^   /, '').trim();
-                        if (body) currentBody.push(body);
-                    }
-                }
-                if (inResult && currentTitle) {
-                    html += this.buildSearchResultCard(resultNum, currentTitle, currentSource, currentBody);
-                }
-                html += '</div>';
-                return html;
-            }
-            
-            if (toolName === 'console') {
-                return '<pre class="console-output">' + this.escapeHtml(output) + '</pre>';
-            }
-            
-            if (toolName === 'files') {
-                return '<pre class="files-output">' + this.escapeHtml(output) + '</pre>';
-            }
-            
-            return '<pre class="text-xs font-mono">' + this.escapeHtml(output) + '</pre>';
+            return Formatters.formatToolOutput(output, toolName);
         },
 
         buildSearchResultCard(num, title, source, body) {
-            const bodyHtml = body.length > 0 
-                ? '<div class="search-body">' + this.escapeHtml(body.join(' ')).substring(0, 300) + (body.join(' ').length > 300 ? '...' : '') + '</div>' 
-                : '';
-            const sourceHtml = source 
-                ? `<a href="${this.escapeHtml(source)}" target="_blank" class="search-source">${this.escapeHtml(this.truncateUrl(source))}</a>` 
-                : '';
-            
-            return `
-                <div class="search-result-card">
-                    <div class="search-result-number">${num}</div>
-                    <div class="search-result-content">
-                        <div class="search-title">${this.escapeHtml(title)}</div>
-                        ${bodyHtml}
-                        ${sourceHtml}
-                    </div>
-                </div>
-            `;
+            return Formatters.buildSearchResultCard(num, title, source, body);
         },
 
         truncateUrl(url) {
-            try {
-                const parsed = new URL(url.startsWith('http') ? url : 'http://' + url);
-                return parsed.hostname + (parsed.pathname !== '/' ? parsed.pathname : '');
-            } catch {
-                return url.substring(0, 50);
-            }
+            return Formatters.truncateUrl(url);
         },
 
         formatContent(content) {
-            if (!content) return '';
-            
-            if (content.trim().startsWith('{')) {
-                try {
-                    const json = JSON.parse(content);
-                    
-                    if (json.action === 'tool') {
-                        return '<span class="text-gray-400 italic">Выполнение инструмента...</span>'; 
-                    }
-                    
-                    if (json.action === 'delegate' && json.agent && json.task) {
-                        return `<span class="text-purple-600">→ ${this.getAgentDisplayName(json.agent)}:</span> ${json.task.substring(0, 100)}...`;
-                    }
-                    
-                    if (json.action === 'done' && json.result) {
-                        return json.result;
-                    }
-                    
-                        return '<span class="text-gray-400 italic">Обработка...</span>';
-                } catch (e) {}
-            }
-            
-            return content;
+            return Formatters.formatContent(content);
         }
     };
 };
