@@ -1,5 +1,7 @@
+// Main application logic
 window.dashboard = function() {
     return {
+        // State
         socket: null,
         eventSource: null,
         isConnected: false,
@@ -8,21 +10,315 @@ window.dashboard = function() {
         currentSessionId: null,
         activeSessions: {},
         historicalSessions: [],
-        _currentSession: null,
+        _currentSessionData: null,
         metrics: { total_tokens: 0, total_cost: 0 },
         autoScrollEnabled: true,
         fileTree: null,
         fileTreeOpen: true,
         fileTreeOpenPaths: {},
-        expandedEvents: {}, // Stores the expanded state of events
+        expandedEvents: {},
+        currentPlan: null,
 
+        // Initialize
         init() {
             this.fetchSessions();
             this.fetchFileTree();
-            setInterval(() => {
-                this.fetchSessions();
-                this.fetchFileTree();
-            }, 5000);
+            this.$watch('currentSessionId', () => this.onSessionChange());
+        },
+
+        // Session management
+        async fetchSessions() {
+            try {
+                const res = await fetch('/api/sessions');
+                const data = await res.json();
+                
+                const savedExpanded = {};
+                if (this.currentSessionId) {
+                    for (const [key, value] of Object.entries(this.expandedEvents)) {
+                        if (key.startsWith(this.currentSessionId)) {
+                            savedExpanded[key] = value;
+                        }
+                    }
+                }
+                
+                this.activeSessions = data.active || {};
+                this.historicalSessions = data.historical || [];
+                
+                if (this.currentSessionId) {
+                    for (const key of Object.keys(savedExpanded)) {
+                        this.expandedEvents[key] = savedExpanded[key];
+                    }
+                }
+                
+                if (this.currentSessionId && this.activeSessions[this.currentSessionId]?.events) {
+                    const events = this.activeSessions[this.currentSessionId].events;
+                    events.forEach((event, index) => {
+                        const eventKey = `${this.currentSessionId}-${index}`;
+                        if (savedExpanded.hasOwnProperty(eventKey)) {
+                            event.expanded = savedExpanded[eventKey];
+                            this.expandedEvents[eventKey] = savedExpanded[eventKey];
+                        } else if (event.expanded === undefined) {
+                            event.expanded = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
+                            this.expandedEvents[eventKey] = event.expanded;
+                        } else {
+                            this.expandedEvents[eventKey] = event.expanded;
+                        }
+                    });
+                    this.activeSessions[this.currentSessionId].events = [...events];
+                    this.currentSession = this.activeSessions[this.currentSessionId];
+                }
+                
+                if (this.currentSession && this.currentSession.events) {
+                    this.currentSession.events.forEach((event, index) => {
+                        const eventKey = `${this.currentSessionId}-${index}`;
+                        if (this.expandedEvents.hasOwnProperty(eventKey)) {
+                            event.expanded = this.expandedEvents[eventKey];
+                        }
+                    });
+                }
+            } catch(e) {
+                console.log('Waiting for backend...');
+            }
+        },
+
+        async fetchSessionData(sessionId) {
+            try {
+                const res = await fetch(`/api/session/${sessionId}`);
+                const data = await res.json();
+                
+                if (data.events) {
+                    data.events.forEach((event, index) => {
+                        const eventKey = `${sessionId}-${index}`;
+                        if (this.expandedEvents.hasOwnProperty(eventKey)) {
+                            event.expanded = this.expandedEvents[eventKey];
+                        } else {
+                            event.expanded = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
+                            this.expandedEvents[eventKey] = event.expanded;
+                        }
+                    });
+                }
+                
+                if (data.total_tokens) {
+                    this.metrics.total_tokens = data.total_tokens;
+                    this.metrics.total_cost = data.total_cost || 0;
+                }
+                
+                if (this.historicalSessions.find(s => s.id === sessionId)) {
+                    this._currentSessionData = data;
+                } else {
+                    this.activeSessions[sessionId] = data;
+                }
+            } catch(e) {
+                console.log('Error fetching session:', e);
+            }
+        },
+
+        createNewSession() {
+            this.currentSessionId = null;
+            this.newTaskInput = '';
+            this.metrics = { total_tokens: 0, total_cost: 0 };
+            this._currentSessionData = null;
+            this.expandedEvents = {};
+        },
+
+        async clearHistory() {
+            if (!confirm('Очистить всю историю?')) return;
+            try {
+                await fetch('/api/sessions/clear', { method: 'POST' });
+                this.historicalSessions = [];
+                this.activeSessions = {};
+                this.currentSessionId = null;
+            } catch(e) {
+                console.error('Error clearing history:', e);
+            }
+        },
+
+        get currentSession() {
+            if (!this.currentSessionId) return null;
+            if (this.activeSessions[this.currentSessionId]) {
+                return this.activeSessions[this.currentSessionId];
+            }
+            const hist = this.historicalSessions.find(s => s.id === this.currentSessionId);
+            if (hist) return hist;
+            if (this._currentSessionData && this._currentSessionData.id === this.currentSessionId) {
+                return this._currentSessionData;
+            }
+            return null;
+        },
+
+        get currentSessionEvents() {
+            if (!this.currentSession || !this.currentSession.events) return [];
+            
+            const events = this.currentSession.events;
+            
+            for (const event of events) {
+                if (event.type === 'thought' && event.data && event.data.content) {
+                    try {
+                        const content = event.data.content;
+                        if (content.includes('"plan"') && content.includes('"steps"')) {
+                            const planMatch = content.match(/\{[\s\S]*"plan"[\s\S]*"steps"\s*:\s*\[[\s\S]*\]\}/);
+                            if (planMatch) {
+                                const plan = JSON.parse(planMatch[0]);
+                                if (plan.plan && plan.steps) {
+                                    this.currentPlan = plan;
+                                    break;
+                                }
+                            }
+                        }
+                        if (content.includes('"plan_update"') || content.includes('"step_id"')) {
+                            const updateMatch = content.match(/\{"plan_update"\s*:\s*\{"step_id"\s*:\s*(\d+)\s*,\s*"status"\s*:\s*"(\w+)"\}\}/);
+                            if (updateMatch && this.currentPlan && this.currentPlan.steps) {
+                                const stepId = parseInt(updateMatch[1]);
+                                const status = updateMatch[2];
+                                const step = this.currentPlan.steps.find(s => s.id === stepId);
+                                if (step) {
+                                    step.status = status;
+                                }
+                            }
+                        }
+                    } catch(e) {}
+                }
+                if (event.type === 'delegate' && event.data && event.data.step_id) {
+                    if (this.currentPlan && this.currentPlan.steps) {
+                        const step = this.currentPlan.steps.find(s => s.id === event.data.step_id);
+                        if (step) {
+                            step.status = 'active';
+                        }
+                    }
+                }
+            }
+            
+            return events;
+        },
+
+        get sortedActiveSessions() {
+            return Object.values(this.activeSessions)
+                .filter(s => s.created_at)
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        },
+
+        get sortedHistoricalSessions() {
+            return [...this.historicalSessions]
+                .filter(s => s.created_at)
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        },
+
+        selectSession(id) {
+            this.currentSessionId = id;
+            this.currentPlan = null;
+            const isActive = this.activeSessions && this.activeSessions[id] && this.activeSessions[id].status === 'running';
+            if (isActive) {
+                this.connectSSE(id);
+            } else {
+                this.fetchSessionData(id);
+            }
+        },
+
+        async stopSession() {
+            if (!this.currentSessionId) return;
+            try {
+                await fetch(`/api/session/${this.currentSessionId}/stop`, { method: 'POST' });
+                if (this.eventSource) {
+                    this.eventSource.close();
+                    this.eventSource = null;
+                }
+                await this.fetchSessions();
+            } catch(e) {
+                console.error('Error stopping session:', e);
+            }
+        },
+
+        async startTask() {
+            if (!this.newTaskInput.trim()) return;
+            
+            const task = this.newTaskInput;
+            this.newTaskInput = '';
+            
+            try {
+                const res = await fetch('/api/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: task })
+                });
+                const data = await res.json();
+                this.currentSessionId = data.session_id;
+                
+                await this.fetchSessions();
+                this.connectSSE(data.session_id);
+            } catch(e) {
+                console.error('Error starting task:', e);
+            }
+        },
+
+        connectSSE(sessionId) {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+            
+            this.fetchSessionData(sessionId);
+            
+            this.eventSource = new EventSource(`/api/sse/${sessionId}`);
+            
+            this.eventSource.onmessage = (e) => {
+                try {
+                    const event = JSON.parse(e.data);
+                    
+                    if (event.type === 'session_done') {
+                        if (this.activeSessions[sessionId]) {
+                            this.activeSessions[sessionId].status = event.status || 'completed';
+                        }
+                        return;
+                    }
+                    
+                    if (this.currentSessionId === sessionId) {
+                        if (!this.activeSessions[sessionId]) {
+                            this.activeSessions[sessionId] = { events: [], status: 'running' };
+                        }
+                        if (!this.activeSessions[sessionId].events) {
+                            this.activeSessions[sessionId].events = [];
+                        }
+                        
+                        const existingEvents = this.activeSessions[sessionId].events;
+                        const isDuplicate = existingEvents.some(
+                            (ev, i) => ev.type === event.type && 
+                                       ev.timestamp === event.timestamp &&
+                                       JSON.stringify(ev.data) === JSON.stringify(event.data)
+                        );
+                        if (isDuplicate) return;
+                        
+                        const eventIndex = existingEvents.length;
+                        const eventKey = `${sessionId}-${eventIndex}`;
+                        
+                        if (!this.expandedEvents.hasOwnProperty(eventKey)) {
+                            this.expandedEvents[eventKey] = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
+                        }
+                        
+                        event.expanded = this.expandedEvents[eventKey];
+                        this.activeSessions[sessionId].events.push(event);
+                        this.$nextTick(() => this.scrollToBottom());
+                    }
+                } catch(err) {
+                    console.error('SSE parse error:', err);
+                }
+            };
+            
+            this.eventSource.onerror = () => {
+                const session = this.activeSessions[sessionId];
+                if (session && session.status === 'running') {
+                    console.log('SSE connection lost, retrying...');
+                    this.eventSource.close();
+                    setTimeout(() => {
+                        if (this.currentSessionId === sessionId && this.activeSessions[sessionId]?.status === 'running') {
+                            this.connectSSE(sessionId);
+                        }
+                    }, 2000);
+                } else {
+                    console.log('SSE connection closed');
+                    this.eventSource.close();
+                    this.eventSource = null;
+                }
+            };
         },
 
         async fetchFileTree() {
@@ -53,214 +349,17 @@ window.dashboard = function() {
             }
         },
 
-        isFolder(path) {
-            return this.fileTree && this.fileTree[path] && Object.keys(this.fileTree[path]).length > 0;
-        },
-
-        async fetchSessions() {
-            try {
-                const res = await fetch('/api/sessions');
-                const data = await res.json();
-                
-                // Save expanded state from current session before replacing - use persistent storage
-                const savedExpanded = {};
-                if (this.currentSessionId) {
-                    for (const [key, value] of Object.entries(this.expandedEvents)) {
-                        if (key.startsWith(this.currentSessionId)) {
-                            savedExpanded[key] = value;
-                        }
-                    }
-                }
-                
-                this.activeSessions = data.active || {};
-                this.historicalSessions = data.historical || {};
-                
-                // Update expandedEvents with saved state for current session
-                if (this.currentSessionId) {
-                    for (const key of Object.keys(savedExpanded)) {
-                        this.expandedEvents[key] = savedExpanded[key];
-                    }
-                }
-                
-                // Restore expanded state to current session events
-                if (this.currentSessionId && this.activeSessions[this.currentSessionId]?.events) {
-                    const events = this.activeSessions[this.currentSessionId].events;
-                    events.forEach((event, index) => {
-                        const eventKey = `${this.currentSessionId}-${index}`;
-                        if (savedExpanded.hasOwnProperty(eventKey)) {
-                            event.expanded = savedExpanded[eventKey];
-                        } else if (event.expanded === undefined) {
-                            // Default: expand results, errors, tools, delegates; collapse thoughts
-                            event.expanded = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
-                            this.expandedEvents[eventKey] = event.expanded;
-                        } else {
-                            this.expandedEvents[eventKey] = event.expanded;
-                        }
-                    });
-                    // Force Alpine.js reactivity by reassigning
-                    this.activeSessions[this.currentSessionId].events = [...events];
-                    this.currentSession = this.activeSessions[this.currentSessionId];
-                }
-            } catch(e) {
-                console.log('Waiting for backend...');
-            }
-        },
-
-        async startTask() {
-            if (!this.newTaskInput.trim()) return;
-            
-            const task = this.newTaskInput;
-            this.newTaskInput = '';
-
-            try {
-                await this.fetchSessions();
-                
-                const res = await fetch('/api/query', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: task })
-                });
-                const data = await res.json();
-                this.currentSessionId = data.session_id;
-                
-                await this.fetchSessions();
-                this.connectSSE(data.session_id);
-            } catch(e) {
-                console.error('Error starting task:', e);
-            }
-        },
-
-        connectSSE(sessionId) {
-            if (this.eventSource) {
-                this.eventSource.close();
-                this.eventSource = null;
-            }
-            
-            this.fetchSessionData(sessionId);
-            
-            this.eventSource = new EventSource(`/api/sse/${sessionId}`);
-            
-            this.eventSource.onmessage = (e) => {
-                try {
-                    const event = JSON.parse(e.data);
-                    console.log('SSE event:', event);
-                    
-                    if (event.type === 'session_done') {
-                        // Just update status locally - don't refetch everything!
-                        if (this.activeSessions[sessionId]) {
-                            this.activeSessions[sessionId].status = event.status || 'completed';
-                        }
-                        return;
-                    }
-                    
-                    if (this.currentSessionId === sessionId) {
-                        if (!this.activeSessions[sessionId]) {
-                            this.activeSessions[sessionId] = { events: [], status: 'running' };
-                        }
-                        if (!this.activeSessions[sessionId].events) {
-                            this.activeSessions[sessionId].events = [];
-                        }
-                        
-                        // Determine default expanded state - tools/delegate/results expanded, thoughts collapsed
-                        const eventIndex = this.activeSessions[sessionId].events.length;
-                        const eventKey = `${sessionId}-${eventIndex}`;
-                        
-                        if (!this.expandedEvents.hasOwnProperty(eventKey)) {
-                            this.expandedEvents[eventKey] = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
-                        }
-                        
-                        event.expanded = this.expandedEvents[eventKey];
-                        this.activeSessions[sessionId].events.push(event);
-                        this.$nextTick(() => this.scrollToBottom());
-                    }
-                } catch(err) {
-                    console.error('SSE parse error:', err);
-                }
-            };
-            
-            this.eventSource.onerror = () => {
-                console.log('SSE connection error, retrying...');
-                this.eventSource.close();
-                setTimeout(() => {
-                    if (this.currentSessionId === sessionId && this.currentSession?.status === 'running') {
-                        this.connectSSE(sessionId);
-                    }
-                }, 2000);
-            };
-        },
-
-        async fetchSessionData(sessionId) {
-            try {
-                const res = await fetch(`/api/session/${sessionId}`);
-                const data = await res.json();
-                
-                // Restore expanded state
-                if (data.events) {
-                    data.events.forEach((event, index) => {
-                        const eventKey = `${sessionId}-${index}`;
-                        if (this.expandedEvents.hasOwnProperty(eventKey)) {
-                            event.expanded = this.expandedEvents[eventKey];
-                        } else {
-                            // Default state logic
-                            event.expanded = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
-                            this.expandedEvents[eventKey] = event.expanded;
-                        }
-                    });
-                }
-                
-                this.activeSessions[sessionId] = data;
-            } catch(e) {
-                console.log('Error fetching session:', e);
-            }
-        },
-
         toggleEvent(sessionId, index) {
             const eventKey = `${sessionId}-${index}`;
             const currentState = this.expandedEvents[eventKey];
-            // If undefined, use default logic to determine current state, then toggle
             const isExpanded = currentState !== undefined ? currentState : ['result', 'error', 'tool', 'delegate', 'system'].includes(this.currentSession?.events?.[index]?.type);
             
             this.expandedEvents[eventKey] = !isExpanded;
             
-            // Update the event object directly to trigger reactivity
             if (this.currentSession && this.currentSession.events && this.currentSession.events[index]) {
                 this.currentSession.events[index].expanded = !isExpanded;
-                // Force Alpine.js reactivity by reassigning the events array
                 this.currentSession.events = [...this.currentSession.events];
             }
-        },
-
-        get currentSession() {
-            if (!this.currentSessionId) return null;
-            return this.activeSessions[this.currentSessionId] || this.historicalSessions.find(s => s.id === this.currentSessionId);
-        },
-
-        get currentSessionEvents() {
-            if (!this.currentSession || !this.currentSession.events) return [];
-            return this.currentSession.events;
-        },
-
-        selectSession(id) {
-            this.currentSessionId = id;
-            this.connectSSE(id);
-        },
-
-        newChat() {
-            if (this.eventSource) {
-                this.eventSource.close();
-                this.eventSource = null;
-            }
-            this.currentSessionId = null;
-            this._currentSession = null;
-            this.newTaskInput = '';
-        },
-
-        async stopTask() {
-            if (!this.currentSessionId) return;
-            try {
-                await fetch(`/api/session/${this.currentSessionId}/stop`, { method: 'POST' });
-                this.fetchSessions();
-            } catch(e) {}
         },
 
         formatTime(timestamp) {
@@ -277,19 +376,23 @@ window.dashboard = function() {
             return new Intl.NumberFormat().format(num || 0);
         },
 
-        getCoordinatorEventType(type) {
-            const types = {
-                'coordinator_thinking': 'Анализ',
-                'coordinator_decision': 'Решение',
-                'planning_start': 'Планирование',
-                'planning_complete': 'План готов',
-                'coordinator_continue_check': 'Проверка',
-                'coordinator_adjust_decision': 'Корректировка'
-            };
-            return types[type] || type;
+        scrollToBottom() {
+            const el = document.getElementById('events-feed');
+            if (el) {
+                const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+                if (isNearBottom || this.currentSessionEvents.length < 2) {
+                    el.scrollTop = el.scrollHeight;
+                }
+            }
         },
-        
+
+        onSessionChange() {
+            this.fetchFileTree();
+        },
+
+        // Agent functions
         getAgentDisplayName(agent) {
+            if (!agent) return 'Агент';
             const names = {
                 'Coordinator': 'Планировщик',
                 'CoordinatorAgent': 'Планировщик',
@@ -303,40 +406,92 @@ window.dashboard = function() {
                 'Creator': 'Создатель',
                 'Analyst': 'Аналитик'
             };
-            return names[agent] || agent || 'Агент';
+            return names[agent] || agent;
         },
-        
-        formatContent(content) {
-            if (!content) return '';
-            // Try to parse JSON and format nicely
+
+        getAgentIcon(agent) {
+            const icons = {
+                'Coordinator': 'fa-sitemap',
+                'CodeAgent': 'fa-code',
+                'SearchAgent': 'fa-search',
+                'CriticAgent': 'fa-glasses',
+                'Creator': 'fa-pen',
+                'Analyst': 'fa-chart-line'
+            };
+            return icons[agent] || 'fa-robot';
+        },
+
+        getAgentStyle(agent) {
+            return { 
+                bg: 'bg-blue-50', 
+                border: 'border-blue-200', 
+                text: 'text-blue-700', 
+                icon: this.getAgentIcon(agent),
+                iconColor: 'text-blue-600',
+                headerBg: 'bg-blue-50'
+            };
+        },
+
+        getUserStyle() {
+            return {
+                icon: 'fa-user',
+                bg: 'bg-red-50',
+                border: 'border-red-200',
+                headerBg: 'bg-red-50',
+                text: 'text-red-700',
+                iconColor: 'text-red-600'
+            };
+        },
+
+        getToolStyle(toolName) {
+            return {
+                icon: toolName === 'search' ? 'fa-search' : toolName === 'console' ? 'fa-terminal' : 'fa-file-code',
+                bg: 'bg-emerald-50',
+                border: 'border-emerald-200',
+                headerBg: 'bg-emerald-50',
+                text: 'text-emerald-700',
+                iconColor: 'text-emerald-600'
+            };
+        },
+
+        getDelegateStyle() {
+            return {
+                icon: 'fa-share-alt',
+                bg: 'bg-purple-50',
+                border: 'border-purple-200',
+                headerBg: 'bg-purple-50',
+                text: 'text-purple-700',
+                iconColor: 'text-purple-600'
+            };
+        },
+
+        escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+
+        formatToolInput(input) {
+            if (!input) return '';
             try {
-                const json = JSON.parse(content);
-                // If it has action/result, format as readable text
-                if (json.action === 'done' && json.result) {
-                    return json.result;
+                const obj = typeof input === 'string' ? JSON.parse(input) : input;
+                let html = '<div class="tool-params">';
+                for (const [key, value] of Object.entries(obj)) {
+                    let valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+                    if (valStr.length > 200) valStr = valStr.substring(0, 200) + '...';
+                    html += `<div class="param-row"><span class="param-key">${key}:</span> <span class="param-value">${this.escapeHtml(valStr)}</span></div>`;
                 }
-                if (json.action === 'delegate' && json.agent && json.task) {
-                    return `Делегирование: ${json.agent}\nЗадача: ${json.task}`;
-                }
-                if (json.action === 'tool' && json.tool) {
-                    let text = `Инструмент: ${json.tool}`;
-                    if (json.query) text += `\nЗапрос: ${json.query}`;
-                    if (json.op) text += `\nОперация: ${json.op}`;
-                    if (json.path) text += `\nПуть: ${json.path}`;
-                    return text;
-                }
-                // Return formatted JSON for other cases
-                return JSON.stringify(json, null, 2);
+                html += '</div>';
+                return html;
             } catch {
-                // Not JSON, return as is
-                return content;
+                return this.escapeHtml(String(input));
             }
         },
-        
+
         formatToolOutput(output, toolName) {
             if (!output) return '';
             
-            // Format search results nicely
             if (toolName === 'search') {
                 const lines = output.split('\n');
                 let html = '<div class="search-results-container">';
@@ -370,26 +525,23 @@ window.dashboard = function() {
                 return html;
             }
             
-            // Console output - clean formatting
             if (toolName === 'console') {
                 return '<pre class="console-output">' + this.escapeHtml(output) + '</pre>';
             }
             
-            // Files tool
             if (toolName === 'files') {
                 return '<pre class="files-output">' + this.escapeHtml(output) + '</pre>';
             }
             
-            // Default: escape and preserve whitespace
             return '<pre class="text-xs font-mono">' + this.escapeHtml(output) + '</pre>';
         },
-        
+
         buildSearchResultCard(num, title, source, body) {
             const bodyHtml = body.length > 0 
                 ? '<div class="search-body">' + this.escapeHtml(body.join(' ')).substring(0, 300) + (body.join(' ').length > 300 ? '...' : '') + '</div>' 
                 : '';
             const sourceHtml = source 
-                ? `<a href="${this.escapeHtml(source)}" target="_blank" class="search-source">${this.escapeHtml(this.truncateUrl(source))} <i class="fas fa-external-link-alt"></i></a>` 
+                ? `<a href="${this.escapeHtml(source)}" target="_blank" class="search-source">${this.escapeHtml(this.truncateUrl(source))}</a>` 
                 : '';
             
             return `
@@ -403,7 +555,7 @@ window.dashboard = function() {
                 </div>
             `;
         },
-        
+
         truncateUrl(url) {
             try {
                 const parsed = new URL(url.startsWith('http') ? url : 'http://' + url);
@@ -412,33 +564,31 @@ window.dashboard = function() {
                 return url.substring(0, 50);
             }
         },
-        
-        escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        },
-        
-        getAgentStyle(agent) {
-            const styles = {
-                'CriticAgent': { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-700', icon: 'fa-glasses', iconColor: 'text-pink-600' },
-                'SearchAgent': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: 'fa-search', iconColor: 'text-blue-600' },
-                'CodeAgent': { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', icon: 'fa-code', iconColor: 'text-green-600' },
-                'Coordinator': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', icon: 'fa-sitemap', iconColor: 'text-purple-600' }
-            };
-            const defaultStyle = { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', icon: 'fa-robot', iconColor: 'text-indigo-600' };
-            return styles[agent] || defaultStyle;
-        },
 
-        scrollToBottom() {
-            const el = document.getElementById('events-feed');
-            if (el) {
-                // Only scroll if we are already near the bottom or it's a new session
-                const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-                if (isNearBottom || this.currentSessionEvents.length < 2) {
-                    el.scrollTop = el.scrollHeight;
-                }
+        formatContent(content) {
+            if (!content) return '';
+            
+            if (content.trim().startsWith('{')) {
+                try {
+                    const json = JSON.parse(content);
+                    
+                    if (json.action === 'tool') {
+                        return '<span class="text-gray-400 italic">Выполнение инструмента...</span>'; 
+                    }
+                    
+                    if (json.action === 'delegate' && json.agent && json.task) {
+                        return `<span class="text-purple-600">→ ${this.getAgentDisplayName(json.agent)}:</span> ${json.task.substring(0, 100)}...`;
+                    }
+                    
+                    if (json.action === 'done' && json.result) {
+                        return json.result;
+                    }
+                    
+                        return '<span class="text-gray-400 italic">Обработка...</span>';
+                } catch (e) {}
             }
+            
+            return content;
         }
     };
-}
+};

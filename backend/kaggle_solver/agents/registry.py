@@ -29,8 +29,9 @@ class AgentRegistry:
         sandbox,
         tool_registry,
         event_callback: Optional[Callable] = None,
-        agent_factory: Optional[Callable] = None
+        agent_factory: Optional[Callable] = None,
+        session: Optional[Any] = None
     ):
         if name not in cls._agents:
             raise ValueError(f"Unknown agent: {name}")
-        return cls._agents[name](config, llm, sandbox, tool_registry, event_callback, agent_factory)
+        return cls._agents[name](config, llm, sandbox, tool_registry, event_callback, agent_factory, session)

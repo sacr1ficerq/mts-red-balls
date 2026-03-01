@@ -1,0 +1,102 @@
+/* ==========================================================================
+   4. COMPONENTS - Reusable UI elements
+   ========================================================================== */
+
+/* --- Badges --- */
+.badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+.badge-tool {
+    background-color: var(--neutral-100);
+    color: var(--neutral-700);
+}
+.badge-error {
+    background-color: #FEE2E2;
+    color: #DC2626;
+}
+.badge-success {
+    background-color: #D1FAE5;
+    color: #059669;
+}
+
+/* --- Buttons --- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-lg);
+    font-weight: 500;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+}
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.btn-primary {
+    background: linear-gradient(180deg, var(--mts-red) 0%, var(--mts-red-dark) 100%);
+    color: white;
+}
+.btn-primary:hover:not(:disabled) {
+    background: linear-gradient(180deg, var(--mts-red-dark) 0%, #A8040E 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(227, 6, 19, 0.3);
+}
+.btn-secondary {
+    background: white;
+    color: var(--neutral-700);
+    border: 2px solid var(--neutral-200);
+}
+.btn-secondary:hover:not(:disabled) {
+    border-color: var(--mts-red);
+    color: var(--mts-red);
+    background: var(--mts-red-light);
+}
+
+/* --- Inputs --- */
+.input {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    outline: none;
+    transition: all 0.2s ease;
+}
+.input:focus {
+    border-color: var(--mts-red);
+    box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+}
+.input::placeholder {
+    color: var(--neutral-400);
+}
+
+/* --- Status Indicators --- */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.status-online { 
+    background-color: #10B981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+.status-offline { 
+    background-color: #EF4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+.status-running {
+    background-color: #3B82F6;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+    animation: pulse 2s infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

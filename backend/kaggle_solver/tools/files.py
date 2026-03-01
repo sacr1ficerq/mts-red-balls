@@ -1,9 +1,23 @@
 from kaggle_solver.tools.registry import create_tool
 
 
-@create_tool(name="files", description="File operations (read, write, list, delete)")
+@create_tool(
+    name="files", 
+    description="File operations: read, write, list, delete, exists, size"
+)
 def files_tool(op: str, path: str, content: str = "", sandbox=None) -> str:
-    """File operations: read, write, list, delete, exists, size."""
+    """File operations in sandbox.
+    
+    Operations:
+    - read: Read file content. Args: path="filename"
+    - write: Write content to file. Args: path="filename", content="text"
+    - list: List files in directory. Args: path="." 
+    - delete: Delete file. Args: path="filename"
+    - exists: Check if file exists. Args: path="filename"
+    - size: Get file size. Args: path="filename"
+    
+    Returns:
+        File content, success message, or error"""
     if sandbox is None:
         return "Error: Sandbox not provided"
 

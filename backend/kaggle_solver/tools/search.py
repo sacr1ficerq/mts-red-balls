@@ -16,7 +16,7 @@ except ImportError:
 def _translate_query(query: str, llm: LLM) -> str:
     """Translate query to English for better search results."""
     config = ConfigHolder().search_config
-    model = config.get("model", "openai/gpt-oss-120b:free")
+    model = config.get("model", "openrouter/free")
     prompt = f"""Translate this query to English. Return ONLY the translated query, nothing else.
 
 Query: {query}"""
@@ -32,7 +32,7 @@ def _evaluate_relevance(query: str, results: List[Dict], llm: LLM) -> List[Dict]
         return []
     
     config = ConfigHolder().search_config
-    model = config.get("model", "openai/gpt-oss-120b:free")
+    model = config.get("model", "openrouter/free")
     results_subset = results[:5]
     
     results_text = "\n".join([
@@ -76,9 +76,23 @@ Respond ONLY with comma-separated numbers, nothing else. Example: 1,3,4"""
         return results_subset[:3]
 
 
-@create_tool(name="search", description="Web search using DuckDuckGo")
+@create_tool(
+    name="search", 
+    description="Web search via DuckDuckGo - returns relevant results with sources"
+)
 def search_tool(query: str, llm=None, sandbox=None) -> str:
-    """Real web search using DuckDuckGo with relevance filtering."""
+    """Web search using DuckDuckGo.
+    
+    Args:
+        query: Search query (supports any language, auto-translates to English)
+    
+    Returns:
+        Formatted search results with titles, snippets, and source URLs
+    
+    Features:
+    - Auto-translates query to English for better results
+    - Filters results by relevance using LLM
+    - Returns up to 8 results with sources"""
     if llm is None:
         return "Error: LLM not provided"
     

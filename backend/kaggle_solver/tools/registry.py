@@ -66,6 +66,11 @@ class ToolRegistry:
                 tool_kwargs["path"] = kwargs.get("path", "")
                 tool_kwargs["content"] = kwargs.get("content", "")
                 result = func(**tool_kwargs)
+            elif name == "search":
+                # For search, pass query from kwargs (which comes from action)
+                search_query = kwargs.get("query", query)
+                tool_kwargs["query"] = search_query
+                result = func(**tool_kwargs)
             else:
                 result = func(query=query, **tool_kwargs)
             return ToolResult(

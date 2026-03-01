@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, List
 
 @dataclass
 class LLMConfig:
-    model: str = "meta-llama/llama-3.1-8b-instruct"
+    model: str = "openrouter/free"
     temperature: float = 0.7
     max_tokens: int = 4096
     max_retries: int = 3
@@ -31,7 +31,7 @@ class AgentSettings:
 
 @dataclass
 class SearchConfig:
-    model: str = "openai/gpt-4o-mini"
+    model: str = "openrouter/free"
     max_results: int = 8
     relevance_filter: bool = True
 

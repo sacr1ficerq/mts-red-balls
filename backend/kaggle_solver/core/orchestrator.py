@@ -19,19 +19,20 @@ LOG_DIR = Path(__file__).parent.parent.parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 
-def _create_agent_factory(orchestrator, event_callback):
+def _create_agent_factory(orchestrator, event_callback, session=None):
     def agent_factory_fn(**kwargs):
         agent_name = kwargs.get("name", "")
         agent_role = kwargs.get("role", "")
         agent_tools = kwargs.get("tools", ["tool"])
-        return orchestrator.create_agent(agent_name, agent_role, agent_tools, event_callback)
+        return orchestrator.create_agent(agent_name, agent_role, agent_tools, event_callback, session=session)
     return agent_factory_fn
 
 
 class Orchestrator:
     def __init__(self, config: Optional[Config] = None):
         self.config = config or Config.load()
-        self.state = StateManager()
+        storage_path = Path(__file__).parent.parent.parent / "data" / "sessions.json"
+        self.state = StateManager(str(storage_path))
         self.llm = LLM()
         # Sandbox root is the base directory. Sessions will use subdirectories.
         self.base_sandbox_path = Path(self.config.sandbox.root)
@@ -60,15 +61,15 @@ class Orchestrator:
         tools: List[str],
         event_callback: Optional[Callable] = None,
         agent_factory: Optional[Callable] = None,
-        sandbox: Optional[Sandbox] = None
+        sandbox: Optional[Sandbox] = None,
+        session: Optional[Any] = None
     ) -> BaseAgent:
         if agent_factory is None:
-            # We need to pass the sandbox to the factory so sub-agents use the same sandbox
             def agent_factory_fn(**kwargs):
                 agent_name = kwargs.get("name", "")
                 agent_role = kwargs.get("role", "")
                 agent_tools = kwargs.get("tools", ["tool"])
-                return self.create_agent(agent_name, agent_role, agent_tools, event_callback, None, sandbox)
+                return self.create_agent(agent_name, agent_role, agent_tools, event_callback, None, sandbox, session)
             agent_factory = agent_factory_fn
         
         current_sandbox = sandbox or self.sandbox
@@ -87,7 +88,7 @@ class Orchestrator:
                 temperature=self.config.llm.temperature
             )
             return AgentRegistry.create(
-                name, agent_config, self.llm, current_sandbox, self.tool_registry, event_callback, agent_factory
+                name, agent_config, self.llm, current_sandbox, self.tool_registry, event_callback, agent_factory, session
             )
 
         class DynamicAgent(BaseAgent):
@@ -103,7 +104,7 @@ class Orchestrator:
             temperature=self.config.llm.temperature
         )
         
-        return DynamicAgent(agent_config, self.llm, current_sandbox, self.tool_registry, event_callback, agent_factory)
+        return DynamicAgent(agent_config, self.llm, current_sandbox, self.tool_registry, event_callback, agent_factory, session)
 
     def _create_session_callback(self, session: Session) -> Callable:
         session_log_file = LOG_DIR / f"session_{session.id}.log"
@@ -142,7 +143,8 @@ class Orchestrator:
             role="Plan and delegate tasks",
             tools=["delegate", "message", "tool"],
             event_callback=event_callback,
-            sandbox=session_sandbox
+            sandbox=session_sandbox,
+            session=session
         )
 
         start_time = time.time()
@@ -159,6 +161,7 @@ class Orchestrator:
             session.artifacts["error"] = str(e)
         
         session.artifacts["total_time"] = time.time() - start_time
+        self.state.update_session(session.id)
 
         return session
 
@@ -209,6 +212,7 @@ class Orchestrator:
             session.artifacts["error"] = str(e)
         
         session.artifacts["total_time"] = time.time() - start_time
+        self.state.update_session(session.id)
         return session
 
     def list_sessions(self) -> Dict[str, Any]:
@@ -216,9 +220,16 @@ class Orchestrator:
         historical = [v.to_dict() for v in self.state.sessions.values() if v.status != "running"]
         return {"active": active, "historical": historical}
 
+    def clear_sessions(self):
+        historical = [sid for sid, s in self.state.sessions.items() if s.status != "running"]
+        for sid in historical:
+            del self.state.sessions[sid]
+        self.state.save()
+
     def stop_session(self, session_id: str) -> bool:
         session = self.state.get_session(session_id)
         if session:
             session.status = "cancelled"
+            self.state.update_session(session.id)
             return True
         return False

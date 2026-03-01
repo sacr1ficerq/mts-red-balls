@@ -86,7 +86,7 @@ class RAG:
             return f"Context: {context_text}\n\nQuestion: {query}"
         
         config = ConfigHolder().search_config
-        model = config.get("model", "openai/gpt-oss-120b:free")
+        model = config.get("model", "openrouter/free")
         
         prompt = f"""Based on the following context, answer the question.
 

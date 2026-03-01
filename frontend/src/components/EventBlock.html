@@ -1,0 +1,26 @@
+<!-- EventBlock.html - Agent thought/block -->
+<div class="flex gap-4 group">
+    <div class="flex-shrink-0 mt-1">
+        <div class="w-6 h-6 rounded-full flex items-center justify-center border shadow-sm"
+             :class="getAgentStyle(event.agent).bg + ' ' + getAgentStyle(event.agent).border">
+            <i class="fas text-[10px]" :class="getAgentStyle(event.agent).icon + ' ' + getAgentStyle(event.agent).iconColor"></i>
+        </div>
+    </div>
+    <div class="flex-1 min-w-0">
+        <div class="bg-white border rounded-lg shadow-sm overflow-hidden transition-all hover:shadow-md"
+             :class="getAgentStyle(event.agent).border.replace('border-', 'border-')">
+            <div class="px-3 py-2 flex justify-between items-center cursor-pointer"
+                 :class="getAgentStyle(event.agent).bg + '/50'"
+                 @click="toggleEvent(currentSessionId, index)">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold" :class="getAgentStyle(event.agent).text" x-text="getAgentDisplayName(event.agent)"></span>
+                </div>
+                <i class="fas text-[10px] opacity-50 transition-transform" 
+                   :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </div>
+            <div x-show="event.expanded && event.data.content" class="p-3 text-xs text-gray-700 leading-relaxed markdown-body bg-white">
+                <div x-html="DOMPurify.sanitize(marked.parse(formatContent(event.data.content || '')))"></div>
+            </div>
+        </div>
+    </div>
+</div>

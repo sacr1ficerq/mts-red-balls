@@ -247,6 +247,13 @@ def list_sessions():
     return orch.list_sessions()
 
 
+@app.post("/api/sessions/clear")
+def clear_sessions():
+    orch = get_orchestrator()
+    orch.clear_sessions()
+    return {"status": "cleared"}
+
+
 @app.post("/api/session/{session_id}/stop")
 def stop_session(session_id: str):
     orch = get_orchestrator()

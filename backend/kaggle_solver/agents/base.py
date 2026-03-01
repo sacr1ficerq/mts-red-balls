@@ -45,7 +45,8 @@ class BaseAgent(ABC):
         sandbox,
         tool_registry,
         event_callback: Optional[Callable] = None,
-        agent_factory: Optional[Any] = None
+        agent_factory: Optional[Any] = None,
+        session=None
     ):
         self.config = config
         self.llm = llm
@@ -53,6 +54,7 @@ class BaseAgent(ABC):
         self.tools = tool_registry
         self.event_callback = event_callback
         self.agent_factory = agent_factory
+        self.session = session
         self.state = AgentState.IDLE
         self.messages: List[Dict[str, str]] = []
         self._iteration = 0
@@ -91,6 +93,10 @@ class BaseAgent(ABC):
                     temperature=self.config.temperature,
                     max_tokens=1024
                 )
+                input_tokens = sum(len(m.get("content", "")) // 4 for m in full)
+                output_tokens = len(resp) // 4
+                if hasattr(self, 'session') and self.session:
+                    self.session.add_tokens(input_tokens + output_tokens)
             except Exception as e:
                 logger.error(f"LLM error: {e}")
                 return AgentResult(success=False, error=str(e), duration=time.time() - start)
