@@ -3,7 +3,7 @@ from kaggle_solver.tools.registry import create_tool
 
 @create_tool(
     name="files", 
-    description="File operations: read, write, list, delete, exists, size"
+    description="File operations: read, write, list, delete, exists, size, is_dir"
 )
 def files_tool(op: str, path: str, content: str = "", sandbox=None) -> str:
     """File operations in sandbox.
@@ -15,6 +15,7 @@ def files_tool(op: str, path: str, content: str = "", sandbox=None) -> str:
     - delete: Delete file. Args: path="filename"
     - exists: Check if file exists. Args: path="filename"
     - size: Get file size. Args: path="filename"
+    - is_dir: Check if path is directory. Args: path="filename"
     
     Returns:
         File content, success message, or error"""
@@ -23,6 +24,8 @@ def files_tool(op: str, path: str, content: str = "", sandbox=None) -> str:
 
     try:
         if op == "read":
+            if sandbox.is_dir(path):
+                return f"Error: {path} is a directory. Use list to see contents."
             return sandbox.read(path)
         elif op == "write":
             sandbox.write(path, content)

@@ -161,7 +161,13 @@ class Orchestrator:
             session.artifacts["error"] = str(e)
         
         session.artifacts["total_time"] = time.time() - start_time
-        self.state.update_session(session.id)
+        
+        self.state.sessions[session.id] = session
+        self.state.save()
+        
+        return session
+        
+        return session
 
         return session
 

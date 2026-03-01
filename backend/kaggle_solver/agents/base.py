@@ -9,6 +9,38 @@ from typing import List, Dict, Any, Optional, Callable
 logger = logging.getLogger(__name__)
 
 
+def parse_json_output(text: str) -> Dict[str, Any]:
+    """Parse JSON from LLM output, handling extra text"""
+    if not text:
+        return {}
+    
+    text = text.strip()
+    
+    # Try direct parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    
+    # Find JSON in text
+    start = text.find('{')
+    if start >= 0:
+        # Find matching closing brace
+        depth = 0
+        for i, char in enumerate(text[start:], start):
+            if char == '{':
+                depth += 1
+            elif char == '}':
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(text[start:i+1])
+                    except json.JSONDecodeError:
+                        pass
+    
+    return {}
+
+
 class AgentState(Enum):
     IDLE = "idle"
     THINKING = "thinking"
@@ -167,6 +199,17 @@ class BaseAgent(ABC):
                 self._emit("result", {"content": action.get("result", "")})
                 return AgentResult(success=True, output=action.get("result", ""), duration=time.time() - start)
 
+            elif action.get("action") == "options":
+                options = action.get("options", [])
+                question = action.get("question", "Выберите опцию:")
+                self._emit("button_options", {
+                    "question": question,
+                    "options": options,
+                    "expanded": True
+                })
+                self.add_message("tool", f"options: {question}")
+                full.append({"role": "tool", "content": f"options: {question}"})
+
         return AgentResult(success=False, error="Max iterations", duration=time.time() - start)
 
     def _parse(self, response: str) -> Dict[str, Any]:
@@ -212,7 +255,7 @@ class BaseAgent(ABC):
         for obj in json_objects:
             if isinstance(obj, dict) and "action" in obj:
                 action = obj.get("action", "")
-                if action in ("tool", "delegate"):
+                if action in ("tool", "delegate", "options"):
                     return obj
                 elif action == "done":
                     return obj

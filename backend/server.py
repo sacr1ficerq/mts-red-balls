@@ -241,6 +241,52 @@ async def continue_session(session_id: str, request: ContinueRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class OptionSelectionRequest(BaseModel):
+    selected: str
+
+
+@app.post("/api/session/{session_id}/select")
+async def select_option(session_id: str, request: OptionSelectionRequest):
+    try:
+        orch = get_orchestrator()
+        session = orch.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Add user selection as a message to the session
+        user_message = f"User selected: {request.selected}"
+        
+        # Emit event for the selection
+        event = {
+            "type": "user_selection",
+            "data": {"selected": request.selected},
+            "agent": "User"
+        }
+        session.add_event(event)
+        
+        # Continue session with the selection
+        def run_in_background():
+            try:
+                orch.continue_session(session_id, user_message)
+            except Exception as e:
+                logger.error(f"Background select error: {e}")
+                session.status = "error"
+                session.artifacts["error"] = str(e)
+
+        import threading
+        thread = threading.Thread(target=run_in_background, daemon=True)
+        thread.start()
+
+        return {
+            "session_id": session.id,
+            "status": "running",
+            "result": f"Selected: {request.selected}"
+        }
+    except Exception as e:
+        logger.error(f"Select error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/sessions")
 def list_sessions():
     orch = get_orchestrator()

@@ -65,7 +65,10 @@ class Sandbox:
         return True
 
     def read(self, path: str, encoding: str = "utf-8") -> str:
-        return self._secure_path(path).read_text(encoding=encoding)
+        p = self._secure_path(path)
+        if p.is_dir():
+            return f"Error: Path is a directory: {path}. Use list to see contents."
+        return p.read_text(encoding=encoding)
 
     def write(self, path: str, content: str, encoding: str = "utf-8"):
         p = self._secure_path(path)
@@ -75,6 +78,9 @@ class Sandbox:
 
     def exists(self, path: str) -> bool:
         return self._secure_path(path).exists()
+
+    def is_dir(self, path: str) -> bool:
+        return self._secure_path(path).is_dir()
 
     def list(self, path: str = ".") -> list:
         p = self._secure_path(path)

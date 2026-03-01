@@ -228,6 +228,21 @@ window.dashboard = function() {
             }
         },
 
+        async selectOption(event, option) {
+            if (!this.currentSessionId) return;
+            try {
+                const res = await fetch(`/api/session/${this.currentSessionId}/select`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ selected: option })
+                });
+                const data = await res.json();
+                await this.fetchSessions();
+            } catch(e) {
+                console.error('Error selecting option:', e);
+            }
+        },
+
         async startTask() {
             if (!this.newTaskInput.trim()) return;
             

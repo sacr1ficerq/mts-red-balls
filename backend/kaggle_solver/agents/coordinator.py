@@ -24,34 +24,28 @@ def load_prompt(filename: str, default: str) -> str:
 class CoordinatorAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        default = '''You are the Coordinator agent.
+        default = '''You are Coordinator. Your ONLY job is to delegate tasks to agents.
 
-LANGUAGE RULES:
-- RESPONSE to user: SAME language as user (Russian/English)
-- DELEGATE to agents: ALWAYS in English (CodeAgent, SearchAgent)
+RULES:
+1. If user says hi/hello/привет -> answer directly: {"action": "done", "result": "Привет!"}
+2. If user asks for code -> delegate to CodeAgent
+3. If user asks for info -> delegate to SearchAgent
+4. If unclear or need user choice -> ask with "options" action
+5. NEVER create a plan! Just delegate!
 
-DECISION TREE:
-- Simple question -> answer directly
-- Code task -> CodeAgent (ENGLISH task description)
-- Research task -> SearchAgent (ENGLISH task description)
-- Complex report -> plan + agents + CriticAgent
+OUTPUT (choose ONE):
+{"action": "done", "result": "Answer in user's language"}
+{"action": "delegate", "agent": "CodeAgent", "task": "Task in English"}
+{"action": "delegate", "agent": "SearchAgent", "task": "Search query in English"}
+{"action": "options", "question": "Question in user's language", "options": ["Option 1", "Option 2"]}
 
-EXAMPLES (Russian user):
+EXAMPLES:
+User: привет -> {"action": "done", "result": "Привет! Чем помочь?"}
+User: напиши код -> {"action": "delegate", "agent": "CodeAgent", "task": "Write hello world code to file"}
+User: найди инфо -> {"action": "delegate", "agent": "SearchAgent", "task": "Find information about X"}
+User: выбери модель (unclear which) -> {"action": "options", "question": "Какую модель использовать?", "options": ["XGBoost", "Random Forest", "Logistic Regression"]}
 
-User: "привет"
-{"action": "done", "result": "Привет! Чем могу помочь?"}
-
-User: "напиши сортировку в файл"
-{"action": "delegate", "agent": "CodeAgent", "task": "Write bubble sort algorithm to sort.py and execute it"}
-
-User: "найди информацию про AI"
-{"action": "delegate", "agent": "SearchAgent", "task": "Find latest information about artificial intelligence 2026"}
-
-User: "составь отчет про Абхазию"
-{"action": "delegate", "agent": "SearchAgent", "task": "Find comprehensive information about Abkhazia: geography, history, economy, culture"}
-
-
-Task to agents MUST be in English!
+That's it! No planning, no steps, just delegate!
 
 WRONG:
 - Writing code yourself instead of delegating to CodeAgent
@@ -60,6 +54,7 @@ WRONG:
 CORRECT:
 - Code: {"action": "delegate", "agent": "CodeAgent", "task": "Write X to file.py"}
 - Then verify with console tool if needed
+- Need user choice: {"action": "options", "question": "...", "options": [...]}
 {"action": "delegate", "agent": "CriticAgent", "task": "Validate..."}
 {"action": "done", "result": "Final answer"}'''
         return load_prompt("coordinator.yaml", default)
@@ -164,3 +159,36 @@ def get_agent_prompts(agent_name: str) -> str:
         "CriticAgent": CriticAgentPrompts.system_prompt(),
     }
     return prompts.get(agent_name, f"You are {agent_name}.")
+
+
+# Model selection helpers
+COMPLEX_TASKS = [
+    "анализ", "анализируй", "обучи", "модель", "машинн",
+    "analyze", "train", "model", "ml", "ai",
+    "график", "визуализ", "chart", "visual",
+    "отчет", "репорт", "report"
+]
+
+SIMPLE_TASKS = [
+    "привет", "hi", "hello", "пока",
+    "какой", "что такое", "как дела",
+    "найди", "search", "информацию",
+    "напиши код", "write code", "файл"
+]
+
+
+def should_use_powerful_model(query: str) -> bool:
+    """Determine if task requires powerful model"""
+    query_lower = query.lower()
+    
+    # Simple tasks - use free model
+    for simple in SIMPLE_TASKS:
+        if simple in query_lower:
+            return False
+    
+    # Complex tasks - use powerful model
+    for complex in COMPLEX_TASKS:
+        if complex in query_lower:
+            return True
+    
+    return False
