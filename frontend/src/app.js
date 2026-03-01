@@ -62,29 +62,39 @@ window.dashboard = function() {
                 const res = await fetch('/api/sessions');
                 const data = await res.json();
                 
-                const prevExpanded = {};
-                
-                // Save expanded state from current session before replacing
-                if (this.currentSessionId && this.activeSessions[this.currentSessionId]?.events) {
-                    this.activeSessions[this.currentSessionId].events.forEach((e, i) => {
-                        if (e && e.expanded !== undefined) {
-                            prevExpanded[i] = e.expanded;
+                // Save expanded state from current session before replacing - use persistent storage
+                const savedExpanded = {};
+                if (this.currentSessionId) {
+                    for (const [key, value] of Object.entries(this.expandedEvents)) {
+                        if (key.startsWith(this.currentSessionId)) {
+                            savedExpanded[key] = value;
                         }
-                    });
+                    }
                 }
                 
                 this.activeSessions = data.active || {};
-                this.historicalSessions = data.historical || [];
+                this.historicalSessions = data.historical || {};
+                
+                // Update expandedEvents with saved state for current session
+                if (this.currentSessionId) {
+                    for (const key of Object.keys(savedExpanded)) {
+                        this.expandedEvents[key] = savedExpanded[key];
+                    }
+                }
                 
                 // Restore expanded state to current session events
                 if (this.currentSessionId && this.activeSessions[this.currentSessionId]?.events) {
                     const events = this.activeSessions[this.currentSessionId].events;
                     events.forEach((event, index) => {
-                        if (prevExpanded.hasOwnProperty(index)) {
-                            event.expanded = prevExpanded[index];
+                        const eventKey = `${this.currentSessionId}-${index}`;
+                        if (savedExpanded.hasOwnProperty(eventKey)) {
+                            event.expanded = savedExpanded[eventKey];
                         } else if (event.expanded === undefined) {
                             // Default: expand results, errors, tools, delegates; collapse thoughts
                             event.expanded = ['result', 'error', 'tool', 'delegate', 'system'].includes(event.type);
+                            this.expandedEvents[eventKey] = event.expanded;
+                        } else {
+                            this.expandedEvents[eventKey] = event.expanded;
                         }
                     });
                     // Force Alpine.js reactivity by reassigning
@@ -279,6 +289,23 @@ window.dashboard = function() {
             return types[type] || type;
         },
         
+        getAgentDisplayName(agent) {
+            const names = {
+                'Coordinator': 'Планировщик',
+                'CoordinatorAgent': 'Планировщик',
+                'CodeAgent': 'Программист',
+                'Code': 'Программист',
+                'SearchAgent': 'Поисковик',
+                'Search': 'Поисковик',
+                'CriticAgent': 'Критик',
+                'Critic': 'Критик',
+                'CreatorAgent': 'Создатель',
+                'Creator': 'Создатель',
+                'Analyst': 'Аналитик'
+            };
+            return names[agent] || agent || 'Агент';
+        },
+        
         formatContent(content) {
             if (!content) return '';
             // Try to parse JSON and format nicely
@@ -304,6 +331,92 @@ window.dashboard = function() {
                 // Not JSON, return as is
                 return content;
             }
+        },
+        
+        formatToolOutput(output, toolName) {
+            if (!output) return '';
+            
+            // Format search results nicely
+            if (toolName === 'search') {
+                const lines = output.split('\n');
+                let html = '<div class="search-results-container">';
+                let inResult = false;
+                let resultNum = 0;
+                let currentTitle = '';
+                let currentSource = '';
+                let currentBody = [];
+                
+                for (const line of lines) {
+                    if (line.match(/^\d+\.\s/)) {
+                        if (inResult && currentTitle) {
+                            html += this.buildSearchResultCard(resultNum, currentTitle, currentSource, currentBody);
+                        }
+                        resultNum++;
+                        currentTitle = line.replace(/^\d+\.\s*/, '').trim();
+                        currentSource = '';
+                        currentBody = [];
+                        inResult = true;
+                    } else if (line.startsWith('   Source:')) {
+                        currentSource = line.replace('   Source:', '').trim();
+                    } else if (line.trim() && !line.startsWith('Search results')) {
+                        const body = line.replace(/^   /, '').trim();
+                        if (body) currentBody.push(body);
+                    }
+                }
+                if (inResult && currentTitle) {
+                    html += this.buildSearchResultCard(resultNum, currentTitle, currentSource, currentBody);
+                }
+                html += '</div>';
+                return html;
+            }
+            
+            // Console output - clean formatting
+            if (toolName === 'console') {
+                return '<pre class="console-output">' + this.escapeHtml(output) + '</pre>';
+            }
+            
+            // Files tool
+            if (toolName === 'files') {
+                return '<pre class="files-output">' + this.escapeHtml(output) + '</pre>';
+            }
+            
+            // Default: escape and preserve whitespace
+            return '<pre class="text-xs font-mono">' + this.escapeHtml(output) + '</pre>';
+        },
+        
+        buildSearchResultCard(num, title, source, body) {
+            const bodyHtml = body.length > 0 
+                ? '<div class="search-body">' + this.escapeHtml(body.join(' ')).substring(0, 300) + (body.join(' ').length > 300 ? '...' : '') + '</div>' 
+                : '';
+            const sourceHtml = source 
+                ? `<a href="${this.escapeHtml(source)}" target="_blank" class="search-source">${this.escapeHtml(this.truncateUrl(source))} <i class="fas fa-external-link-alt"></i></a>` 
+                : '';
+            
+            return `
+                <div class="search-result-card">
+                    <div class="search-result-number">${num}</div>
+                    <div class="search-result-content">
+                        <div class="search-title">${this.escapeHtml(title)}</div>
+                        ${bodyHtml}
+                        ${sourceHtml}
+                    </div>
+                </div>
+            `;
+        },
+        
+        truncateUrl(url) {
+            try {
+                const parsed = new URL(url.startsWith('http') ? url : 'http://' + url);
+                return parsed.hostname + (parsed.pathname !== '/' ? parsed.pathname : '');
+            } catch {
+                return url.substring(0, 50);
+            }
+        },
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         },
         
         getAgentStyle(agent) {
