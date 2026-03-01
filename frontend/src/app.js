@@ -30,6 +30,7 @@ window.dashboard = function() {
         async fetchSessions() {
             try {
                 const data = await API.fetchSessions();
+                console.log('[Sessions] Active:', Object.keys(data.active || {}).length, 'Historical:', (data.historical || []).length);
                 
                 const savedExpanded = {};
                 if (this.currentSessionId) {
@@ -76,7 +77,7 @@ window.dashboard = function() {
                     });
                 }
             } catch(e) {
-                console.log('Waiting for backend...');
+                console.error('[Sessions] Error:', e);
             }
         },
 
