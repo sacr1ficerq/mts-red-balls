@@ -1,4 +1,3 @@
-<script>
 // Style helpers
 window.Styles = {
     getAgentDisplayName(agent) {
@@ -38,4 +37,3 @@ window.Styles = {
         return { icon: 'fa-share-alt', bg: 'bg-purple-50', border: 'border-purple-200', headerBg: 'bg-purple-50', text: 'text-purple-700', iconColor: 'text-purple-600' };
     }
 };
-</script>

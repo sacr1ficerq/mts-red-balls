@@ -1,4 +1,3 @@
-<script>
 // API service - all HTTP calls
 window.API = {
     async fetchSessions() {
@@ -42,4 +41,3 @@ window.API = {
         return res.json();
     }
 };
-</script>

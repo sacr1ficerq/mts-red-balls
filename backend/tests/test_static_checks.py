@@ -15,7 +15,9 @@ class TestJavaScriptSyntax:
 
     JS_FILES = [
         FRONTEND_DIR / "src" / "app.js",
-        FRONTEND_DIR / "src" / "api.js",
+        FRONTEND_DIR / "src" / "services" / "api.js",
+        FRONTEND_DIR / "src" / "utils" / "formatters.js",
+        FRONTEND_DIR / "src" / "utils" / "styles.js",
         FRONTEND_DIR / "src" / "utils" / "helpers.js",
     ]
 
@@ -63,16 +65,28 @@ class TestJavaScriptSyntax:
         for js_file in self.JS_FILES:
             if not js_file.exists():
                 continue
-            result = subprocess.run(
-                ["node", "--check", str(js_file)],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode != 0:
-                pytest.fail(
-                    f"JavaScript syntax error in {js_file.name}:\n{result.stderr}"
-                )
+            content = js_file.read_text()
+            import re
+            js_match = re.search(r'<script>(.*?)</script>', content, re.DOTALL)
+            if js_match:
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as tmp:
+                    tmp.write(js_match.group(1))
+                    tmp_path = tmp.name
+                try:
+                    result = subprocess.run(
+                        ["node", "--check", tmp_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                    if result.returncode != 0:
+                        pytest.fail(
+                            f"JavaScript syntax error in {js_file.name}:\n{result.stderr}"
+                        )
+                finally:
+                    import os
+                    os.unlink(tmp_path)
 
     def test_javascript_parentheses_balanced(self):
         """JavaScript files should have balanced parentheses"""

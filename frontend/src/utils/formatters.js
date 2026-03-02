@@ -1,4 +1,3 @@
-<script>
 // Formatting utilities
 window.Formatters = {
     formatTime(timestamp) {
@@ -117,4 +116,3 @@ window.Formatters = {
         return content;
     }
 };
-</script>
