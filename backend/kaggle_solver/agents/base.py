@@ -392,8 +392,32 @@ class BaseAgent(ABC):
                 if action in ("tool", "delegate", "options", "plan", "update_plan", "done"):
                     return first_obj
         
-        # If response looks like JSON but wasn't parsed correctly, try direct parsing
+        # Try to handle truncated JSON - response might be cut off mid-JSON
         response_stripped = response.strip()
+        
+        # If it starts with { but doesn't end with }, try to find complete JSON
+        if response_stripped.startswith('{') and not response_stripped.endswith('}'):
+            # Try to complete the JSON by finding action field
+            action_match = re.search(r'"action"\s*:\s*"([^"]+)"', response_stripped)
+            if action_match:
+                action_type = action_match.group(1)
+                # Extract what we can
+                partial_result = {"action": action_type}
+                
+                # Try to extract other fields
+                task_match = re.search(r'"task"\s*:\s*"([^"]*(?:\\.[^"]*)*)"', response_stripped)
+                if task_match:
+                    partial_result["task"] = task_match.group(1)
+                
+                plan_match = re.search(r'"plan"\s*:\s*\{', response_stripped)
+                if plan_match:
+                    partial_result["plan"] = "..."
+                
+                if action_type in ("tool", "delegate", "options", "plan", "update_plan", "done"):
+                    logger.warning(f"Using truncated JSON with action: {action_type}")
+                    return partial_result
+        
+        # If response looks like JSON but wasn't parsed correctly, try direct parsing
         if response_stripped.startswith('{') and response_stripped.endswith('}'):
             try:
                 direct_parse = json.loads(response_stripped)
