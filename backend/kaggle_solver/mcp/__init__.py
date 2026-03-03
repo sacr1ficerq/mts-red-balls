@@ -18,8 +18,4 @@ def mcp_tool(query: str, tool_name: str = "", **kwargs) -> str:
         return f"Error: {e}"
 
 
-def register_mcp_tools():
-    pass
-
-
 ToolRegistry.register("mcp", mcp_tool, "Call MCP tool", {"tool_name": {"type": "string"}})

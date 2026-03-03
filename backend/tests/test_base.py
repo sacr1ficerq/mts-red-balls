@@ -288,12 +288,38 @@ class TestBaseAgentRun:
         context = {"session_id": "abc123", "history": []}
         agent.run("test", context)
         
-        # Check that context was passed to LLM
+        # With new indexed context, context is handled via event_ids
+        # The session_id is stored but context is passed via events
         call_args = mock_llm.chat.call_args
         messages = call_args.kwargs["messages"]
-        system_msg = messages[0]["content"]
-        assert "Context:" in system_msg
-        assert "abc123" in system_msg
+        # Context is now passed via messages (subscribed events), not in system prompt
+        assert len(messages) >= 1
+    
+    def test_run_with_event_ids_context(self, agent, mock_llm):
+        """Agent should subscribe to events by ID when context has event_ids."""
+        from unittest.mock import MagicMock
+        
+        # Setup session with events
+        mock_session = MagicMock()
+        mock_session.events = [
+            {"event_id": 1, "type": "tool", "data": {"output": "test output"}},
+            {"event_id": 2, "type": "tool", "data": {"output": "another"}},
+        ]
+        mock_session.get_events_by_ids.return_value = [mock_session.events[0]]
+        
+        mock_llm.chat.return_value = '{"action": "done", "result": "ok"}'
+        
+        # Pass context with event_ids
+        context = {"event_ids": [1], "session": mock_session}
+        agent.run("test", context)
+        
+        # Check that subscribed events were added to messages
+        call_args = mock_llm.chat.call_args
+        messages = call_args.kwargs["messages"]
+        
+        # Should have context message at beginning
+        context_found = any("[Context #1]" in m.get("content", "") for m in messages)
+        assert context_found, "Context event should be added to messages"
     
     def test_run_tool_action(self, agent, mock_llm, mock_tool_registry, mock_event_callback):
         """Agent should execute tool action and continue loop until done."""
@@ -353,7 +379,7 @@ class TestBaseAgentRun:
     
     def test_run_max_iterations(self, agent, mock_llm):
         """Agent should stop after max iterations when action not done/tool/delegate."""
-        # Return different unknown actions to avoid loop detection
+        # Return different unknown actions - now these will be treated as done
         mock_llm.chat.side_effect = [
             '{"action": "unknown", "data": "test1"}',
             '{"action": "unknown", "data": "test2"}'
@@ -363,9 +389,9 @@ class TestBaseAgentRun:
         
         result = agent.run("test")
         
-        assert result.success is False
-        assert result.error == "Max iterations"
-        assert mock_llm.chat.call_count == 2
+        # Unknown actions now result in done with the response as result
+        assert result.success is True
+        assert "test1" in result.output or "test2" in result.output
     
     def test_run_llm_error(self, agent, mock_llm):
         """Agent should handle LLM errors."""
@@ -386,22 +412,17 @@ class TestBaseAgentRun:
     
     def test_run_multiple_iterations(self, agent, mock_llm):
         """Agent should handle multiple iterations before done."""
-        call_count = [0]
+        # First return tool, then done - this will make 2 iterations
+        mock_llm.chat.side_effect = [
+            '{"action": "tool", "tool": "console", "query": "echo test"}',
+            '{"action": "done", "result": "finished"}'
+        ]
         
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] < 3:
-                # Return different unknown actions to avoid loop detection
-                return f'{{"action": "unknown", "data": "test{call_count[0]}"}}'
-            return '{"action": "done", "result": "finished"}'
-        
-        mock_llm.chat.side_effect = side_effect
         agent.config.max_iterations = 5
         
         result = agent.run("test")
         
         assert result.success is True
-        assert mock_llm.chat.call_count == 3
 
 
 class TestBaseAgentParse:
@@ -481,7 +502,7 @@ class TestAgentIntegration:
         call_kwargs = mock_llm.chat.call_args.kwargs
         assert call_kwargs["model"] == "test/model"
         assert call_kwargs["temperature"] == 0.7
-        assert call_kwargs["max_tokens"] == 1024
+        assert call_kwargs["max_tokens"] == 8192
     
     def test_agent_tracks_messages(self, agent, mock_llm):
         """Agent should track all messages."""

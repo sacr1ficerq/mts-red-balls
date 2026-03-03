@@ -166,10 +166,6 @@ class Orchestrator:
         self.state.save()
         
         return session
-        
-        return session
-
-        return session
 
     def get_session(self, session_id: str) -> Optional[Session]:
         return self.state.get_session(session_id)

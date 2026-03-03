@@ -4,6 +4,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+TOOL_CONSOLE = "console"
+TOOL_FILES = "files"
+TOOL_SEARCH = "search"
+TOOL_RAG = "rag"
+
+TOOLS_REQUIRING_LLM = {TOOL_SEARCH, TOOL_RAG}
+TOOLS_REQUIRING_SANDBOX = {TOOL_CONSOLE, TOOL_FILES}
+
 
 @dataclass
 class ToolResult:
@@ -54,20 +62,21 @@ class ToolRegistry:
             func = cls._tools[name]
             
             tool_kwargs = {}
-            if name in ("search", "rag"):
+            if name in TOOLS_REQUIRING_LLM:
                 if "llm" in kwargs:
                     tool_kwargs["llm"] = kwargs["llm"]
-            if name in ("console", "files"):
+            if name in TOOLS_REQUIRING_SANDBOX:
                 if "sandbox" in kwargs:
                     tool_kwargs["sandbox"] = kwargs["sandbox"]
             
-            if name == "files":
+            if name == TOOL_FILES:
                 tool_kwargs["op"] = kwargs.get("op", "read")
                 tool_kwargs["path"] = kwargs.get("path", "")
                 tool_kwargs["content"] = kwargs.get("content", "")
+                tool_kwargs["search"] = kwargs.get("search", "")
+                tool_kwargs["replace"] = kwargs.get("replace", "")
                 result = func(**tool_kwargs)
-            elif name == "search":
-                # For search, pass query from kwargs (which comes from action)
+            elif name == TOOL_SEARCH:
                 search_query = kwargs.get("query", query)
                 tool_kwargs["query"] = search_query
                 result = func(**tool_kwargs)

@@ -1,10 +1,12 @@
 import json
 import re
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Dict, Any, Optional, Callable
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +72,9 @@ class AgentResult:
 
 
 class BaseAgent(ABC):
+    MAX_CONTEXT_EVENTS = 3
+    MAX_CONSECUTIVE_PLANS = 2
+    
     def __init__(
         self,
         config: AgentConfig,
@@ -94,7 +99,7 @@ class BaseAgent(ABC):
     def _emit(self, event_type: str, data: Dict[str, Any]):
         if self.event_callback:
             data["expanded"] = True
-            self.event_callback({"type": event_type, "data": data, "agent": self.config.name, "timestamp": __import__("datetime").datetime.now().isoformat()})
+            self.event_callback({"type": event_type, "data": data, "agent": self.config.name, "timestamp": datetime.now().isoformat()})
 
     def add_message(self, role: str, content: str):
         self.messages.append({"role": role, "content": content})
@@ -103,27 +108,49 @@ class BaseAgent(ABC):
     def system_prompt(self) -> str:
         pass
 
-    def run(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> AgentResult:
-        import time
+    def run(self, user_input: str, context: Optional[Dict[str, Any]] = None, is_sub_call: bool = False) -> AgentResult:
         start = time.time()
         
         self.messages = []
         self.add_message("user", user_input)
         
-        system = self.system_prompt()
+        # Handle context subscription (event_ids)
         if context:
-            system += f"\n\nContext: {json.dumps(context)}"
+            if "session" in context:
+                self.session = context["session"]
+            
+            # Subscribe to events by ID
+            if "event_ids" in context and self.session:
+                event_ids = context["event_ids"][:self.MAX_CONTEXT_EVENTS]
+                subscribed_events = self.session.get_events_by_ids(event_ids)
+                
+                # Add context events to the beginning of messages
+                for e in subscribed_events:
+                    event_type = e.get("type", "event")
+                    event_data = e.get("data", {})
+                    content = str(event_data) if event_data else ""
+                    context_msg = f"[Context #{e['event_id']}] {event_type}: {content}"
+                    self.messages.insert(0, {"role": "system", "content": context_msg})
+        
+        system = self.system_prompt()
         
         full = [{"role": "system", "content": system}] + self.messages
-        self._emit("system", {"message": f"Starting: {user_input}"})
+        
+        # Track consecutive plans to prevent infinite loop
+        consecutive_plans = 0
+        
+        # Only emit "system" if NOT a sub-call (sub-call events are nested under parent)
+        if not is_sub_call:
+            self._emit("system", {"message": f"Starting: {user_input}"})
 
         for self._iteration in range(1, self.config.max_iterations + 1):
             try:
+                max_output_tokens = 8192
                 resp = self.llm.chat(
                     model=self.config.model,
                     messages=full,
                     temperature=self.config.temperature,
-                    max_tokens=1024
+                    max_tokens=max_output_tokens
                 )
                 input_tokens = sum(len(m.get("content", "")) // 4 for m in full)
                 output_tokens = len(resp) // 4
@@ -137,6 +164,31 @@ class BaseAgent(ABC):
             self._emit("thought", {"content": resp, "raw_response": resp, "expanded": True})
             
             action = self._parse(resp)
+            
+            # Track consecutive plans
+            if action.get("action") == "plan":
+                consecutive_plans += 1
+            else:
+                consecutive_plans = 0
+            
+            # Force delegate after 2 consecutive plans (prevent infinite loop)
+            if consecutive_plans >= self.MAX_CONSECUTIVE_PLANS and self.agent_factory:
+                logger.warning("Consecutive plans detected, forcing delegation")
+                steps = action.get("steps", [])
+                if steps:
+                    task = steps[0].get("task", "search")
+                    self._emit("delegate", {
+                        "target_agent": "SearchAgent", 
+                        "task": task,
+                        "expanded": True
+                    })
+                    sub = self.agent_factory(name="SearchAgent", role="Execute SearchAgent", tools=["tool"])
+                    sub_context = {"event_ids": []}
+                    if self.session:
+                        sub_context["session"] = self.session
+                    sub_result = sub.run(task, context=sub_context, is_sub_call=True)
+                    self._emit("result", {"content": sub_result.output})
+                    return AgentResult(success=True, output=sub_result.output, duration=time.time() - start)
             
             # Check for infinite loops or repeated failures
             if self._iteration > 1 and self.messages[-2].get("role") == "assistant" and self.messages[-2].get("content") == resp:
@@ -154,6 +206,8 @@ class BaseAgent(ABC):
                     kwargs["op"] = action.get("op", "read")
                     kwargs["path"] = action.get("path", "")
                     kwargs["content"] = action.get("content", "")
+                    kwargs["search"] = action.get("search", "")
+                    kwargs["replace"] = action.get("replace", "")
                 else:
                     for k, v in action.items():
                         if k not in ["action", "tool"]:
@@ -175,25 +229,69 @@ class BaseAgent(ABC):
                     "expanded": True
                 })
                 
+                # Add tool message with tool_call_id to satisfy providers that require it
+                tool_call_id = f"call_{action.get('tool', 'tool')}_{self._iteration}"
+                tool_msg = {"role": "tool", "content": f"{action.get('tool')}: {output}", "tool_call_id": tool_call_id}
                 self.add_message("tool", f"{action.get('tool')}: {output}")
-                full.append({"role": "tool", "content": f"{action.get('tool')}: {output}"})
+                full.append(tool_msg)
                 
                 # Continue loop to process tool result - don't return here!
 
             elif action.get("action") == "delegate" and self.agent_factory:
                 target = action.get("agent", "")
                 task = action.get("task", "")
+                context_ids = action.get("context_ids", [])[:3]
+                plan_id = action.get("plan_id", "")
+                step_id = action.get("step_id", 0)
+                
                 self._emit("delegate", {
                     "target_agent": target, 
                     "task": task,
+                    "context_ids": context_ids,
+                    "plan_id": plan_id,
+                    "step_id": step_id,
                     "expanded": True
                 })
                 
                 sub = self.agent_factory(name=target, role=f"Execute {target}", tools=["tool"])
-                sub_result = sub.run(task)
                 
+                # Pass context with event IDs and plan info
+                sub_context = {"event_ids": context_ids}
+                if self.session:
+                    sub_context["session"] = self.session
+                
+                sub_result = sub.run(task, context=sub_context, is_sub_call=True)
+                
+                # Emit delegate result as tool event
+                self._emit("tool", {
+                    "tool_name": "delegate", 
+                    "input": f"delegate to {target}: {task}",
+                    "output": sub_result.output[:2000],
+                    "success": sub_result.success,
+                    "expanded": True
+                })
+                
+                # Add tool message with tool_call_id
+                tool_call_id = f"call_delegate_{self._iteration}"
+                tool_msg = {"role": "tool", "content": f"delegate to {target}: {sub_result.output}", "tool_call_id": tool_call_id}
                 self.add_message("tool", f"delegate to {target}: {sub_result.output}")
-                full.append({"role": "tool", "content": f"delegate to {target}: {sub_result.output}"})
+                full.append(tool_msg)
+
+                # After delegate, optionally run CriticAgent for validation
+                if self.agent_factory and sub_result.output:
+                    critic = self.agent_factory(name="CriticAgent", role="Validate results", tools=["tool"])
+                    critic_result = critic.run(f"Validate and improve this answer: {sub_result.output}", context=sub_context, is_sub_call=True)
+                    if critic_result.output:
+                        # Emit critic result
+                        self._emit("tool", {
+                            "tool_name": "critic",
+                            "input": "validate and improve",
+                            "output": critic_result.output[:2000],
+                            "success": critic_result.success,
+                            "expanded": True
+                        })
+                        self.add_message("tool", f"CriticAgent: {critic_result.output}")
+                        full.append({"role": "tool", "content": f"CriticAgent: {critic_result.output}"})
 
             elif action.get("action") == "done":
                 self._emit("result", {"content": action.get("result", "")})
@@ -209,6 +307,34 @@ class BaseAgent(ABC):
                 })
                 self.add_message("tool", f"options: {question}")
                 full.append({"role": "tool", "content": f"options: {question}"})
+
+            elif action.get("action") == "plan":
+                plan_id = action.get("plan_id", "")
+                steps = action.get("steps", [])
+                self._emit("plan", {
+                    "plan_id": plan_id,
+                    "steps": steps,
+                    "expanded": True
+                })
+                
+                # Just emit plan - coordinator decides when and how to delegate
+                plan_text = f"Plan created with {len(steps)} steps. Now delegate the first step."
+                tool_call_id = f"call_plan_{self._iteration}"
+                tool_msg = {"role": "tool", "content": plan_text, "tool_call_id": tool_call_id}
+                self.add_message("tool", plan_text)
+                full.append(tool_msg)
+
+            elif action.get("action") == "update_plan":
+                plan_id = action.get("plan_id", "")
+                update = action.get("update", {})
+                update_type = update.get("type", "")
+                self._emit("update_plan", {
+                    "plan_id": plan_id,
+                    "update": update,
+                    "expanded": True
+                })
+                self.add_message("tool", f"plan updated: {update_type}")
+                full.append({"role": "tool", "content": f"plan updated: {update_type}"})
 
         return AgentResult(success=False, error="Max iterations", duration=time.time() - start)
 
@@ -250,30 +376,47 @@ class BaseAgent(ABC):
                 except:
                     pass
 
-        # Take ONLY THE FIRST valid action - execute one at a time
-        # This prevents infinite loops and ensures proper iteration
-        for obj in json_objects:
-            if isinstance(obj, dict) and "action" in obj:
-                action = obj.get("action", "")
-                if action in ("tool", "delegate", "options"):
-                    return obj
-                elif action == "done":
-                    return obj
-        
-        # Fallback: return first object with any action
+        # Take ONLY THE FIRST valid action - execute one at a time!
+        # Multiple actions in one response is NOT allowed - this causes loops
         if json_objects:
-            return json_objects[0]
+            # First, try to find a "done" action - prefer final results over intermediate actions
+            for obj in json_objects:
+                if isinstance(obj, dict) and obj.get("action") == "done":
+                    return obj
+            
+            # Otherwise take the first valid action
+            first_obj = json_objects[0]
+            if isinstance(first_obj, dict) and "action" in first_obj:
+                action = first_obj.get("action", "")
+                # Only these actions are allowed
+                if action in ("tool", "delegate", "options", "plan", "update_plan", "done"):
+                    return first_obj
         
-        for obj in json_objects:
-            if isinstance(obj, dict) and obj.get("action") == "done":
-                return obj
-                
-        for obj in json_objects:
-            if isinstance(obj, dict) and "action" in obj:
-                return obj
-
-        # If no valid JSON action found, but it looks like they tried (contains "action":),
-        # we might want to retry. But for now, fallback to text result.
-        # Improvement: If response is short and looks like a thought, maybe continue?
+        # If response looks like JSON but wasn't parsed correctly, try direct parsing
+        response_stripped = response.strip()
+        if response_stripped.startswith('{') and response_stripped.endswith('}'):
+            try:
+                direct_parse = json.loads(response_stripped)
+                if isinstance(direct_parse, dict) and "action" in direct_parse:
+                    action = direct_parse.get("action", "")
+                    if action in ("tool", "delegate", "options", "plan", "update_plan", "done"):
+                        return direct_parse
+            except:
+                pass
         
-        return {"action": "done", "result": response}
+        # If no valid JSON action found, treat entire response as text result
+        # Clean up the response - remove markdown code blocks if present
+        cleaned_response = re.sub(r'^```json\s*', '', response.strip())
+        cleaned_response = re.sub(r'^```\s*', '', cleaned_response)
+        cleaned_response = re.sub(r'```$', '', cleaned_response).strip()
+        
+        # If it still looks like JSON after cleaning, extract just the result
+        if cleaned_response.startswith('{') and cleaned_response.endswith('}'):
+            try:
+                json_resp = json.loads(cleaned_response)
+                if "result" in json_resp:
+                    return {"action": "done", "result": json_resp["result"]}
+            except:
+                pass
+        
+        return {"action": "done", "result": cleaned_response if cleaned_response else response}

@@ -7,8 +7,10 @@ from typing import Optional, Dict, Any
 import asyncio
 import logging
 import json
+import threading
 from pathlib import Path
 from datetime import datetime
+from contextlib import asynccontextmanager
 
 from kaggle_solver.core.config import ConfigHolder, Config
 from kaggle_solver.core.orchestrator import Orchestrator
@@ -34,6 +36,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Kaggle Solver API", version="1.0.0")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting Kaggle Solver API")
+    yield
+    logger.info("Shutting down Kaggle Solver API")
+
+
+app.router.lifespan_context = lifespan
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,28 +73,21 @@ def serve_index_html():
 
 # Global orchestrator instance
 orchestrator: Optional[Orchestrator] = None
+_orchestrator_lock = threading.Lock()
 
 
 def get_orchestrator() -> Orchestrator:
     global orchestrator
     if orchestrator is None:
-        orchestrator = Orchestrator()
+        with _orchestrator_lock:
+            if orchestrator is None:
+                orchestrator = Orchestrator()
     return orchestrator
 
 
 class QueryRequest(BaseModel):
     query: str
     session_id: Optional[str] = None
-
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting Kaggle Solver API")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("Shutting down Kaggle Solver API")
 
 
 @app.get("/api/health")

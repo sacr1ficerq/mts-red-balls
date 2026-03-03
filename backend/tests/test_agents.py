@@ -80,17 +80,21 @@ class TestCoordinatorAgent:
         assert "delegate" in agent.config.tools
     
     def test_coordinator_delegates_task(self, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback):
-        """Coordinator should be able to delegate tasks."""
+        """Coordinator should be able to delegate tasks after creating a plan."""
         config = AgentConfig(
             name="Coordinator",
             role="Plan and delegate",
             tools=["delegate", "message", "tool"],
-            max_iterations=3
+            max_iterations=5
         )
         agent = create_agent(ConcreteCoordinator, config, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback)
         
-        # Mock LLM to return delegate action
-        mock_llm.chat.return_value = '{"action": "delegate", "agent": "CodeAgent", "task": "do work"}'
+        # Mock LLM to return plan first, then delegate with plan_id
+        mock_llm.chat.side_effect = [
+            '{"action": "plan", "plan_id": "test123", "steps": [{"id": 1, "task": "do work"}]}',
+            '{"action": "delegate", "agent": "CodeAgent", "task": "do work", "plan_id": "test123", "step_id": 1}',
+            '{"action": "done", "result": "completed"}'
+        ]
         
         # Create sub-agent mock
         sub_agent = Mock()
@@ -108,7 +112,8 @@ class TestCoordinatorAgent:
         
         prompt = agent.system_prompt()
         
-        assert "Coordinator" in prompt or "coordinate" in prompt.lower()
+        # Prompt should mention plan, delegation, or workflow
+        assert "plan" in prompt.lower() or "delegate" in prompt.lower()
     
     def test_coordinator_uses_all_tools(self, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback):
         """Coordinator should be configured with all required tools."""
@@ -275,13 +280,12 @@ class TestCriticAgent:
         assert result.success is True
     
     def test_critic_agent_system_prompt(self, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback):
-        """CriticAgent should have correct system prompt."""
         config = AgentConfig(name="CriticAgent", role="test", tools=[], max_iterations=3)
         agent = create_agent(ConcreteCritic, config, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback)
         
         prompt = agent.system_prompt()
         
-        assert "CriticAgent" in prompt or "critic" in prompt.lower() or "validate" in prompt.lower()
+        assert "qa" in prompt.lower() or "quality" in prompt.lower() or "critic" in prompt.lower()
 
 
 class TestAllToolsAvailable:

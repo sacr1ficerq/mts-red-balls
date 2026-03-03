@@ -13,30 +13,22 @@ class TestDelegation:
         return factory
 
     def test_delegation_creates_sub_agent(self, agent_factory):
-        # Test that delegation creates and runs a sub-agent
+        # Test that after plan, delegation happens automatically
         
-        config = AgentConfig(name="AgentA", role="Role", tools=[], max_iterations=2)
+        config = AgentConfig(name="AgentA", role="Role", tools=[], max_iterations=5)
         agent = ConcreteAgent(config, Mock(), Mock(), Mock(), agent_factory=agent_factory)
         
-        # First call returns delegate, second call returns done
-        agent.llm.chat.side_effect = [
-            '{"action": "delegate", "agent": "AgentB", "task": "task"}',
-            '{"action": "done", "result": "delegation completed"}'
-        ]
+        # First call returns plan - then auto-delegate happens and returns
+        agent.llm.chat.return_value = '{"action": "plan", "plan_id": "test123", "steps": [{"id": 1, "task": "do task"}]}'
         
-        # Mock factory to return a mock agent
         sub_agent = Mock()
         sub_agent.run.return_value = AgentResult(success=True, output="AgentB result")
-        agent_factory.side_effect = lambda **kwargs: sub_agent
+        agent_factory.return_value = sub_agent
         
         result = agent.run("start")
         
-        # Agent should complete successfully
         assert result.success
-        # The final result comes from the LLM's "done" response
-        assert "delegation completed" in result.output
-        # But the factory was called to create the sub-agent
-        agent_factory.assert_called()
+        assert "AgentB result" in result.output
 
     def test_delegation_without_factory(self):
         # Test behavior when delegation is requested but no factory exists

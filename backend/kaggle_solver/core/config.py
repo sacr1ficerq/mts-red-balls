@@ -59,6 +59,8 @@ class Config:
     rag: Dict[str, Any] = field(default_factory=dict)
     server: ServerConfig = field(default_factory=ServerConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
+    complex_tasks: List[str] = field(default_factory=lambda: ["analyze", "train", "model", "ml", "ai", "chart", "visual", "graph", "report"])
+    simple_tasks: List[str] = field(default_factory=lambda: ["hi", "hello", "hey", "what is", "how to", "find", "search", "info", "code", "file"])
 
     @classmethod
     def load(cls, path: str = "config.yaml") -> "Config":
@@ -90,7 +92,9 @@ class Config:
             search=SearchConfig(**data.get("search", {})),
             rag=data.get("rag", {}),
             server=ServerConfig(**data.get("server", {})),
-            logging=LoggingConfig(**data.get("logging", {}))
+            logging=LoggingConfig(**data.get("logging", {})),
+            complex_tasks=data.get("complex_tasks", ["analyze", "train", "model", "ml", "ai", "chart", "visual", "graph", "report"]),
+            simple_tasks=data.get("simple_tasks", ["hi", "hello", "hey", "what is", "how to", "find", "search", "info", "code", "file"])
         )
 
 

@@ -134,8 +134,11 @@ class Sandbox:
                 if next_cmd not in self.ALLOWED_COMMANDS and not next_cmd.startswith("./"):
                     return Result(False, error=f"Command not allowed in chain: {next_cmd}")
 
-        if " /" in command or command.startswith("/"):
-            return Result(False, error="Absolute paths not allowed", return_code=1)
+        # Block absolute paths in shell commands (but allow in python -c commands)
+        # Check if command starts with / or contains " /" (space + absolute path)
+        stripped = command.strip()
+        if (stripped.startswith("/") or " /" in stripped) and not stripped.startswith("python"):
+            return Result(False, error="Absolute paths not allowed in shell commands", return_code=1)
 
         timeout = timeout or self.timeout
         

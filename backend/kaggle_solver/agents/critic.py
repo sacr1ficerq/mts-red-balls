@@ -69,8 +69,7 @@ def check_submission_format(content: str) -> Dict[str, Any]:
     
     header = lines[0].lower()
     
-    # Check for Id column
-    if "id" not in header and "id" not in header:
+    if "id" not in header:
         return {"valid": False, "error": "Missing Id column"}
     
     return {"valid": True, "rows": len(lines) - 1}
