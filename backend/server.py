@@ -315,12 +315,13 @@ async def query(request: QueryRequest, req: Request):
                 session.artifacts["duration"] = result.duration
                 session.artifacts["steps"] = result.steps
             except Exception as e:
-                logger.error(f"Background task error: {e}")
+                logger.error(f"Background task error: {e}", exc_info=True)
                 session.status = "error"
                 session.artifacts["error"] = str(e)
         
         import threading
-        thread = task_executor.submit(run_in_background)
+        thread = threading.Thread(target=run_in_background, daemon=True)
+        thread.start()
         
         return {
             "session_id": session_id,
@@ -328,7 +329,7 @@ async def query(request: QueryRequest, req: Request):
             "result": "Task started"
         }
     except Exception as e:
-        logger.error(f"Query error: {e}")
+        logger.error(f"Query error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         rate_limiter.release(client_id)
@@ -360,12 +361,13 @@ async def continue_session(session_id: str, request: ContinueRequest):
             try:
                 orch.continue_session(session_id, request.message)
             except Exception as e:
-                logger.error(f"Background continue error: {e}")
+                logger.error(f"Background continue error: {e}", exc_info=True)
                 session.status = "error"
                 session.artifacts["error"] = str(e)
 
         import threading
-        thread = task_executor.submit(run_in_background)
+        thread = threading.Thread(target=run_in_background, daemon=True)
+        thread.start()
 
         return {
             "session_id": session.id,
@@ -373,7 +375,7 @@ async def continue_session(session_id: str, request: ContinueRequest):
             "result": "Task continued"
         }
     except Exception as e:
-        logger.error(f"Continue error: {e}")
+        logger.error(f"Continue error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -405,12 +407,13 @@ async def select_option(session_id: str, request: OptionSelectionRequest):
             try:
                 orch.continue_session(session_id, user_message)
             except Exception as e:
-                logger.error(f"Background select error: {e}")
+                logger.error(f"Background select error: {e}", exc_info=True)
                 session.status = "error"
                 session.artifacts["error"] = str(e)
 
         import threading
-        thread = task_executor.submit(run_in_background)
+        thread = threading.Thread(target=run_in_background, daemon=True)
+        thread.start()
 
         return {
             "session_id": session.id,
@@ -418,7 +421,7 @@ async def select_option(session_id: str, request: OptionSelectionRequest):
             "result": f"Selected: {request.selected}"
         }
     except Exception as e:
-        logger.error(f"Select error: {e}")
+        logger.error(f"Select error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

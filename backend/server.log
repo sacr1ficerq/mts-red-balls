@@ -1,8 +1,5 @@
-INFO:     Started server process [77010]
+INFO:     Started server process [49191]
 INFO:     Waiting for application startup.
-2026-03-02 00:57:43,330 - server - INFO - Starting Kaggle Solver API
+2026-03-04 13:36:51,977 - server - INFO - Starting Kaggle Solver API
 INFO:     Application startup complete.
-ERROR:    [Errno 48] error while attempting to bind on address ('0.0.0.0', 8080): address already in use
-INFO:     Waiting for application shutdown.
-2026-03-02 00:57:43,331 - server - INFO - Shutting down Kaggle Solver API
-INFO:     Application shutdown complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

@@ -35,7 +35,10 @@ class Orchestrator:
         self.state = StateManager(str(storage_path))
         self.llm = LLM()
         # Sandbox root is the base directory. Sessions will use subdirectories.
-        self.base_sandbox_path = Path(self.config.sandbox.root)
+        sandbox_root = self.config.sandbox.root
+        if not Path(sandbox_root).is_absolute():
+            sandbox_root = Path(__file__).parent.parent.parent / sandbox_root
+        self.base_sandbox_path = Path(sandbox_root).resolve()
         self.base_sandbox_path.mkdir(parents=True, exist_ok=True)
         # Default sandbox for general tasks (or backward compatibility)
         self.sandbox = Sandbox(self.base_sandbox_path, timeout=self.config.sandbox.timeout)
