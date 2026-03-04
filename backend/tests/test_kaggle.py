@@ -31,16 +31,13 @@ class TestMultiModelSelection:
         assert config.llm.model in self.FREE_MODELS, f"Model should be free: {config.llm.model}"
     
     def test_model_selection_by_task_complexity(self):
-        """System should select model based on task complexity"""
         from kaggle_solver.agents.coordinator import should_use_powerful_model
         
-        # Simple tasks - use free model
-        assert not should_use_powerful_model("привет")
-        assert not should_use_powerful_model("какой сегодня день")
+        assert not should_use_powerful_model("hello")
+        assert not should_use_powerful_model("what day is it")
         
-        # Complex tasks - suggest powerful model
-        assert should_use_powerful_model("проанализируй данные")
-        assert should_use_powerful_model("обучи модель")
+        assert should_use_powerful_model("analyze data")
+        assert should_use_powerful_model("train model")
 
 
 class TestStructuredOutput:

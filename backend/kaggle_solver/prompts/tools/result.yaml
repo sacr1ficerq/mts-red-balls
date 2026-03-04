@@ -1,0 +1,7 @@
+result_tool: |
+  done: Complete the task and return result to user.
+  Input: final answer in user's language
+  Output: none
+  
+  Usage:
+  {"action": "done", "result": "your answer"}

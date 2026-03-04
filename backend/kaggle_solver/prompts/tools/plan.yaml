@@ -1,0 +1,36 @@
+plan_tool: |
+  plan: Create a plan with steps (task + agent for each step).
+  Input: plan_id, steps list with {id, task, agent}
+  Output: none
+  
+  Usage:
+  {"action": "plan", "plan_id": "1", "steps": [{"id": 1, "agent": "SearchAgent", "task": "search query"}]}
+
+update_plan_tool: |
+  update_plan: Update a specific step in the plan.
+  Input: plan_id, step_id, new_task/new_agent
+  Output: none
+  
+  Usage:
+  {"action": "update_plan", "plan_id": "1", "step_id": 1, "task": "new task"}
+
+delegate_tool: |
+  delegate: Delegate task to an agent.
+  Available agents:
+  - SearchAgent: searches web for information (task in English)
+  - CodeAgent: writes and executes Python code
+  
+  Input: agent name, task description
+  Output: agent execution result
+  
+  Usage:
+  {"action": "delegate", "agent": "SearchAgent", "task": "what is Python"}
+  {"action": "delegate", "agent": "CodeAgent", "task": "write hello world"}
+
+result_tool: |
+  done: Return final result to user.
+  Input: final answer in user's language
+  Output: none
+  
+  Usage:
+  {"action": "done", "result": "your answer"}

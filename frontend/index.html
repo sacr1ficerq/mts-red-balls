@@ -18,10 +18,10 @@
     <style>[x-cloak] { display: none !important; }</style>
     
     <!-- Local Scripts - modules first, then app.js -->
-    <script src="src/services/api.js?v=4"></script>
-    <script src="src/utils/formatters.js?v=4"></script>
-    <script src="src/utils/styles.js?v=4"></script>
-    <script src="src/app.js?v=4"></script>
+    <script src="src/services/api.js?v=10"></script>
+    <script src="src/utils/formatters.js?v=10"></script>
+    <script src="src/utils/styles.js?v=10"></script>
+    <script src="src/app.js?v=10"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-50 h-screen flex overflow-hidden text-sm" x-data="dashboard()" x-init="init()" x-cloak>
@@ -240,6 +240,11 @@
                 <template x-for="(event, index) in currentSessionEvents" :key="index">
                     <div class="max-w-3xl mx-auto w-full">
                         
+                        <!-- Event ID Badge -->
+                        <div class="flex items-center gap-2 mb-1 ml-12">
+                            <span class="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded" x-text="'#' + (event.event_id || index + 1)"></span>
+                        </div>
+                        
                         <!-- System -->
                         <template x-if="event.type === 'system'">
                             <div class="flex gap-4">
@@ -329,6 +334,8 @@
                                             <span class="text-sm font-bold text-purple-700">Делегирование</span>
                                             <span class="px-2 py-1 rounded text-xs bg-purple-100 text-purple-700" 
                                                   x-text="getAgentDisplayName(event.data.target_agent)"></span>
+                                            <span x-show="event.data.step_id" class="px-2 py-1 rounded text-xs bg-gray-100 text-gray-600"
+                                                  x-text="'step ' + event.data.step_id"></span>
                                         </div>
                                         <i class="fas text-xs" :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                                     </div>
@@ -336,6 +343,49 @@
                                         <div class="text-xs font-bold text-gray-500 uppercase mb-2">Задача</div>
                                         <div class="text-sm text-gray-700" x-text="event.data.task"></div>
                                     </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Plan Created -->
+                        <template x-if="event.type === 'plan'">
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center border border-amber-200">
+                                        <i class="fas fa-tasks text-sm text-amber-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-white border border-amber-200 rounded-lg shadow-sm">
+                                    <div class="px-4 py-2 bg-amber-50 border-b border-amber-100">
+                                        <span class="text-sm font-bold text-amber-700">План создан</span>
+                                    </div>
+                                    <div class="p-4">
+                                        <template x-for="step in event.data.steps" :key="step.id">
+                                            <div class="flex items-center gap-2 py-1">
+                                                <span class="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs flex items-center justify-center font-bold" 
+                                                      x-text="step.id"></span>
+                                                <span class="text-sm text-gray-700" x-text="step.task"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Plan Updated -->
+                        <template x-if="event.type === 'update_plan'">
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center border border-orange-200">
+                                        <i class="fas fa-edit text-sm text-orange-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-white border border-orange-200 rounded-lg shadow-sm">
+                                    <div class="px-4 py-2 bg-orange-50 border-b border-orange-100">
+                                        <span class="text-sm font-bold text-orange-700">План обновлён</span>
+                                        <span class="ml-2 text-xs text-orange-600" x-text="event.data.update.type"></span>
+                                    </div>
+                                    <div class="p-4 text-sm text-gray-700" x-text="JSON.stringify(event.data.update)"></div>
                                 </div>
                             </div>
                         </template>

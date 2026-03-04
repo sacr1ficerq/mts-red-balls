@@ -38,6 +38,22 @@
         </template>
     </div>
 
+    <!-- Current Plan -->
+    <div x-show="sidebarOpen && currentPlan" class="border-t border-gray-100 px-2 py-2">
+        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+            <i class="fas fa-tasks"></i> План
+        </div>
+        <div class="space-y-1">
+            <template x-for="step in currentPlan.steps" :key="step.id">
+                <div class="flex items-center gap-2 px-2 py-1 rounded text-xs"
+                     :class="step.status === 'complete' ? 'bg-green-50 text-green-700' : (step.status === 'active' ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600')">
+                    <i class="fas w-3" :class="step.status === 'complete' ? 'fa-check-circle text-green-500' : (step.status === 'active' ? 'fa-spinner fa-spin text-amber-500' : 'fa-circle text-gray-300')"></i>
+                    <span class="truncate" x-text="step.task"></span>
+                </div>
+            </template>
+        </div>
+    </div>
+
     <!-- File Structure -->
     <div x-show="sidebarOpen" class="border-t border-gray-100 bg-gray-50 flex-shrink-0" style="height: 180px; overflow: hidden;" x-data="{ selectedFile: null, fileContent: '', loading: false }">
         <div class="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-100 border-b border-gray-200" @click="fileTreeOpen = !fileTreeOpen">

@@ -1,0 +1,14 @@
+# Tool definitions
+# Important: Use tool once, then wait for result. After result, output next action or done.
+
+description: |
+  Read and write files in sandbox.
+  Input: operation (read/write), path, content (for write)
+  Output: success message or file content (for read)
+
+usage: |
+  {"action": "tool", "tool": "files", "op": "write", "path": "script.py", "content": "print('hello')"}
+  # Wait for "File written successfully"...
+  {"action": "tool", "tool": "files", "op": "read", "path": "script.py"}
+  # Wait for file content...
+  {"action": "done", "result": "done"}

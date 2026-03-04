@@ -1,15 +1,16 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta
+from collections import defaultdict
 import asyncio
 import logging
 import json
 import threading
 from pathlib import Path
-from datetime import datetime
 from contextlib import asynccontextmanager
 
 from kaggle_solver.core.config import ConfigHolder, Config
@@ -35,7 +36,55 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Kaggle Solver API", version="1.0.0")
+
+class RateLimiter:
+    """Simple in-memory rate limiter."""
+    
+    def __init__(self, requests_per_minute: int = 10, max_concurrent: int = 5):
+        self.requests_per_minute = requests_per_minute
+        self.max_concurrent = max_concurrent
+        self.requests: Dict[str, List[datetime]] = defaultdict(list)
+        self.active_requests: Dict[str, int] = defaultdict(int)
+        self._lock = threading.Lock()
+    
+    def check(self, client_id: str) -> bool:
+        """Check if request is allowed."""
+        with self._lock:
+            now = datetime.now()
+            minute_ago = now - timedelta(minutes=1)
+            
+            if self.active_requests[client_id] >= self.max_concurrent:
+                return False
+            
+            self.requests[client_id] = [
+                t for t in self.requests[client_id] if t > minute_ago
+            ]
+            
+            if len(self.requests[client_id]) >= self.requests_per_minute:
+                return False
+            
+            return True
+    
+    def record(self, client_id: str):
+        with self._lock:
+            self.requests[client_id].append(datetime.now())
+            self.active_requests[client_id] += 1
+    
+    def release(self, client_id: str):
+        with self._lock:
+            self.active_requests[client_id] = max(0, self.active_requests[client_id] - 1)
+
+
+rate_limiter = RateLimiter(requests_per_minute=10, max_concurrent=5)
+
+
+app = FastAPI(
+    title="Kaggle Solver API",
+    description="Multi-agent system for solving Kaggle competitions and data analysis tasks",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
 
 @asynccontextmanager
@@ -142,11 +191,30 @@ async def sse_session_events(session_id: str):
     )
 
 
+def get_client_id(request: Request) -> str:
+    """Get client identifier from request."""
+    return request.client.host if request.client else "unknown"
+
+
 @app.post("/api/query")
-async def query(request: QueryRequest):
+async def query(request: QueryRequest, req: Request):
+    client_id = get_client_id(req)
+    
+    if not rate_limiter.check(client_id):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please try again later."
+        )
+    
+    rate_limiter.record(client_id)
+    
     try:
         orch = get_orchestrator()
-        
+    except Exception as e:
+        rate_limiter.release(client_id)
+        raise
+    
+    try:
         # Create session FIRST
         session = orch.state.create_session(request.query, request.session_id)
         session_id = session.id
@@ -200,6 +268,8 @@ async def query(request: QueryRequest):
     except Exception as e:
         logger.error(f"Query error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        rate_limiter.release(client_id)
 
 
 @app.get("/api/session/{session_id}")

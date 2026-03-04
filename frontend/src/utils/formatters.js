@@ -101,16 +101,26 @@ window.Formatters = {
 
     formatContent(content) {
         if (!content) return '';
+        
+        // If it looks like just thinking/reasoning (no JSON), show nothing
+        if (!content.trim().startsWith('{')) {
+            return '';
+        }
+        
         if (content.trim().startsWith('{')) {
             try {
                 const json = JSON.parse(content);
-                if (json.action === 'tool') return '<span class="text-gray-400 italic">Выполнение инструмента...</span>'; 
+                if (json.action === 'tool') {
+                    return '<span class="text-emerald-600 font-medium">⚙️ ' + (json.tool || 'tool') + '</span>';
+                }
                 if (json.action === 'delegate' && json.agent && json.task) {
                     const names = {'Coordinator': 'Планировщик', 'CodeAgent': 'Программист', 'SearchAgent': 'Поисковик', 'CriticAgent': 'Критик'};
                     return `<span class="text-purple-600">→ ${names[json.agent] || json.agent}:</span> ${json.task.substring(0, 100)}...`;
                 }
                 if (json.action === 'done' && json.result) return json.result;
-                return '<span class="text-gray-400 italic">Обработка...</span>';
+                if (json.action === 'plan') return '<span class="text-amber-600 font-medium">📋 План: ' + (json.steps?.length || 0) + ' шагов</span>';
+                if (json.action === 'update_plan') return '<span class="text-orange-600 font-medium">✏️ Обновление плана</span>';
+                return '';
             } catch (e) {}
         }
         return content;

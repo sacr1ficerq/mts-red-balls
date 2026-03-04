@@ -1,0 +1,4 @@
+search_tool: |
+  search: Search the web for information.
+  Input: search query in English
+  Output: list of results with title, snippet, and URL

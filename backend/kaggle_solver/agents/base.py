@@ -101,13 +101,13 @@ class BaseAgent(ABC):
     def __init__(
         self,
         config: AgentConfig,
-        llm,
-        sandbox,
-        tool_registry,
-        event_callback: Optional[Callable] = None,
-        agent_factory: Optional[Any] = None,
-        session=None
-    ):
+        llm: Any,
+        sandbox: Any,
+        tool_registry: Any,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        agent_factory: Optional[Callable[..., 'BaseAgent']] = None,
+        session: Optional[Any] = None
+    ) -> None:
         self.config = config
         self.llm = llm
         self.sandbox = sandbox
@@ -119,19 +119,43 @@ class BaseAgent(ABC):
         self.messages: List[Dict[str, str]] = []
         self._iteration = 0
 
-    def _emit(self, event_type: str, data: Dict[str, Any]):
+    def _emit(self, event_type: str, data: Dict[str, Any]) -> None:
+        """Emit an event to the event callback."""
         if self.event_callback:
             data["expanded"] = True
-            self.event_callback({"type": event_type, "data": data, "agent": self.config.name, "timestamp": datetime.now().isoformat()})
+            self.event_callback({
+                "type": event_type,
+                "data": data,
+                "agent": self.config.name,
+                "timestamp": datetime.now().isoformat()
+            })
 
-    def add_message(self, role: str, content: str):
+    def add_message(self, role: str, content: str) -> None:
+        """Add a message to the conversation history."""
         self.messages.append({"role": role, "content": content})
 
     @abstractmethod
     def system_prompt(self) -> str:
+        """Return the system prompt for this agent."""
         pass
 
     def run(self, user_input: str, context: Optional[Dict[str, Any]] = None, is_sub_call: bool = False) -> AgentResult:
+        """Execute the agent loop to accomplish the user's task.
+        
+        The agent follows a think-act-observe loop:
+        1. Receive user input and context
+        2. Query LLM for next action
+        3. Execute action (tool use, delegation, or completion)
+        4. Observe results and repeat
+        
+        Args:
+            user_input: User's request or task description
+            context: Optional context including session, event IDs, etc.
+            is_sub_call: Whether this is a delegated sub-call
+            
+        Returns:
+            AgentResult with success status, output, and execution duration
+        """
         start = time.time()
         
         self.messages = []
