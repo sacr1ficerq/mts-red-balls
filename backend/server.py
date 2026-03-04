@@ -299,39 +299,34 @@ async def query(request: QueryRequest, req: Request):
         session_sandbox = Sandbox(session_sandbox_path, timeout=orch.config.sandbox.timeout)
         orch._session_sandboxes[session_id] = session_sandbox
         
-        # Run in background
-        def run_in_background():
-            try:
-                coordinator = orch.create_agent(
-                    name="Coordinator",
-                    role="Plan and delegate tasks",
-                    tools=["delegate", "message", "tool"],
-                    event_callback=event_callback,
-                    sandbox=session_sandbox
-                )
-                result = coordinator.run(request.query, {"session_id": session_id})
-                session.status = "completed" if result.success else "error"
-                session.artifacts["result"] = result.output
-                session.artifacts["duration"] = result.duration
-                session.artifacts["steps"] = result.steps
-                # IMPORTANT: Save session after completion
-                orch.state.save()
-                logger.info(f"Session {session_id} saved with status: {session.status}")
-            except Exception as e:
-                logger.error(f"Background task error: {e}", exc_info=True)
-                session.status = "error"
-                session.artifacts["error"] = str(e)
-                orch.state.save()
-        
-        import threading
-        thread = threading.Thread(target=run_in_background, daemon=True)
-        thread.start()
-        
-        return {
-            "session_id": session_id,
-            "status": "running",
-            "result": "Task started"
-        }
+        # Run synchronously (simpler than background thread)
+        try:
+            coordinator = orch.create_agent(
+                name="Coordinator",
+                role="Plan and delegate tasks",
+                tools=["delegate", "message", "tool"],
+                event_callback=event_callback,
+                sandbox=session_sandbox
+            )
+            result = coordinator.run(request.query, {"session_id": session_id})
+            session.status = "completed" if result.success else "error"
+            session.artifacts["result"] = result.output
+            session.artifacts["duration"] = result.duration
+            session.artifacts["steps"] = result.steps
+            orch.state.save()
+            logger.info(f"Session {session_id} completed with status: {session.status}")
+            
+            return {
+                "session_id": session_id,
+                "status": session.status,
+                "result": result.output
+            }
+        except Exception as e:
+            logger.error(f"Query error: {e}", exc_info=True)
+            session.status = "error"
+            session.artifacts["error"] = str(e)
+            orch.state.save()
+            raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f"Query error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
