@@ -77,6 +77,11 @@ class RateLimiter:
 
 rate_limiter = RateLimiter(requests_per_minute=10, max_concurrent=5)
 
+# Thread pool for background agent tasks
+from concurrent.futures import ThreadPoolExecutor
+
+task_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="agent_task")
+
 
 app = FastAPI(
     title="Kaggle Solver API",
@@ -135,13 +140,71 @@ def get_orchestrator() -> Orchestrator:
 
 
 class QueryRequest(BaseModel):
-    query: str
-    session_id: Optional[str] = None
+    query: str = Field(..., min_length=1, max_length=10000)
+    session_id: Optional[str] = Field(None, max_length=100)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "Analyze this dataset and create a model"
+            }
+        }
 
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy"}
+    """Comprehensive health check endpoint."""
+    health = {
+        "status": "healthy",
+        "checks": {}
+    }
+    
+    # Check workspace directory
+    try:
+        from pathlib import Path
+        workspace = Path("workspace")
+        if workspace.exists() and workspace.is_dir():
+            health["checks"]["workspace"] = "ok"
+        else:
+            health["checks"]["workspace"] = "missing"
+            health["status"] = "degraded"
+    except Exception as e:
+        health["checks"]["workspace"] = f"error: {e}"
+        health["status"] = "degraded"
+    
+    # Check logs directory
+    try:
+        logs_dir = Path("logs")
+        if logs_dir.exists() or logs_dir.parent.exists():
+            health["checks"]["logs"] = "ok"
+        else:
+            health["checks"]["logs"] = "missing"
+    except Exception as e:
+        health["checks"]["logs"] = f"error: {e}"
+    
+    # Check data directory
+    try:
+        data_dir = Path("data")
+        if data_dir.exists():
+            health["checks"]["data"] = "ok"
+        else:
+            health["checks"]["data"] = "not_initialized"
+    except Exception as e:
+        health["checks"]["data"] = f"error: {e}"
+    
+    # Check active sessions
+    try:
+        orch = get_orchestrator()
+        active_count = len([s for s in orch.state.sessions.values() if s.status == "running"])
+        health["checks"]["sessions"] = f"{active_count} active"
+    except Exception as e:
+        health["checks"]["sessions"] = f"error: {e}"
+        health["status"] = "degraded"
+    
+    if health["status"] == "degraded":
+        health["status"] = "degraded"
+    
+    return health
 
 
 @app.get("/api/sse/{session_id}")
@@ -257,8 +320,7 @@ async def query(request: QueryRequest, req: Request):
                 session.artifacts["error"] = str(e)
         
         import threading
-        thread = threading.Thread(target=run_in_background, daemon=True)
-        thread.start()
+        thread = task_executor.submit(run_in_background)
         
         return {
             "session_id": session_id,
@@ -303,8 +365,7 @@ async def continue_session(session_id: str, request: ContinueRequest):
                 session.artifacts["error"] = str(e)
 
         import threading
-        thread = threading.Thread(target=run_in_background, daemon=True)
-        thread.start()
+        thread = task_executor.submit(run_in_background)
 
         return {
             "session_id": session.id,
@@ -349,8 +410,7 @@ async def select_option(session_id: str, request: OptionSelectionRequest):
                 session.artifacts["error"] = str(e)
 
         import threading
-        thread = threading.Thread(target=run_in_background, daemon=True)
-        thread.start()
+        thread = task_executor.submit(run_in_background)
 
         return {
             "session_id": session.id,

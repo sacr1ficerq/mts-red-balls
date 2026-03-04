@@ -37,6 +37,8 @@ class Sandbox:
         "wget http", "curl http", # Prevent downloading from arbitrary URLs if strict
     ]
 
+    MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
+    
     def __init__(self, root: Path, timeout: int = 60):
         self.root = root.resolve()
         self.timeout = timeout
@@ -92,6 +94,8 @@ class Sandbox:
         return p.read_text(encoding=encoding)
 
     def write(self, path: str, content: str, encoding: str = "utf-8"):
+        if len(content.encode(encoding)) > self.MAX_FILE_SIZE:
+            raise ValueError(f"File too large. Max size: {self.MAX_FILE_SIZE} bytes")
         p = self._secure_path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding=encoding)

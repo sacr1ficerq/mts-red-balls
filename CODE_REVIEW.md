@@ -1,956 +1,554 @@
-# Comprehensive Code Review: MTS Red Balls Multi-Agent System
+# Code Review: Multi-Agent Kaggle Solver
 
-**Date:** 2026-03-04  
-**Reviewer:** Code Assistant  
-**Project:** Multi-Agent Kaggle Solver
+**Review Date:** 2026-03-04  
+**Reviewer:** Code Review Agent  
+**Project:** MTS Red Balls - Multi-Agent System
 
 ---
 
 ## Executive Summary
 
-This review covers architecture, implementation quality, security, code style, and best practices. The project shows **good foundational architecture** but has **critical issues** in several areas that need immediate attention.
+This is a comprehensive code review of a multi-agent system designed for solving Kaggle competitions and data analysis tasks. The system uses a coordinator-worker pattern with specialized agents (Coordinator, CodeAgent, SearchAgent, CriticAgent) that communicate via JSON protocol and execute tasks in isolated sandboxes.
 
-### Severity Levels
-- 🔴 **CRITICAL** - Must fix immediately (security, data loss, crashes)
-- 🟠 **HIGH** - Should fix soon (bugs, poor practices, performance)
-- 🟡 **MEDIUM** - Should improve (code quality, maintainability)
-- 🟢 **LOW** - Nice to have (style, optimization)
+**Overall Assessment:** The codebase demonstrates solid architecture with good separation of concerns, but has several areas requiring attention including security hardening, error handling improvements, and code duplication reduction.
 
 ---
 
-## 1. Architecture & Design Issues
+## 1. Architecture & Design
 
-### 🔴 CRITICAL: Circular Dependencies & Import Issues
+### ✅ Strengths
 
-**Location:** Multiple files  
-**Issue:** The project has potential circular import issues and unclear module boundaries.
+1. **Clean Separation of Concerns**
+   - Core components well-separated: [`agents/`](backend/kaggle_solver/agents/), [`tools/`](backend/kaggle_solver/tools/), [`core/`](backend/kaggle_solver/core/)
+   - Clear responsibility boundaries between modules
 
-```python
-# backend/kaggle_solver/agents/base.py imports from tools
-from kaggle_solver.tools.registry import ToolRegistry
+2. **Agent Pattern Implementation**
+   - Well-designed [`BaseAgent`](backend/kaggle_solver/agents/base.py:97-493) abstract class
+   - Proper use of inheritance and polymorphism
+   - Event-driven architecture with callbacks
 
-# backend/kaggle_solver/tools/registry.py imports from agents (indirectly)
-# This creates tight coupling
-```
+3. **Tool Registry Pattern**
+   - Flexible [`ToolRegistry`](backend/kaggle_solver/tools/registry.py:28-114) for dynamic tool registration
+   - Decorator pattern for tool creation ([`@create_tool`](backend/kaggle_solver/tools/registry.py:110-114))
 
-**Fix:**
-- Use dependency injection more consistently
-- Define clear interfaces/protocols
-- Consider using `typing.Protocol` for loose coupling
+### ⚠️ Issues
 
-### 🟠 HIGH: God Object Pattern in BaseAgent
+1. **Tight Coupling in Orchestrator**
+   - [`Orchestrator`](backend/kaggle_solver/core/orchestrator.py:31-237) has too many responsibilities
+   - Mixes session management, agent creation, and event handling
+   - **Recommendation:** Extract session management into separate class
 
-**Location:** [`backend/kaggle_solver/agents/base.py`](backend/kaggle_solver/agents/base.py:74-446)
+2. **Hardcoded Agent Names**
+   - Agent names like "Coordinator", "CodeAgent" hardcoded in multiple places
+   - Found in: [`orchestrator.py:141`](backend/kaggle_solver/core/orchestrator.py:141), [`server.py:242`](backend/server.py:242)
+   - **Recommendation:** Use constants or enum
 
-**Issue:** `BaseAgent.run()` method is 200+ lines with multiple responsibilities:
-- Message management
-- LLM communication
-- Action parsing
-- Tool execution
-- Delegation logic
-- Event emission
-- Loop detection
-
-**Problems:**
-1. Violates Single Responsibility Principle
-2. Hard to test individual components
-3. Difficult to maintain and extend
-4. High cyclomatic complexity
-
-**Fix:**
-```python
-class BaseAgent(ABC):
-    def __init__(self, ...):
-        self.message_handler = MessageHandler()
-        self.action_parser = ActionParser()
-        self.tool_executor = ToolExecutor(self.tools, self.sandbox)
-        self.delegation_handler = DelegationHandler(self.agent_factory)
-        
-    def run(self, user_input: str, context: Optional[Dict] = None) -> AgentResult:
-        self.message_handler.add_user_message(user_input)
-        
-        for iteration in range(self.config.max_iterations):
-            response = self._get_llm_response()
-            action = self.action_parser.parse(response)
-            
-            if action.is_done():
-                return action.result
-            elif action.is_tool():
-                result = self.tool_executor.execute(action)
-                self.message_handler.add_tool_result(result)
-            elif action.is_delegate():
-                result = self.delegation_handler.delegate(action)
-                self.message_handler.add_delegation_result(result)
-```
-
-### 🟠 HIGH: Inconsistent Error Handling
-
-**Location:** Throughout codebase
-
-**Issues:**
-1. Mix of exceptions, error strings, and `Result` objects
-2. No custom exception hierarchy
-3. Silent failures in many places
-
-```python
-# backend/kaggle_solver/sandbox.py:67
-def read(self, path: str, encoding: str = "utf-8") -> str:
-    p = self._secure_path(path)
-    if p.is_dir():
-        return f"Error: Path is a directory: {path}..."  # ❌ Returns error string
-    return p.read_text(encoding=encoding)  # ❌ Can raise exception
-
-# backend/kaggle_solver/tools/files.py:82
-except Exception as e:
-    return f"Error: {e}"  # ❌ Catches all exceptions, loses stack trace
-```
-
-**Fix:**
-```python
-# Define custom exceptions
-class SandboxError(Exception):
-    pass
-
-class PathTraversalError(SandboxError):
-    pass
-
-class IsDirectoryError(SandboxError):
-    pass
-
-# Use consistently
-def read(self, path: str, encoding: str = "utf-8") -> str:
-    p = self._secure_path(path)
-    if p.is_dir():
-        raise IsDirectoryError(f"Path is a directory: {path}")
-    try:
-        return p.read_text(encoding=encoding)
-    except FileNotFoundError:
-        raise SandboxError(f"File not found: {path}")
-```
-
-### 🟡 MEDIUM: State Management Complexity
-
-**Location:** [`backend/kaggle_solver/core/state.py`](backend/kaggle_solver/core/state.py:1-164)
-
-**Issue:** Session state is scattered across multiple attributes with unclear ownership:
-- `steps`, `events`, `messages`, `artifacts` all track similar data
-- Redundant information storage
-- No clear state machine for session lifecycle
-
-**Fix:**
-- Define explicit state machine for sessions
-- Consolidate related data
-- Use immutable state updates
+3. **Missing Abstraction for Event System**
+   - Event emission logic scattered across agents
+   - No formal event schema validation
+   - **Recommendation:** Create `EventBus` class with typed events
 
 ---
 
-## 2. Security Issues
+## 2. Security Analysis
 
-### 🔴 CRITICAL: Command Injection Vulnerabilities
+### 🔴 Critical Issues
 
-**Location:** [`backend/kaggle_solver/sandbox.py`](backend/kaggle_solver/sandbox.py:104-169)
+1. **Command Injection Vulnerabilities in Sandbox**
+   - [`sandbox.py:125-193`](backend/kaggle_solver/sandbox.py:125-193) - Command execution uses `shlex.split` but still vulnerable
+   - Shell operators blocked but incomplete coverage
+   - **Example vulnerability:**
+     ```python
+     # Line 127-128: python replacement is naive
+     if command.startswith("python "):
+         command = "python3" + command[6:]
+     ```
+   - **Recommendation:** Use subprocess with explicit args list, never shell=True
 
-**Issues:**
+2. **Path Traversal Protection Incomplete**
+   - [`sandbox.py:46-73`](backend/kaggle_solver/sandbox.py:46-73) - `_secure_path` has iterative `..` removal
+   - **Issue:** Can be bypassed with encoded paths or symlinks
+   - **Recommendation:** Use `Path.resolve()` and strict validation
 
-1. **Shell=True with user input:**
-```python
-# Line 148-156
-r = run(
-    command,  # ❌ User-controlled string passed to shell
-    shell=True,  # ❌ DANGEROUS
-    cwd=str(self.root),
-    ...
-)
-```
+3. **No Rate Limiting on Tool Execution**
+   - Tools can be called unlimited times
+   - Risk of resource exhaustion
+   - **Recommendation:** Add per-session tool execution limits
 
-2. **Weak command validation:**
-```python
-# Line 54-65
-def _is_command_safe(self, command: str) -> bool:
-    cmd_lower = command.lower()
-    for pattern in self.BLOCKED_PATTERNS:
-        if pattern in cmd_lower:
-            return False
-    # ❌ Easily bypassed with encoding, case variations, etc.
-```
+### ⚠️ Medium Priority
 
-3. **Semicolon bypass:**
-```python
-# Line 62-63
-if ";" in command and not command.strip().startswith("python"):
-    return False
-# ❌ Can bypass with: "python3 -c 'import os; os.system(\"rm -rf /\")'"
-```
+1. **API Key Exposure Risk**
+   - [`llm.py:27`](backend/kaggle_solver/llm.py:27) - API keys from environment without validation
+   - No key rotation mechanism
+   - **Recommendation:** Use secrets management service
 
-**Fix:**
-```python
-import shlex
-from subprocess import run, PIPE
+2. **CORS Configuration Too Permissive**
+   - [`server.py:99-104`](backend/server.py:99-104) - `allow_origins=["*"]`
+   - **Recommendation:** Restrict to specific domains in production
 
-def execute(self, command: str, timeout: int = None) -> Result:
-    # Parse command safely
-    try:
-        parts = shlex.split(command)
-    except ValueError as e:
-        return Result(False, error=f"Invalid command syntax: {e}")
-    
-    if not parts:
-        return Result(False, error="Empty command")
-    
-    # Validate first command
-    if parts[0] not in self.ALLOWED_COMMANDS:
-        return Result(False, error=f"Command not allowed: {parts[0]}")
-    
-    # Use shell=False and pass args as list
-    try:
-        r = run(
-            parts,  # ✅ List of args, not string
-            shell=False,  # ✅ No shell interpretation
-            cwd=str(self.root),
-            capture_output=True,
-            text=True,
-            timeout=timeout or self.timeout,
-            env=self._get_safe_env()
-        )
-        return Result(
-            success=r.returncode == 0,
-            output=r.stdout + r.stderr,
-            return_code=r.returncode
-        )
-    except Exception as e:
-        return Result(False, error=str(e))
-```
-
-### 🔴 CRITICAL: Path Traversal Still Possible
-
-**Location:** [`backend/kaggle_solver/sandbox.py:46-52`](backend/kaggle_solver/sandbox.py:46-52)
-
-**Issue:**
-```python
-def _secure_path(self, path: str) -> Path:
-    clean = path.replace("..", "").lstrip("/")  # ❌ Weak sanitization
-    full = (self.root / clean).resolve()
-    
-    if not str(full).startswith(str(self.root)):
-        raise ValueError(f"Security: path outside sandbox: {path}")
-    return full
-```
-
-**Problems:**
-- `replace("..", "")` can be bypassed: `"....//....//etc/passwd"` → `"..//..//etc/passwd"`
-- Symlink attacks not prevented
-- Race conditions possible
-
-**Fix:**
-```python
-def _secure_path(self, path: str) -> Path:
-    # Remove all path traversal attempts
-    clean = path
-    while ".." in clean:
-        clean = clean.replace("..", "")
-    clean = clean.lstrip("/")
-    
-    # Resolve to absolute path
-    full = (self.root / clean).resolve()
-    
-    # Check if resolved path is within sandbox
-    try:
-        full.relative_to(self.root)
-    except ValueError:
-        raise ValueError(f"Security: path outside sandbox: {path}")
-    
-    # Check for symlinks pointing outside
-    if full.is_symlink():
-        target = full.readlink()
-        if target.is_absolute():
-            raise ValueError(f"Security: absolute symlink not allowed: {path}")
-        resolved_target = (full.parent / target).resolve()
-        try:
-            resolved_target.relative_to(self.root)
-        except ValueError:
-            raise ValueError(f"Security: symlink points outside sandbox: {path}")
-    
-    return full
-```
-
-### 🟠 HIGH: No Rate Limiting or Resource Limits
-
-**Location:** [`backend/server.py`](backend/server.py:1-397)
-
-**Issues:**
-- No rate limiting on API endpoints
-- No limits on concurrent sessions
-- No memory/CPU limits for sandbox execution
-- No timeout for long-running sessions
-
-**Fix:**
-```python
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-@app.post("/api/query")
-@limiter.limit("10/minute")  # ✅ Rate limit
-async def query(request: QueryRequest, req: Request):
-    # Check concurrent sessions
-    active_count = len([s for s in orch.state.sessions.values() if s.status == "running"])
-    if active_count >= 5:  # ✅ Limit concurrent sessions
-        raise HTTPException(429, "Too many active sessions")
-    ...
-```
-
-### 🟠 HIGH: Sensitive Data in Logs
-
-**Location:** Multiple files
-
-**Issue:** Logging full responses and errors may expose sensitive data:
-```python
-# backend/kaggle_solver/agents/base.py:164
-self._emit("thought", {"content": resp, "raw_response": resp, "expanded": True})
-# ❌ May log API keys, passwords, etc.
-```
-
-**Fix:**
-- Sanitize logs before emission
-- Use structured logging with sensitive field filtering
-- Implement log levels properly
+3. **Session Data Persistence**
+   - [`state.py:169-175`](backend/kaggle_solver/core/state.py:169-175) - Sessions saved to JSON without encryption
+   - May contain sensitive data
+   - **Recommendation:** Encrypt session data at rest
 
 ---
 
-## 3. Code Quality Issues
+## 3. Code Quality & Maintainability
 
-### 🟠 HIGH: Massive JSON Parsing Logic
+### 🟡 Code Duplication
 
-**Location:** [`backend/kaggle_solver/agents/base.py:341-446`](backend/kaggle_solver/agents/base.py:341-446)
+1. **Agent Creation Logic Duplicated**
+   - Similar code in [`orchestrator.py:57-107`](backend/kaggle_solver/core/orchestrator.py:57-107) and [`server.py:242-248`](backend/server.py:242-248)
+   - **Recommendation:** Centralize in `AgentFactory` class
 
-**Issue:** 100+ lines of complex JSON parsing with multiple fallbacks
+2. **Event Handling Patterns Repeated**
+   - Event emission code duplicated across agents
+   - Found in: [`base.py:122-131`](backend/kaggle_solver/agents/base.py:122-131)
+   - **Recommendation:** Extract to mixin or base class method
 
-**Problems:**
-- Hard to test
-- Fragile parsing logic
-- Multiple code paths
-- No clear error messages
+3. **Tool Parameter Extraction**
+   - [`base.py:248-261`](backend/kaggle_solver/agents/base.py:248-261) - Complex parameter building logic
+   - **Recommendation:** Use parameter mapping dictionary
 
-**Fix:**
-```python
-class ActionParser:
-    """Dedicated action parser with clear error handling"""
-    
-    def parse(self, response: str) -> Action:
-        # Try strategies in order
-        strategies = [
-            self._parse_direct_json,
-            self._parse_code_block,
-            self._parse_stack_based,
-            self._parse_truncated,
-            self._parse_as_text
-        ]
-        
-        for strategy in strategies:
-            try:
-                action = strategy(response)
-                if action and self._is_valid_action(action):
-                    return action
-            except Exception as e:
-                logger.debug(f"Strategy {strategy.__name__} failed: {e}")
-                continue
-        
-        # Default: treat as done
-        return Action(type="done", result=response)
-    
-    def _parse_direct_json(self, text: str) -> Optional[Dict]:
-        """Try direct JSON parse"""
-        return json.loads(text.strip())
-    
-    def _parse_code_block(self, text: str) -> Optional[Dict]:
-        """Extract JSON from markdown code blocks"""
-        match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
-        if match:
-            return json.loads(match.group(1))
-        return None
-```
+### 🟡 Complex Methods
 
-### 🟠 HIGH: Magic Numbers and Strings
+1. **`BaseAgent.run()` Too Long**
+   - [`base.py:142-386`](backend/kaggle_solver/agents/base.py:142-386) - 244 lines, multiple responsibilities
+   - Handles: message management, LLM calls, action parsing, tool execution, delegation
+   - **Cyclomatic Complexity:** ~15 (threshold: 10)
+   - **Recommendation:** Extract methods:
+     - `_handle_tool_action()`
+     - `_handle_delegate_action()`
+     - `_handle_plan_action()`
 
-**Location:** Throughout codebase
+2. **`BaseAgent._parse()` Complex**
+   - [`base.py:388-493`](backend/kaggle_solver/agents/base.py:388-493) - 105 lines with nested logic
+   - Multiple JSON extraction strategies
+   - **Recommendation:** Split into separate parsing strategies
 
-**Examples:**
-```python
-# backend/kaggle_solver/agents/base.py
-MAX_CONTEXT_EVENTS = 3  # ❌ No explanation why 3
-MAX_CONSECUTIVE_PLANS = 2  # ❌ Why 2?
+3. **`Orchestrator.run()` Mixed Concerns**
+   - [`orchestrator.py:132-168`](backend/kaggle_solver/core/orchestrator.py:132-168) - Session creation + execution
+   - **Recommendation:** Separate session lifecycle management
 
-# backend/kaggle_solver/agents/base.py:148
-max_output_tokens = 8192  # ❌ Hardcoded
+### 🟢 Good Practices Found
 
-# backend/kaggle_solver/agents/base.py:155
-input_tokens = sum(len(m.get("content", "")) // 4 for m in full)  # ❌ Why // 4?
-```
+1. **Type Hints Usage**
+   - Good coverage in core modules
+   - Example: [`state.py:8-16`](backend/kaggle_solver/core/state.py:8-16)
 
-**Fix:**
-```python
-# Constants with documentation
-class AgentConstants:
-    """Agent behavior constants"""
-    
-    # Maximum number of context events to subscribe to
-    # Prevents context window overflow while maintaining relevance
-    MAX_CONTEXT_EVENTS = 3
-    
-    # Maximum consecutive plan actions before forcing delegation
-    # Prevents infinite planning loops
-    MAX_CONSECUTIVE_PLANS = 2
-    
-    # Maximum tokens for LLM output
-    # Based on model limits and response quality tradeoff
-    MAX_OUTPUT_TOKENS = 8192
-    
-    # Approximate tokens per character (rough estimate)
-    # Used for token counting when exact tokenizer unavailable
-    CHARS_PER_TOKEN = 4
-```
+2. **Dataclass Usage**
+   - Proper use for configuration and results
+   - Example: [`base.py:55-62`](backend/kaggle_solver/agents/base.py:55-62)
 
-### 🟡 MEDIUM: Inconsistent Naming Conventions
-
-**Issues:**
-```python
-# Mix of camelCase and snake_case
-def _emit(self, event_type: str, data: Dict[str, Any]):  # snake_case
-    data["expanded"] = True  # camelCase in dict
-
-# Inconsistent prefixes
-def _secure_path(self, path: str)  # _private
-def _is_command_safe(self, command: str)  # _private
-def _emit(self, event_type: str, data: Dict[str, Any])  # _private but used externally
-
-# Unclear abbreviations
-def _parse(self, response: str)  # What does it parse?
-def run(self, user_input: str, context: Optional[Dict[str, Any]] = None, is_sub_call: bool = False)  # is_sub_call unclear
-```
-
-**Fix:**
-- Use consistent snake_case for Python
-- Avoid abbreviations unless standard (e.g., `id`, `url`)
-- Use descriptive names: `_parse_llm_action`, `is_delegated_call`
-
-### 🟡 MEDIUM: Missing Type Hints
-
-**Location:** Multiple files
-
-**Examples:**
-```python
-# backend/kaggle_solver/agents/coordinator.py:12
-def load_tool_definitions(tools: list) -> dict:  # ❌ Use List[str], Dict[str, Any]
-
-# backend/kaggle_solver/core/orchestrator.py:22
-def _create_agent_factory(orchestrator, event_callback, session=None):  # ❌ No types
-
-# backend/kaggle_solver/llm.py:37
-def chat(self, model: str, messages: List[Dict[str, str]], ...):  # ❌ Dict too generic
-```
-
-**Fix:**
-```python
-from typing import List, Dict, Any, Optional, Callable
-
-def load_tool_definitions(tools: List[str]) -> Dict[str, Any]:
-    ...
-
-def _create_agent_factory(
-    orchestrator: 'Orchestrator',
-    event_callback: Callable[[Dict[str, Any]], None],
-    session: Optional[Session] = None
-) -> Callable[..., BaseAgent]:
-    ...
-
-class Message(TypedDict):
-    role: Literal["system", "user", "assistant", "tool"]
-    content: str
-    tool_call_id: Optional[str]
-
-def chat(self, model: str, messages: List[Message], ...) -> str:
-    ...
-```
-
-### 🟡 MEDIUM: No Docstrings
-
-**Location:** Most classes and methods
-
-**Issue:** Only a few functions have docstrings. Most classes and complex methods lack documentation.
-
-**Fix:**
-```python
-class BaseAgent(ABC):
-    """Base class for all agents in the multi-agent system.
-    
-    Agents follow a think-act-observe loop:
-    1. Receive user input and context
-    2. Query LLM for next action
-    3. Execute action (tool use, delegation, or completion)
-    4. Observe results and repeat
-    
-    Attributes:
-        config: Agent configuration (model, tools, limits)
-        llm: LLM client for generating responses
-        sandbox: Isolated execution environment
-        tools: Registry of available tools
-        state: Current agent state (idle, thinking, etc.)
-        
-    Example:
-        >>> agent = CoordinatorAgent(config, llm, sandbox, tools)
-        >>> result = agent.run("Analyze this dataset")
-        >>> print(result.output)
-    """
-    
-    def run(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> AgentResult:
-        """Execute agent loop to accomplish user's task.
-        
-        Args:
-            user_input: User's request or task description
-            context: Optional context including session, event IDs, etc.
-            
-        Returns:
-            AgentResult with success status, output, and execution steps
-            
-        Raises:
-            LLMError: If LLM communication fails
-            ToolError: If tool execution fails critically
-        """
-```
+3. **Logging**
+   - Consistent logging throughout
+   - Example: [`llm.py:10`](backend/kaggle_solver/llm.py:10)
 
 ---
 
-## 4. Performance Issues
+## 4. Error Handling
 
-### 🟠 HIGH: Inefficient Event Storage
+### 🔴 Critical Gaps
 
-**Location:** [`backend/kaggle_solver/core/state.py`](backend/kaggle_solver/core/state.py:44-48)
+1. **Unhandled LLM Failures**
+   - [`base.py:194-208`](backend/kaggle_solver/agents/base.py:194-208) - Generic exception catch
+   - No retry logic for transient failures
+   - **Recommendation:** Implement exponential backoff
 
-**Issue:**
+2. **Tool Execution Errors Not Propagated**
+   - [`base.py:263-285`](backend/kaggle_solver/agents/base.py:263-285) - Tool errors converted to strings
+   - Agent continues without proper error handling
+   - **Recommendation:** Add error severity levels
+
+3. **Session State Corruption Risk**
+   - [`state.py:109-143`](backend/kaggle_solver/core/state.py:109-143) - No transaction safety
+   - Concurrent access not protected
+   - **Recommendation:** Add file locking or use database
+
+### ⚠️ Missing Validations
+
+1. **No Input Validation**
+   - User queries not sanitized before processing
+   - [`server.py:199-272`](backend/server.py:199-272) - Direct use of request data
+   - **Recommendation:** Add input validation middleware
+
+2. **Configuration Validation Missing**
+   - [`config.py:65-98`](backend/kaggle_solver/core/config.py:65-98) - No validation of loaded config
+   - **Recommendation:** Use Pydantic for config validation
+
+3. **Tool Result Validation**
+   - [`tools/registry.py:57-92`](backend/kaggle_solver/tools/registry.py:57-92) - No output validation
+   - **Recommendation:** Add result schema validation
+
+---
+
+## 5. Performance Concerns
+
+### ⚠️ Identified Issues
+
+1. **Synchronous LLM Calls Block Event Loop**
+   - [`llm.py:37-81`](backend/kaggle_solver/llm.py:37-81) - Blocking calls in async context
+   - **Impact:** Server unresponsive during LLM calls
+   - **Recommendation:** Use async OpenAI client
+
+2. **Inefficient Event Storage**
+   - [`state.py:47-56`](backend/kaggle_solver/core/state.py:47-56) - Events stored in memory
+   - `MAX_EVENTS_IN_MEMORY = 1000` may cause memory issues
+   - **Recommendation:** Use event streaming or database
+
+3. **No Caching for Search Results**
+   - [`tools/search.py:66-101`](backend/kaggle_solver/tools/search.py:66-101) - Every search hits API
+   - **Recommendation:** Add Redis cache for search results
+
+4. **File Tree Rebuilt on Every Request**
+   - [`server.py:387-421`](backend/server.py:387-421) - Recursive file listing
+   - **Recommendation:** Cache file tree with invalidation
+
+---
+
+## 6. Testing
+
+### ✅ Good Coverage
+
+1. **Unit Tests for Core Components**
+   - [`test_base.py`](backend/tests/test_base.py:1-626) - Comprehensive agent tests (626 lines)
+   - Good test organization with fixtures
+   - Edge cases covered
+
+2. **Security Tests**
+   - [`test_security.py`](backend/tests/test_security.py:1-44) - Path traversal and injection tests
+
+### 🔴 Missing Tests
+
+1. **No Integration Tests**
+   - No end-to-end workflow tests
+   - Agent delegation not tested
+   - **Recommendation:** Add integration test suite
+
+2. **Frontend Tests Missing**
+   - [`frontend/src/app.js`](frontend/src/app.js:1-436) - No tests for UI logic
+   - **Recommendation:** Add Jest/Vitest tests
+
+3. **API Endpoint Tests Missing**
+   - [`server.py`](backend/server.py:1-467) - No FastAPI test client usage
+   - **Recommendation:** Add pytest-fastapi tests
+
+4. **Concurrency Tests Incomplete**
+   - [`test_concurrency.py`](backend/tests/test_concurrency.py) exists but not reviewed
+   - **Recommendation:** Verify race condition coverage
+
+---
+
+## 7. Configuration & Deployment
+
+### ⚠️ Issues
+
+1. **Hardcoded Values**
+   - [`base.py:74-95`](backend/kaggle_solver/agents/base.py:74-95) - `AgentConstants` class with magic numbers
+   - **Recommendation:** Move to config file
+
+2. **Environment-Specific Config Missing**
+   - [`config.yaml`](backend/config.yaml:1-84) - Single config for all environments
+   - **Recommendation:** Add dev/staging/prod configs
+
+3. **No Health Checks**
+   - [`server.py:142-144`](backend/server.py:142-144) - Basic health endpoint
+   - Doesn't check dependencies (LLM API, file system)
+   - **Recommendation:** Add comprehensive health checks
+
+4. **Docker Configuration Not Reviewed**
+   - [`docker-compose.yml`](docker-compose.yml) exists but not analyzed
+   - **Recommendation:** Review container security
+
+---
+
+## 8. Documentation
+
+### ✅ Strengths
+
+1. **Architecture Documentation**
+   - [`AGENTS.md`](AGENTS.md:1-970) - Comprehensive 970-line architecture guide
+   - Clear diagrams and examples
+
+2. **Docstrings Present**
+   - Most functions have docstrings
+   - Example: [`tools/files.py:9-24`](backend/kaggle_solver/tools/files.py:9-24)
+
+### 🟡 Gaps
+
+1. **API Documentation Incomplete**
+   - FastAPI auto-docs enabled but no custom descriptions
+   - **Recommendation:** Add OpenAPI descriptions
+
+2. **Prompt Engineering Not Documented**
+   - Prompt files exist but no explanation of design decisions
+   - **Recommendation:** Add prompt design guide
+
+3. **Deployment Guide Missing**
+   - No instructions for production deployment
+   - **Recommendation:** Add DEPLOYMENT.md
+
+---
+
+## 9. Specific File Issues
+
+### [`backend/kaggle_solver/agents/base.py`](backend/kaggle_solver/agents/base.py)
+
+**Issues:**
+1. **Line 222-238:** Infinite loop prevention logic is fragile
+   - Uses `MAX_CONSECUTIVE_PLANS = 2` hardcoded
+   - **Fix:** Make configurable, add better loop detection
+
+2. **Line 241-243:** Duplicate message detection is naive
+   - Compares entire message content
+   - **Fix:** Use message hash or ID
+
+3. **Line 328-341:** Critic agent automatically called after delegation
+   - Not configurable, always runs
+   - **Fix:** Make critic validation optional
+
+**Recommendations:**
 ```python
-def add_event(self, event: Dict[str, Any]) -> int:
-    self._event_counter += 1
-    event["event_id"] = self._event_counter
-    self.events.append(event)  # ❌ Unbounded list growth
-    return self._event_counter
-```
-
-**Problems:**
-- Events list grows unbounded
-- No pagination or cleanup
-- All events loaded into memory
-- Slow serialization for large sessions
-
-**Fix:**
-```python
-class Session:
-    MAX_EVENTS_IN_MEMORY = 1000
+# Extract action handlers
+def _handle_tool_action(self, action: Dict[str, Any]) -> None:
+    """Handle tool execution action."""
+    # Move lines 245-285 here
     
-    def add_event(self, event: Dict[str, Any]) -> int:
-        self._event_counter += 1
-        event["event_id"] = self._event_counter
-        
-        # Keep only recent events in memory
-        if len(self.events) >= self.MAX_EVENTS_IN_MEMORY:
-            # Archive old events to disk
-            self._archive_old_events()
-        
-        self.events.append(event)
-        return self._event_counter
-    
-    def _archive_old_events(self):
-        """Move old events to separate archive file"""
-        archive_path = Path(f"data/archives/{self.id}.jsonl")
-        archive_path.parent.mkdir(exist_ok=True)
-        
-        # Keep last 100 events in memory
-        to_archive = self.events[:-100]
-        self.events = self.events[-100:]
-        
-        with open(archive_path, "a") as f:
-            for event in to_archive:
-                f.write(json.dumps(event) + "\n")
+def _handle_delegate_action(self, action: Dict[str, Any]) -> AgentResult:
+    """Handle delegation action."""
+    # Move lines 287-341 here
 ```
 
-### 🟠 HIGH: N+1 Query Pattern in Frontend
+### [`backend/kaggle_solver/sandbox.py`](backend/kaggle_solver/sandbox.py)
 
-**Location:** [`frontend/src/app.js:84-112`](frontend/src/app.js:84-112)
+**Issues:**
+1. **Line 30-38:** `BLOCKED_PATTERNS` incomplete
+   - Missing many dangerous patterns
+   - **Fix:** Use comprehensive blocklist
 
-**Issue:**
-```javascript
-async fetchSessionData(sessionId) {
-    const data = await API.fetchSessionData(sessionId);  // ❌ Called for each session
-    // Process data...
-}
-```
+2. **Line 83-86:** Semicolon check has exception for Python
+   - Still allows injection in Python -c commands
+   - **Fix:** Parse Python -c commands separately
 
-**Fix:**
-- Batch fetch session data
-- Use pagination
-- Implement caching
+3. **Line 156-157:** Command whitelist check after parsing
+   - Should be before parsing
+   - **Fix:** Validate command before shlex.split
 
-### 🟡 MEDIUM: Redundant File System Operations
-
-**Location:** [`backend/kaggle_solver/sandbox.py:85-95`](backend/kaggle_solver/sandbox.py:85-95)
-
-**Issue:**
+**Recommendations:**
 ```python
-def list(self, path: str = ".") -> list:
-    p = self._secure_path(path)
-    if p.is_dir():
-        return [str(x.relative_to(self.root)) for x in p.rglob("*") if ...]  # ❌ rglob is slow
-    return []
+# Improved command validation
+def _validate_command(self, command: str) -> bool:
+    """Validate command before execution."""
+    # Check command whitelist first
+    # Then check for dangerous patterns
+    # Finally validate arguments
 ```
 
-**Fix:**
+### [`backend/server.py`](backend/server.py)
+
+**Issues:**
+1. **Line 40-76:** `RateLimiter` uses in-memory storage
+   - Lost on restart
+   - Not shared across instances
+   - **Fix:** Use Redis for distributed rate limiting
+
+2. **Line 240-261:** Background thread for task execution
+   - No thread pool management
+   - Unlimited threads can be created
+   - **Fix:** Use ThreadPoolExecutor with max workers
+
+3. **Line 424-450:** File read endpoint has security issues
+   - No size limit check
+   - Can read any file in workspace
+   - **Fix:** Add file size limits and path validation
+
+**Recommendations:**
 ```python
+# Use proper async task queue
+from celery import Celery
+
+celery_app = Celery('tasks', broker='redis://localhost:6379')
+
+@celery_app.task
+def run_agent_task(session_id: str, query: str):
+    # Execute agent task asynchronously
+```
+
+### [`backend/kaggle_solver/tools/search.py`](backend/kaggle_solver/tools/search.py)
+
+**Issues:**
+1. **Line 18-28:** Query translation always calls LLM
+   - Expensive for every search
+   - **Fix:** Cache translations or detect language first
+
+2. **Line 31-62:** Relevance evaluation calls LLM
+   - Adds latency to every search
+   - **Fix:** Make optional or use faster method
+
+3. **Line 72-101:** No error handling for DDGS failures
+   - Will crash on network errors
+   - **Fix:** Add retry logic and fallback
+
+**Recommendations:**
+```python
+# Add caching
 from functools import lru_cache
 
-@lru_cache(maxsize=128)
-def list(self, path: str = ".") -> tuple:  # tuple for caching
-    p = self._secure_path(path)
-    if not p.is_dir():
-        return ()
-    
-    # Use iterdir for top-level, cache results
-    files = []
-    for x in p.rglob("*"):
-        if x.name.startswith('.') or x.name in ('__pycache__', 'node_modules'):
-            continue
-        files.append(str(x.relative_to(self.root)))
-    
-    return tuple(files)
+@lru_cache(maxsize=100)
+def _translate_query_cached(query: str) -> str:
+    # Cache translations
 ```
 
----
-
-## 5. Testing Issues
-
-### 🔴 CRITICAL: Insufficient Test Coverage
-
-**Location:** [`backend/tests/`](backend/tests/)
+### [`frontend/src/app.js`](frontend/src/app.js)
 
 **Issues:**
-1. No integration tests for agent workflows
-2. No tests for error conditions
-3. Security tests incomplete
-4. No performance/load tests
-5. No tests for concurrent operations
+1. **Line 154-197:** Complex event processing in getter
+   - Side effects in computed property
+   - **Fix:** Move to method
 
-**Missing Tests:**
-```python
-# tests/test_agent_integration.py
-def test_coordinator_delegates_to_code_agent():
-    """Test full delegation workflow"""
-    ...
+2. **Line 263-314:** SSE connection management fragile
+   - No exponential backoff
+   - **Fix:** Add proper reconnection logic
 
-def test_agent_handles_llm_timeout():
-    """Test agent behavior when LLM times out"""
-    ...
+3. **Line 334-341:** File tree fetching not debounced
+   - Called on every session change
+   - **Fix:** Add debouncing
 
-def test_agent_handles_tool_failure():
-    """Test agent recovery from tool failures"""
-    ...
-
-# tests/test_security_comprehensive.py
-def test_command_injection_all_vectors():
-    """Test all known command injection vectors"""
-    ...
-
-def test_path_traversal_symlinks():
-    """Test symlink-based path traversal"""
-    ...
-
-# tests/test_performance.py
-def test_handles_1000_events():
-    """Test session with 1000+ events"""
-    ...
-
-def test_concurrent_sessions():
-    """Test 10 concurrent sessions"""
-    ...
-```
-
-### 🟠 HIGH: Tests Don't Match Production Code
-
-**Location:** [`backend/tests/test_security.py:18-24`](backend/tests/test_security.py:18-24)
-
-**Issue:**
-```python
-def test_blocked_patterns_bypass(self, sandbox):
-    # But Python with semicolons should work (common pattern for inline code)
-    result = sandbox.execute("python3 -c \"import os; print('hello')\"")
-    assert result.success  # ❌ This is actually a security risk!
-```
-
-**Problem:** Test assumes Python semicolons are safe, but they enable command injection:
-```python
-sandbox.execute("python3 -c \"import os; os.system('rm -rf /')\"")
-```
-
----
-
-## 6. Frontend Issues
-
-### 🟠 HIGH: No Error Boundaries
-
-**Location:** [`frontend/src/app.js`](frontend/src/app.js:1-430)
-
-**Issue:** No error handling for component failures. One error crashes entire UI.
-
-**Fix:**
+**Recommendations:**
 ```javascript
-window.dashboard = function() {
-    return {
-        error: null,
-        
-        init() {
-            try {
-                this.fetchSessions();
-                this.fetchFileTree();
-            } catch (e) {
-                this.error = e.message;
-                console.error('Init error:', e);
-            }
-        },
-        
-        async fetchSessions() {
-            try {
-                const data = await API.fetchSessions();
-                // ...
-            } catch (e) {
-                this.error = 'Failed to load sessions';
-                console.error('Fetch error:', e);
-            }
-        }
+// Add debouncing utility
+const debounce = (fn, delay) => {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn(...args), delay);
     };
 };
 ```
 
-### 🟡 MEDIUM: Memory Leaks in Event Listeners
+---
 
-**Location:** [`frontend/src/app.js:257-326`](frontend/src/app.js:257-326)
+## 10. Priority Action Items
 
-**Issue:**
-```javascript
-connectSSE(sessionId) {
-    if (this.eventSource) {
-        this.eventSource.close();  // ✅ Good
-        this.eventSource = null;
-    }
-    
-    this.eventSource = new EventSource(`/api/sse/${sessionId}`);
-    // ❌ No cleanup of old event listeners
-    // ❌ EventSource not closed on component unmount
-}
-```
+### 🔴 Critical (Fix Immediately)
 
-**Fix:**
-```javascript
-init() {
-    this.cleanup = () => {
-        if (this.eventSource) {
-            this.eventSource.close();
-            this.eventSource = null;
-        }
-    };
-    
-    // Register cleanup
-    window.addEventListener('beforeunload', this.cleanup);
-},
+1. **Security: Harden sandbox command execution**
+   - File: [`sandbox.py:125-193`](backend/kaggle_solver/sandbox.py:125-193)
+   - Action: Rewrite to use subprocess with args list, never shell=True
 
-destroy() {
-    this.cleanup();
-    window.removeEventListener('beforeunload', this.cleanup);
-}
-```
+2. **Security: Fix path traversal vulnerabilities**
+   - File: [`sandbox.py:46-73`](backend/kaggle_solver/sandbox.py:46-73)
+   - Action: Use strict path validation with resolve()
+
+3. **Reliability: Add LLM retry logic**
+   - File: [`llm.py:37-81`](backend/kaggle_solver/llm.py:37-81)
+   - Action: Implement exponential backoff for API failures
+
+4. **Concurrency: Fix session state corruption**
+   - File: [`state.py:169-175`](backend/kaggle_solver/core/state.py:169-175)
+   - Action: Add file locking or use database
+
+### 🟡 High Priority (Fix Soon)
+
+5. **Performance: Make LLM calls async**
+   - File: [`llm.py`](backend/kaggle_solver/llm.py)
+   - Action: Use async OpenAI client
+
+6. **Code Quality: Refactor BaseAgent.run()**
+   - File: [`base.py:142-386`](backend/kaggle_solver/agents/base.py:142-386)
+   - Action: Extract action handlers into separate methods
+
+7. **Testing: Add integration tests**
+   - Action: Create test suite for end-to-end workflows
+
+8. **Configuration: Remove hardcoded values**
+   - Files: Multiple
+   - Action: Move constants to config
+
+### 🟢 Medium Priority (Plan for Next Sprint)
+
+9. **Architecture: Extract session management**
+   - File: [`orchestrator.py`](backend/kaggle_solver/core/orchestrator.py)
+   - Action: Create SessionManager class
+
+10. **Performance: Add caching layer**
+    - Files: [`search.py`](backend/kaggle_solver/tools/search.py), [`server.py`](backend/server.py)
+    - Action: Implement Redis caching
+
+11. **Documentation: Add API documentation**
+    - Action: Add OpenAPI descriptions to endpoints
+
+12. **Monitoring: Add comprehensive health checks**
+    - File: [`server.py`](backend/server.py)
+    - Action: Check all dependencies in health endpoint
 
 ---
 
-## 7. Configuration Issues
+## 11. Code Metrics
 
-### 🟡 MEDIUM: Hardcoded Configuration
+### Complexity Analysis
 
-**Location:** Multiple files
+| File | Lines | Functions | Complexity | Maintainability |
+|------|-------|-----------|------------|-----------------|
+| [`agents/base.py`](backend/kaggle_solver/agents/base.py) | 493 | 8 | High | Medium |
+| [`core/orchestrator.py`](backend/kaggle_solver/core/orchestrator.py) | 237 | 11 | Medium | Medium |
+| [`server.py`](backend/server.py) | 467 | 15 | Medium | Good |
+| [`sandbox.py`](backend/kaggle_solver/sandbox.py) | 217 | 12 | Medium | Good |
+| [`tools/search.py`](backend/kaggle_solver/tools/search.py) | 101 | 4 | Low | Good |
 
-**Issues:**
-```python
-# backend/kaggle_solver/agents/base.py:75-76
-MAX_CONTEXT_EVENTS = 3  # ❌ Should be in config
-MAX_CONSECUTIVE_PLANS = 2  # ❌ Should be in config
+### Test Coverage Estimate
 
-# backend/server.py:26
-log_file = f"logs/server_{datetime.now().strftime('%Y%m%d')}.log"  # ❌ Hardcoded path
+- **Unit Tests:** ~60% coverage (based on test_base.py)
+- **Integration Tests:** 0%
+- **Frontend Tests:** 0%
+- **Security Tests:** ~30%
 
-# backend/kaggle_solver/llm.py:34
-self.max_retries = 3  # ❌ Should be in config
-```
-
-**Fix:** Move all configuration to [`config.yaml`](backend/config.yaml:1-84) or environment variables.
-
----
-
-## 8. Documentation Issues
-
-### 🟠 HIGH: No API Documentation
-
-**Issue:** No OpenAPI/Swagger docs for REST API
-
-**Fix:**
-```python
-# backend/server.py
-from fastapi import FastAPI
-from pydantic import BaseModel, Field
-
-app = FastAPI(
-    title="Kaggle Solver API",
-    description="Multi-agent system for solving Kaggle competitions",
-    version="1.0.0",
-    docs_url="/docs",  # ✅ Enable Swagger UI
-    redoc_url="/redoc"  # ✅ Enable ReDoc
-)
-
-class QueryRequest(BaseModel):
-    """Request to start a new task"""
-    query: str = Field(..., description="Task description", example="Analyze iris dataset")
-    session_id: Optional[str] = Field(None, description="Optional session ID to resume")
-
-@app.post("/api/query", response_model=QueryResponse, tags=["Tasks"])
-async def query(request: QueryRequest):
-    """Start a new task or resume existing session.
-    
-    The task will be executed asynchronously. Use SSE endpoint to monitor progress.
-    """
-    ...
-```
-
-### 🟡 MEDIUM: No Architecture Diagram
-
-**Issue:** [`AGENTS.md`](AGENTS.md) has text descriptions but no visual diagrams.
-
-**Fix:** Add Mermaid diagrams:
-```markdown
-## System Architecture
-
-```mermaid
-graph TD
-    User[User] --> API[FastAPI Server]
-    API --> Orch[Orchestrator]
-    Orch --> Coord[Coordinator Agent]
-    Coord --> Code[Code Agent]
-    Coord --> Search[Search Agent]
-    Coord --> Critic[Critic Agent]
-    Code --> Sandbox[Sandbox]
-    Search --> LLM[LLM Client]
-    Critic --> LLM
-```
-```
+**Target:** 80% overall coverage
 
 ---
 
-## 9. Dependency Issues
+## 12. Recommendations Summary
 
-### 🟠 HIGH: Missing Dependency Pinning
+### Immediate Actions
 
-**Location:** [`backend/requirements.txt`](backend/requirements.txt)
+1. **Security Audit:** Conduct full security review of sandbox implementation
+2. **Refactoring:** Break down large methods (BaseAgent.run, _parse)
+3. **Testing:** Add integration and frontend tests
+4. **Documentation:** Complete API documentation
 
-**Issue:** No version pinning for critical dependencies
+### Long-term Improvements
 
-**Fix:**
-```txt
-# Pin all versions for reproducibility
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-openai==1.3.5
-pydantic==2.5.0
-pyyaml==6.0.1
-duckduckgo-search==3.9.6
-python-dotenv==1.0.0
+1. **Architecture:** Consider microservices for agent execution
+2. **Scalability:** Move to async/await throughout
+3. **Observability:** Add distributed tracing (OpenTelemetry)
+4. **Deployment:** Create Kubernetes manifests
 
-# Development dependencies
-pytest==7.4.3
-pytest-asyncio==0.21.1
-pytest-cov==4.1.0
-black==23.11.0
-mypy==1.7.1
-ruff==0.1.6
-```
+### Best Practices to Adopt
 
----
-
-## 10. Recommendations by Priority
-
-### Immediate (This Week)
-
-1. **🔴 Fix command injection vulnerability** - Use `shell=False` and `shlex.split()`
-2. **🔴 Fix path traversal** - Improve `_secure_path()` with symlink checks
-3. **🔴 Add rate limiting** - Prevent API abuse
-4. **🔴 Add error boundaries** - Prevent UI crashes
-
-### Short Term (This Month)
-
-1. **🟠 Refactor BaseAgent.run()** - Break into smaller methods
-2. **🟠 Add comprehensive tests** - Especially security and integration tests
-3. **🟠 Implement proper error handling** - Custom exceptions, structured logging
-4. **🟠 Add API documentation** - Enable Swagger/OpenAPI
-5. **🟠 Fix event storage** - Implement pagination and archiving
-
-### Medium Term (This Quarter)
-
-1. **🟡 Add type hints everywhere** - Improve IDE support and catch bugs
-2. **🟡 Write docstrings** - Document all public APIs
-3. **🟡 Optimize performance** - Caching, batching, lazy loading
-4. **🟡 Add monitoring** - Metrics, tracing, alerting
-5. **🟡 Improve configuration** - Move hardcoded values to config
-
-### Long Term (This Year)
-
-1. **🟢 Refactor architecture** - Reduce coupling, improve modularity
-2. **🟢 Add observability** - Distributed tracing, structured logs
-3. **🟢 Performance optimization** - Profiling, caching strategies
-4. **🟢 Add CI/CD** - Automated testing, deployment
-5. **🟢 Security audit** - Professional penetration testing
-
----
-
-## Summary Statistics
-
-- **Total Issues Found:** 45+
-- **Critical:** 6
-- **High:** 12
-- **Medium:** 18
-- **Low:** 9+
-
-**Code Quality Score:** 6.5/10
-
-**Strengths:**
-- ✅ Good foundational architecture
-- ✅ Modular agent system
-- ✅ Decent separation of concerns
-- ✅ Some security measures in place
-
-**Weaknesses:**
-- ❌ Critical security vulnerabilities
-- ❌ Poor error handling
-- ❌ Insufficient testing
-- ❌ Performance issues with large sessions
-- ❌ Missing documentation
+1. **Code Review:** Require reviews for all PRs
+2. **CI/CD:** Add automated testing and linting
+3. **Monitoring:** Set up error tracking (Sentry)
+4. **Documentation:** Keep architecture docs updated
 
 ---
 
 ## Conclusion
 
-The project has a **solid architectural foundation** but requires **immediate security fixes** and **significant refactoring** to be production-ready. The multi-agent system design is sound, but implementation details need attention.
+The codebase demonstrates solid engineering fundamentals with a well-thought-out architecture. The main areas requiring attention are:
 
-**Priority Actions:**
-1. Fix security vulnerabilities (command injection, path traversal)
-2. Add comprehensive testing
-3. Refactor large methods
-4. Improve error handling
-5. Add documentation
+1. **Security hardening** - Critical for production use
+2. **Error handling** - Improve resilience
+3. **Testing** - Expand coverage significantly
+4. **Performance** - Address async/sync mixing
 
-With these improvements, the system can become a robust, maintainable, and secure multi-agent platform.
+With these improvements, the system will be production-ready and maintainable long-term.
+
+**Overall Grade:** B+ (Good foundation, needs refinement)
+
+---
+
+**Next Steps:**
+1. Review this document with the team
+2. Prioritize action items
+3. Create tickets for each issue
+4. Schedule refactoring sprints

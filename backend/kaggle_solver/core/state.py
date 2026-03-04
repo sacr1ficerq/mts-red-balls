@@ -3,6 +3,9 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -167,9 +170,24 @@ class StateManager:
         self.save()
 
     def save(self, path: str = None):
+        import fcntl
         path = path or self.storage_path
-        with open(path, "w") as f:
-            json.dump(
-                {sid: s.to_dict() for sid, s in self.sessions.items()},
-                f, indent=2
-            )
+        try:
+            with open(path, "a+") as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                try:
+                    f.seek(0)
+                    json.dump(
+                        {sid: s.to_dict() for sid, s in self.sessions.items()},
+                        f, indent=2
+                    )
+                    f.truncate()
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        except (IOError, OSError) as e:
+            logger.warning(f"Failed to lock file for writing: {e}")
+            with open(path, "w") as f:
+                json.dump(
+                    {sid: s.to_dict() for sid, s in self.sessions.items()},
+                    f, indent=2
+                )
