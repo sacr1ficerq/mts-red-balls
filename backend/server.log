@@ -1,80 +1,121 @@
-INFO:     Started server process [57002]
+INFO:     Started server process [59285]
 INFO:     Waiting for application startup.
-2026-03-04 14:16:14,951 - server - INFO - Starting Kaggle Solver API
+2026-03-04 14:26:02,823 - server - INFO - Starting Kaggle Solver API
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:58702 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58702 - "GET /api/workspace/files HTTP/1.1" 200 OK
-2026-03-04 14:19:42,807 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
-2026-03-04 14:20:10,799 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
-2026-03-04 14:20:12,470 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
-2026-03-04 14:20:19,053 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
-2026-03-04 14:20:24,799 - server - INFO - Session 1c489593-2b0c-4bbe-8e62-7d27342d4a21 completed with status: completed
-INFO:     127.0.0.1:58702 - "POST /api/query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58702 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58709 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58731 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58731 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58709 - "GET /src/app.js?v=10 HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:58709 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58709 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58702 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58702 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58765 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58765 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58765 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58767 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58767 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58767 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58767 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58770 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58765 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58765 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58765 - "GET /api/session/b1def24c-1a6f-4189-b87c-38e6aa120e57 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58770 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58765 - "GET /api/sse/b1def24c-1a6f-4189-b87c-38e6aa120e57 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58770 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58770 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58770 - "GET /api/workspace/files HTTP/1.1" 200 OK
-2026-03-04 14:21:54,098 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
-2026-03-04 14:22:10,756 - server - INFO - Session 29f0d8e9-ea44-4361-a752-5e7c88a19428 completed with status: completed
-INFO:     127.0.0.1:58770 - "POST /api/query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58789 - "GET /api/sse/b1def24c-1a6f-4189-b87c-38e6aa120e57 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58785 - "GET /api/session/b1def24c-1a6f-4189-b87c-38e6aa120e57 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58783 - "POST /api/sessions/clear HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58795 - "GET /api/sse/5003dc6b-91ef-4078-a378-7ccf9960ea8a HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58785 - "GET /api/sse/b1def24c-1a6f-4189-b87c-38e6aa120e57 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58793 - "GET /api/session/5003dc6b-91ef-4078-a378-7ccf9960ea8a HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58783 - "GET /api/session/b1def24c-1a6f-4189-b87c-38e6aa120e57 HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:58791 - "POST /api/session/b1def24c-1a6f-4189-b87c-38e6aa120e57/stop HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58800 - "POST /api/sessions/clear HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58787 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58787 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58787 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58787 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58787 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58787 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58785 - "POST /api/sessions/clear HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58800 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58787 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58787 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58787 - "GET /api/session/5003dc6b-91ef-4078-a378-7ccf9960ea8a HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58800 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58787 - "GET /api/sse/5003dc6b-91ef-4078-a378-7ccf9960ea8a HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58800 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58800 - "POST /api/session/5003dc6b-91ef-4078-a378-7ccf9960ea8a/stop HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58800 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58800 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58800 - "GET /api/workspace/files HTTP/1.1" 200 OK
-2026-03-04 14:22:32,848 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
-2026-03-04 14:22:38,023 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
-2026-03-04 14:22:42,306 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
-2026-03-04 14:22:47,084 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
-2026-03-04 14:22:57,383 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
-2026-03-04 14:24:28,747 - server - INFO - Session c4757094-3978-4c93-b817-88f5cf6f6960 completed with status: completed
-INFO:     127.0.0.1:58800 - "POST /api/query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58800 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58925 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58925 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58925 - "GET /api/session/c4757094-3978-4c93-b817-88f5cf6f6960 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58800 - "GET /api/sse/c4757094-3978-4c93-b817-88f5cf6f6960 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59682 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59682 - "GET /src/app.js?v=10 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:59682 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59682 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59684 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59684 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59684 - "GET /api/session/c4757094-3978-4c93-b817-88f5cf6f6960 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59684 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59684 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59684 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59684 - "GET /api/workspace/files HTTP/1.1" 200 OK
+2026-03-04 14:52:59,419 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:53:02,473 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:53:06,888 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:53:11,094 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:53:33,184 - server - INFO - Session d675d09b-4eda-4713-9632-6408f3ec9a99 completed with status: completed
+INFO:     127.0.0.1:59684 - "POST /api/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59689 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59684 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59689 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59689 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/session/c4757094-3978-4c93-b817-88f5cf6f6960 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/session/d675d09b-4eda-4713-9632-6408f3ec9a99 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/session/c4757094-3978-4c93-b817-88f5cf6f6960 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/session/d675d09b-4eda-4713-9632-6408f3ec9a99 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59790 - "GET /api/session/c4757094-3978-4c93-b817-88f5cf6f6960 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59795 - "GET /api/session/c4757094-3978-4c93-b817-88f5cf6f6960 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59808 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59808 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59808 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59811 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59811 - "GET /api/workspace/files HTTP/1.1" 200 OK
+2026-03-04 14:54:57,057 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:54:57,786 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:55:03,216 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:55:04,784 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:55:19,038 - server - INFO - Session 182a6777-aff8-48c5-9755-a44f1d6190fe completed with status: completed
+INFO:     127.0.0.1:59811 - "POST /api/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59808 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59811 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59829 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59829 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59831 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59831 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59833 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59833 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59833 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59843 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59843 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59843 - "GET /api/session/182a6777-aff8-48c5-9755-a44f1d6190fe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59843 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59843 - "GET /api/workspace/files HTTP/1.1" 200 OK
+2026-03-04 14:57:00,943 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:57:05,649 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:57:08,533 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:58:02,839 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 14:58:16,659 - server - INFO - Session 2dcbd43a-c9e2-4c0c-b7d2-f559df0eda56 completed with status: completed
+INFO:     127.0.0.1:59886 - "POST /api/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59918 - "GET /src/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59920 - "HEAD /src/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59996 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59996 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59996 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59996 - "GET /src/services/api.js?v=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60000 - "GET /src/utils/formatters.js?v=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60005 - "GET /src/app.js?v=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60004 - "GET /src/utils/styles.js?v=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60000 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60005 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60004 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60004 - "GET /api/workspace/files HTTP/1.1" 200 OK
+2026-03-04 14:59:50,089 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 15:00:06,336 - server - INFO - Session 614df108-a88a-4cf5-a221-326b50557e89 completed with status: completed
+INFO:     127.0.0.1:60004 - "POST /api/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60000 - "GET /api/session/2dcbd43a-c9e2-4c0c-b7d2-f559df0eda56 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60020 - "GET /api/session/182a6777-aff8-48c5-9755-a44f1d6190fe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59996 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59996 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59996 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59996 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60041 - "GET /api/session/data/sessions HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60136 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60136 - "GET /src/services/api.js?v=20 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:60136 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60136 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60138 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60138 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60138 - "GET /api/session/614df108-a88a-4cf5-a221-326b50557e89 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60138 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60138 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60140 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60140 - "GET /api/workspace/files HTTP/1.1" 200 OK
+2026-03-04 15:04:56,193 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 15:05:12,443 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 15:05:15,583 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 15:05:23,910 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 15:05:24,891 - server - INFO - Session 17250863-7615-4c7d-bb38-af1d00f0a412 completed with status: completed
+INFO:     127.0.0.1:60140 - "POST /api/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60171 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60171 - "GET /src/services/api.js?v=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60194 - "GET /src/utils/styles.js?v=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60173 - "GET /src/utils/formatters.js?v=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60173 - "GET /src/app.js?v=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60220 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60222 - "GET /src/app.js?v=30 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:60220 - "GET /src/services/api.js?v=30 HTTP/1.1" 304 Not Modified

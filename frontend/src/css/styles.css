@@ -1,13 +1,178 @@
-/* ==========================================================================
-   MTS Agent - Main Stylesheet
-   ========================================================================== */
+[x-cloak] { display: none !important; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Import all CSS modules in dependency order */
-@import url('tokens.css');
-@import url('base.css');
-@import url('domains/spheres.css');
-@import url('components/components.css');
-@import url('components/metrics.css');
-@import url('utils/output.css');
-@import url('utils/search.css');
-@import url('utils/markdown.css');
+:root {
+    --mts-red: #E30613;
+    --mts-red-dark: #C40511;
+    --mts-red-light: #FDE8EA;
+    --mts-red-border: #F5B7BC;
+}
+
+.mts-red { background-color: var(--mts-red) !important; }
+.mts-red-text { color: var(--mts-red) !important; }
+.mts-hover:hover { background-color: var(--mts-red-dark) !important; }
+
+.btn-mts-primary {
+    background: linear-gradient(180deg, #E30613 0%, #C40511 100%);
+    color: #fff !important;
+    border: none;
+    transition: all 0.2s ease;
+}
+.btn-mts-primary:hover:not(:disabled) {
+    background: linear-gradient(180deg, #C40511 0%, #A8040E 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(227, 6, 19, 0.3);
+}
+.btn-mts-primary:active:not(:disabled) { 
+    transform: translateY(0); 
+    box-shadow: 0 2px 6px rgba(227, 6, 19, 0.2);
+}
+
+.btn-mts-secondary {
+    background: #fff;
+    color: #374151;
+    border: 2px solid #e5e7eb;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    transition: all 0.2s ease;
+}
+.btn-mts-secondary:hover {
+    border-color: var(--mts-red);
+    color: var(--mts-red);
+    background: var(--mts-red-light);
+}
+
+.btn-mts-icon {
+    background: #fff;
+    border: 2px solid #e5e7eb;
+    color: #6b7280;
+    width: 2.75rem;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+.btn-mts-icon:hover {
+    border-color: var(--mts-red);
+    color: var(--mts-red);
+    background: var(--mts-red-light);
+}
+
+.input-mts {
+    outline: none;
+    line-height: 1.5;
+    transition: all 0.2s ease;
+}
+.input-mts:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+}
+
+.markdown-body pre { 
+    background-color: #f9fafb; 
+    padding: 1rem; 
+    border-radius: 0.5rem; 
+    overflow-x: auto;
+    border: 1px solid #e5e7eb;
+}
+
+.markdown-body code { 
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace; 
+    background-color: #f3f4f6; 
+    padding: 0.2rem 0.4rem; 
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+}
+
+.fade-in { 
+    animation: fadeIn 0.3s ease-out; 
+}
+@keyframes fadeIn { 
+    from { 
+        opacity: 0; 
+        transform: translateY(8px); 
+    } 
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    } 
+}
+
+.file-list-item {
+    transition: all 0.15s ease;
+}
+
+.file-list-item:hover {
+    transform: translateX(2px);
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.status-online { 
+    background-color: #10B981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+.status-offline { 
+    background-color: #EF4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+@media (max-width: 768px) {
+    .sidebar-collapsible {
+        width: 100% !important;
+        position: fixed;
+        z-index: 40;
+        height: 100%;
+    }
+    .main-content-mobile {
+        margin-left: 0 !important;
+    }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+/* Плавные переходы для раскрытия блоков */
+[x-show] {
+    transition: all 0.2s ease;
+}
+
+/* Улучшенная типографика */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Улучшенные тени */
+.shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+.shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); }
+.shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+.shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+.shadow-xl { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
