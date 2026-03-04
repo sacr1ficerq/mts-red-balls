@@ -53,12 +53,13 @@ class LLM:
                     if not content:
                         for tc in msg.tool_calls:
                             func = tc.function
+                            tool_call_id = getattr(tc, 'id', None) or f"call_{func.name}"
                             if func.arguments:
                                 try:
                                     args = json.loads(func.arguments)
-                                    return json.dumps({"action": "tool", "tool": func.name, **args})
+                                    return json.dumps({"action": "tool", "tool": func.name, "tool_call_id": tool_call_id, **args})
                                 except:
-                                    return json.dumps({"action": "tool", "tool": func.name, "query": func.arguments})
+                                    return json.dumps({"action": "tool", "tool": func.name, "tool_call_id": tool_call_id, "query": func.arguments})
                     return content
                 return msg.content or ""
             except RateLimitError:
