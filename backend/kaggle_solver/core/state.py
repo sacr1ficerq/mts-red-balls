@@ -18,6 +18,9 @@ class Step:
 
 @dataclass
 class Session:
+    MAX_EVENTS_IN_MEMORY = 1000
+    MAX_MESSAGES = 500
+    
     id: str
     query: str
     created_at: str
@@ -28,6 +31,7 @@ class Session:
     messages: List[Dict[str, str]] = field(default_factory=list)
     total_tokens: int = 0
     total_cost: float = 0.0
+    _event_counter: int = 0
 
     def add_step(self, agent: str, action: str, input: str, output: str, success: bool = True):
         step = Step(
@@ -40,11 +44,28 @@ class Session:
         )
         self.steps.append(step)
 
-    def add_event(self, event: Dict[str, Any]):
+    def add_event(self, event: Dict[str, Any]) -> int:
+        self._event_counter += 1
+        event["event_id"] = self._event_counter
+        
+        # Keep only recent events in memory
+        if len(self.events) >= self.MAX_EVENTS_IN_MEMORY:
+            self.events = self.events[-self.MAX_EVENTS_IN_MEMORY//2:]
+        
         self.events.append(event)
-
+        return self._event_counter
+    
     def add_message(self, role: str, content: str):
+        # Keep only recent messages
+        if len(self.messages) >= self.MAX_MESSAGES:
+            self.messages = self.messages[-self.MAX_MESSAGES//2:]
         self.messages.append({"role": role, "content": content})
+
+    def get_events_by_ids(self, event_ids: List[int]) -> List[Dict[str, Any]]:
+        return [e for e in self.events if e.get("event_id") in event_ids]
+
+    def get_latest_events(self, count: int = 3) -> List[Dict[str, Any]]:
+        return self.events[-count:] if self.events else []
 
     def add_tokens(self, tokens: int, cost: float = 0.0):
         self.total_tokens += tokens

@@ -18,12 +18,18 @@ window.dashboard = function() {
         fileTreeOpenPaths: {},
         expandedEvents: {},
         currentPlan: null,
+        error: null,
 
         // Initialize
         init() {
-            this.fetchSessions();
-            this.fetchFileTree();
-            this.$watch('currentSessionId', () => this.onSessionChange());
+            try {
+                this.fetchSessions();
+                this.fetchFileTree();
+                this.$watch('currentSessionId', () => this.onSessionChange());
+            } catch (e) {
+                console.error('Init error:', e);
+                this.error = 'Failed to initialize application';
+            }
         },
 
         // Session management

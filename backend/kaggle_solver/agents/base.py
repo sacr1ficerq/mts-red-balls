@@ -71,9 +71,32 @@ class AgentResult:
     duration: float = 0.0
 
 
-class BaseAgent(ABC):
+class AgentConstants:
+    """Agent behavior constants.
+    
+    These values control agent behavior and limits.
+    """
+    
+    # Maximum number of context events to subscribe to
+    # Prevents context window overflow while maintaining relevance
     MAX_CONTEXT_EVENTS = 3
+    
+    # Maximum consecutive plan actions before forcing delegation
+    # Prevents infinite planning loops
     MAX_CONSECUTIVE_PLANS = 2
+    
+    # Maximum tokens for LLM output
+    # Based on model limits and response quality tradeoff
+    MAX_OUTPUT_TOKENS = 8192
+    
+    # Approximate tokens per character (rough estimate)
+    # Used for token counting when exact tokenizer unavailable
+    CHARS_PER_TOKEN = 4
+
+
+class BaseAgent(ABC):
+    MAX_CONTEXT_EVENTS = AgentConstants.MAX_CONTEXT_EVENTS
+    MAX_CONSECUTIVE_PLANS = AgentConstants.MAX_CONSECUTIVE_PLANS
     
     def __init__(
         self,
@@ -145,7 +168,7 @@ class BaseAgent(ABC):
 
         for self._iteration in range(1, self.config.max_iterations + 1):
             try:
-                max_output_tokens = 8192
+                max_output_tokens = AgentConstants.MAX_OUTPUT_TOKENS
                 resp = self.llm.chat(
                     model=self.config.model,
                     messages=full,

@@ -8,17 +8,16 @@ class TestSandboxSecurity:
         return Sandbox(tmp_path)
 
     def test_blocked_patterns_bypass(self, sandbox):
-        # Try to bypass blocked patterns using shell command chaining with semicolons
-        # Shell semicolons should still be blocked
+        # Shell operators &&, ||, | are blocked
         result = sandbox.execute("echo hello; whoami")
         assert not result.success
-        assert "Command contains blocked patterns" in result.error
+        assert "Shell operator" in result.error
         
-        # But Python with semicolons should work (common pattern for inline code)
+        # Python with semicolons in -c should work (common pattern)
         result = sandbox.execute("python3 -c \"import os; print('hello')\"")
         assert result.success
         
-        # Running a script file should work (if content is safe)
+        # Running a script file should work
         sandbox.write("script.py", "print('hello')")
         result = sandbox.execute("python3 script.py")
         assert result.success
@@ -28,23 +27,18 @@ class TestSandboxSecurity:
         # Try to write outside sandbox
         try:
             sandbox.write("../outside.txt", "hacked")
-            # If we get here, check if file exists
             assert not (sandbox.root.parent / "outside.txt").exists()
         except ValueError:
-            pass # Expected
+            pass
 
     def test_command_injection_chaining(self, sandbox):
-        # Try chaining commands without the specific blocked patterns
-        # e.g. using newlines or other separators
-        # Note: \n is treated as whitespace by split(), so "echo hello\nls" -> "echo", "hello", "ls"
-        # This doesn't trigger the separator logic unless we explicitly check for \n as a separator
-        # But our new logic checks &&, ||, |
-        
-        # This should fail now because 'rm' is allowed but we want to test the logic
-        # Let's try a disallowed command
+        # Shell operators are completely blocked now (more secure)
         result = sandbox.execute("echo hello && whoami")
-        assert result.success # whoami is allowed
-        
-        result = sandbox.execute("echo hello && notallowed")
         assert not result.success
-        assert "Command not allowed in chain" in result.error
+        assert "Shell operator" in result.error
+        
+        result = sandbox.execute("echo hello || whoami")
+        assert not result.success
+        
+        result = sandbox.execute("echo hello | whoami")
+        assert not result.success

@@ -44,11 +44,32 @@ class Sandbox:
         self._created_files = set()
 
     def _secure_path(self, path: str) -> Path:
-        clean = path.replace("..", "").lstrip("/")
+        # Remove all path traversal attempts iteratively
+        clean = path
+        while ".." in clean:
+            clean = clean.replace("..", "")
+        clean = clean.lstrip("/")
+        
+        # Resolve to absolute path
         full = (self.root / clean).resolve()
 
-        if not str(full).startswith(str(self.root)):
+        # Check if resolved path is within sandbox
+        try:
+            full.relative_to(self.root)
+        except ValueError:
             raise ValueError(f"Security: path outside sandbox: {path}")
+        
+        # Check for symlinks pointing outside sandbox
+        if full.is_symlink():
+            target = full.readlink()
+            if target.is_absolute():
+                raise ValueError(f"Security: absolute symlink not allowed: {path}")
+            resolved_target = (full.parent / target).resolve()
+            try:
+                resolved_target.relative_to(self.root)
+            except ValueError:
+                raise ValueError(f"Security: symlink points outside sandbox: {path}")
+        
         return full
 
     def _is_command_safe(self, command: str) -> bool:
@@ -106,18 +127,27 @@ class Sandbox:
         if command.startswith("python "):
             command = "python3" + command[6:]
         
-        # Fix: handle escaped newlines and literal newlines in strings
-        # Agent may send: 'hello\nworld' which should stay as literal
-        # or actual newlines which break shell
-        command = command.replace('\\n', '\\\\n').replace('\\r', '\\\\r')
+        # Block shell operators that could enable command chaining/injection
+        # But allow semicolons in python -c commands (common pattern)
+        shell_operators = ["&&", "||", "|"]
+        is_python_c = "python3 -c" in command or "python -c" in command
+        for op in shell_operators:
+            if op in command:
+                return Result(False, error=f"Shell operator '{op}' not allowed for security", return_code=1)
+        
+        # Block other dangerous shell operators in non-python commands
+        if not is_python_c and ";" in command:
+            return Result(False, error="Shell operator ';' not allowed for security", return_code=1)
         
         if not self._is_command_safe(command):
             return Result(False, error="Command contains blocked patterns", return_code=1)
 
+        # Use shlex.split for safe parsing
         try:
-            cmd_parts = command.replace("&&", " ").replace("||", " ").replace("|", " ").split()
-        except:
-            cmd_parts = command.split()
+            import shlex
+            cmd_parts = shlex.split(command)
+        except ValueError as e:
+            return Result(False, error=f"Invalid command syntax: {e}", return_code=1)
             
         if not cmd_parts:
             return Result(False, error="Empty command")
@@ -126,34 +156,26 @@ class Sandbox:
         if first_cmd not in self.ALLOWED_COMMANDS and not first_cmd.startswith("./"):
              return Result(False, error=f"Command not allowed: {first_cmd}")
 
-        separators = {"&&", "||", "|"}
-        parts = command.split()
-        for i, part in enumerate(parts):
-            if part in separators and i + 1 < len(parts):
-                next_cmd = parts[i+1]
-                if next_cmd not in self.ALLOWED_COMMANDS and not next_cmd.startswith("./"):
-                    return Result(False, error=f"Command not allowed in chain: {next_cmd}")
-
-        # Block absolute paths in shell commands (but allow in python -c commands)
-        # Check if command starts with / or contains " /" (space + absolute path)
-        stripped = command.strip()
-        if (stripped.startswith("/") or " /" in stripped) and not stripped.startswith("python"):
-            return Result(False, error="Absolute paths not allowed in shell commands", return_code=1)
+        # Block absolute paths
+        for part in cmd_parts:
+            if part.startswith("/") and not part.startswith("--"):
+                return Result(False, error="Absolute paths not allowed", return_code=1)
 
         timeout = timeout or self.timeout
         
         try:
             env = {**os.environ, "HOME": str(self.root)}
             env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + env.get("PATH", "")
+            
+            # Use shell=False for security - pass args as list
             r = run(
-                command,
-                shell=True,
+                cmd_parts,
+                shell=False,
                 cwd=str(self.root),
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                env=env,
-                executable="/bin/bash"
+                env=env
             )
             output = r.stdout + (r.stderr if r.stderr else "")
             return Result(
@@ -165,6 +187,8 @@ class Sandbox:
             return Result(False, error="Command timed out", return_code=124)
         except PermissionError as e:
             return Result(False, error=f"Permission denied: {e}")
+        except FileNotFoundError as e:
+            return Result(False, error=f"Command not found: {e}")
         except Exception as e:
             return Result(False, error=str(e), return_code=1)
 
