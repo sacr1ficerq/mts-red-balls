@@ -314,10 +314,14 @@ async def query(request: QueryRequest, req: Request):
                 session.artifacts["result"] = result.output
                 session.artifacts["duration"] = result.duration
                 session.artifacts["steps"] = result.steps
+                # IMPORTANT: Save session after completion
+                orch.state.save()
+                logger.info(f"Session {session_id} saved with status: {session.status}")
             except Exception as e:
                 logger.error(f"Background task error: {e}", exc_info=True)
                 session.status = "error"
                 session.artifacts["error"] = str(e)
+                orch.state.save()
         
         import threading
         thread = threading.Thread(target=run_in_background, daemon=True)

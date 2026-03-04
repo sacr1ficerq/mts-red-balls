@@ -1,1 +1,291 @@
-{}
+{
+  "ea9c1963-c92f-4cfa-a1b0-1019d67df7d6": {
+    "id": "ea9c1963-c92f-4cfa-a1b0-1019d67df7d6",
+    "query": "\u043a\u0430\u043a\u0438\u0435 \u0435\u0441\u0442\u044c \u0434\u0438\u0430\u043b\u0435\u043a\u0442\u044b \u0432 \u0430\u0431\u0445\u0430\u0437\u0441\u043a\u043e\u043c \u044f\u0437\u044b\u043a\u0435?",
+    "created_at": "2026-03-04T13:42:14.499834",
+    "start_time": "2026-03-04T13:42:14.499834",
+    "task": "\u043a\u0430\u043a\u0438\u0435 \u0435\u0441\u0442\u044c \u0434\u0438\u0430\u043b\u0435\u043a\u0442\u044b \u0432 \u0430\u0431\u0445\u0430\u0437\u0441\u043a\u043e\u043c \u044f\u0437\u044b\u043a\u0435?",
+    "events": [],
+    "messages": [],
+    "steps": [],
+    "artifacts": {},
+    "status": "running",
+    "total_tokens": 0,
+    "total_cost": 0.0
+  },
+  "3fa30f09-efc5-457f-b7fd-5fa5da81d26c": {
+    "id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+    "query": "test query",
+    "created_at": "2026-03-04T13:42:47.503093",
+    "start_time": "2026-03-04T13:42:47.503093",
+    "task": "test query",
+    "events": [
+      {
+        "type": "system",
+        "data": {
+          "message": "Starting: test query",
+          "expanded": true
+        },
+        "agent": "Coordinator",
+        "timestamp": "2026-03-04T13:42:47.508890",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 1
+      },
+      {
+        "type": "thought",
+        "data": {
+          "content": "{\n  \"action\": \"delegate\",\n  \"agent\": \"SearchAgent\",\n  \"task\": \"test query\"\n}",
+          "raw_response": "{\n  \"action\": \"delegate\",\n  \"agent\": \"SearchAgent\",\n  \"task\": \"test query\"\n}",
+          "expanded": true
+        },
+        "agent": "Coordinator",
+        "timestamp": "2026-03-04T13:42:51.377948",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 2
+      },
+      {
+        "type": "delegate",
+        "data": {
+          "target_agent": "SearchAgent",
+          "task": "test query",
+          "context_ids": [],
+          "plan_id": "",
+          "step_id": 0,
+          "expanded": true
+        },
+        "agent": "Coordinator",
+        "timestamp": "2026-03-04T13:42:51.378215",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 3
+      },
+      {
+        "type": "thought",
+        "data": {
+          "content": "{\"action\": \"search\", \"query\": \"test query meaning\"}",
+          "raw_response": "{\"action\": \"search\", \"query\": \"test query meaning\"}",
+          "expanded": true
+        },
+        "agent": "SearchAgent",
+        "timestamp": "2026-03-04T13:42:54.975166",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 4
+      },
+      {
+        "type": "result",
+        "data": {
+          "content": "{\"action\": \"search\", \"query\": \"test query meaning\"}",
+          "expanded": true
+        },
+        "agent": "SearchAgent",
+        "timestamp": "2026-03-04T13:42:54.976188",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 5
+      },
+      {
+        "type": "tool",
+        "data": {
+          "tool_name": "delegate",
+          "input": "delegate to SearchAgent: test query",
+          "output": "{\"action\": \"search\", \"query\": \"test query meaning\"}",
+          "success": true,
+          "expanded": true
+        },
+        "agent": "Coordinator",
+        "timestamp": "2026-03-04T13:42:54.976441",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 6
+      },
+      {
+        "type": "thought",
+        "data": {
+          "content": "Based on your input, I notice you've provided a search request rather than an answer to validate and improve. Let me first execute this search to gather information, and then I'll address the validation task.\n\n{\"action\": \"search\", \"query\": \"test query meaning\"}",
+          "raw_response": "Based on your input, I notice you've provided a search request rather than an answer to validate and improve. Let me first execute this search to gather information, and then I'll address the validation task.\n\n{\"action\": \"search\", \"query\": \"test query meaning\"}",
+          "expanded": true
+        },
+        "agent": "CriticAgent",
+        "timestamp": "2026-03-04T13:43:07.293885",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 7
+      },
+      {
+        "type": "result",
+        "data": {
+          "content": "Based on your input, I notice you've provided a search request rather than an answer to validate and improve. Let me first execute this search to gather information, and then I'll address the validation task.\n\n{\"action\": \"search\", \"query\": \"test query meaning\"}",
+          "expanded": true
+        },
+        "agent": "CriticAgent",
+        "timestamp": "2026-03-04T13:43:07.294849",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 8
+      },
+      {
+        "type": "tool",
+        "data": {
+          "tool_name": "critic",
+          "input": "validate and improve",
+          "output": "Based on your input, I notice you've provided a search request rather than an answer to validate and improve. Let me first execute this search to gather information, and then I'll address the validation task.\n\n{\"action\": \"search\", \"query\": \"test query meaning\"}",
+          "success": true,
+          "expanded": true
+        },
+        "agent": "Coordinator",
+        "timestamp": "2026-03-04T13:43:07.295373",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 9
+      },
+      {
+        "type": "thought",
+        "data": {
+          "content": "{\n  \"action\": \"done\",\n  \"result\": \"A test query is a sample query used to verify that a search or testing system works correctly.\"\n}",
+          "raw_response": "{\n  \"action\": \"done\",\n  \"result\": \"A test query is a sample query used to verify that a search or testing system works correctly.\"\n}",
+          "expanded": true
+        },
+        "agent": "Coordinator",
+        "timestamp": "2026-03-04T13:43:20.597209",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 10
+      },
+      {
+        "type": "result",
+        "data": {
+          "content": "A test query is a sample query used to verify that a search or testing system works correctly.",
+          "expanded": true
+        },
+        "agent": "Coordinator",
+        "timestamp": "2026-03-04T13:43:20.598247",
+        "session_id": "3fa30f09-efc5-457f-b7fd-5fa5da81d26c",
+        "event_id": 11
+      }
+    ],
+    "messages": [],
+    "steps": [],
+    "artifacts": {
+      "result": "A test query is a sample query used to verify that a search or testing system works correctly.",
+      "duration": 33.09506106376648,
+      "steps": [],
+      "total_time": 33.095091104507446
+    },
+    "status": "completed",
+    "total_tokens": 0,
+    "total_cost": 0.0
+  },
+  "b2955ff5-8285-4828-ac8d-736cbebee787": {
+    "id": "b2955ff5-8285-4828-ac8d-736cbebee787",
+    "query": "test from thread",
+    "created_at": "2026-03-04T13:43:34.676352",
+    "start_time": "2026-03-04T13:43:34.676352",
+    "task": "test from thread",
+    "events": [
+      {
+        "type": "system",
+        "data": {
+          "message": "Starting: test from thread",
+          "expanded": true
+        },
+        "agent": "Coordinator",
+        "timestamp": "2026-03-04T13:43:34.682065",
+        "session_id": "b2955ff5-8285-4828-ac8d-736cbebee787",
+        "event_id": 1
+      },
+      {
+        "type": "thought",
+        "data": {
+          "content": "{\"action\": \"done\", \"result\": \"Please clarify what you'd like to test. Are you looking to verify a specific functionality, check a code snippet, or something else? Provide more details so I can assist you effectively.\"}\n",
+          "raw_response": "{\"action\": \"done\", \"result\": \"Please clarify what you'd like to test. Are you looking to verify a specific functionality, check a code snippet, or something else? Provide more details so I can assist you effectively.\"}\n",
+          "expanded": true
+        },
+        "agent": "Coordinator",
+        "timestamp": "2026-03-04T13:43:38.348660",
+        "session_id": "b2955ff5-8285-4828-ac8d-736cbebee787",
+        "event_id": 2
+      },
+      {
+        "type": "result",
+        "data": {
+          "content": "Please clarify what you'd like to test. Are you looking to verify a specific functionality, check a code snippet, or something else? Provide more details so I can assist you effectively.",
+          "expanded": true
+        },
+        "agent": "Coordinator",
+        "timestamp": "2026-03-04T13:43:38.348944",
+        "session_id": "b2955ff5-8285-4828-ac8d-736cbebee787",
+        "event_id": 3
+      }
+    ],
+    "messages": [],
+    "steps": [],
+    "artifacts": {
+      "result": "Please clarify what you'd like to test. Are you looking to verify a specific functionality, check a code snippet, or something else? Provide more details so I can assist you effectively.",
+      "duration": 3.672308921813965,
+      "steps": [],
+      "total_time": 3.6723179817199707
+    },
+    "status": "completed",
+    "total_tokens": 0,
+    "total_cost": 0.0
+  },
+  "cd587c2d-37ae-4fa1-9736-a6321fb135f2": {
+    "id": "cd587c2d-37ae-4fa1-9736-a6321fb135f2",
+    "query": "task 1",
+    "created_at": "2026-03-04T13:44:50.008651",
+    "start_time": "2026-03-04T13:44:50.008651",
+    "task": "task 1",
+    "events": [],
+    "messages": [],
+    "steps": [],
+    "artifacts": {},
+    "status": "running",
+    "total_tokens": 0,
+    "total_cost": 0.0
+  },
+  "dbcb6d44-ad70-4b20-ade2-680dc2dc3f0b": {
+    "id": "dbcb6d44-ad70-4b20-ade2-680dc2dc3f0b",
+    "query": "task 2",
+    "created_at": "2026-03-04T13:44:50.009163",
+    "start_time": "2026-03-04T13:44:50.009163",
+    "task": "task 2",
+    "events": [],
+    "messages": [],
+    "steps": [],
+    "artifacts": {},
+    "status": "running",
+    "total_tokens": 0,
+    "total_cost": 0.0
+  },
+  "2e7cea47-25fe-4dc9-9c35-d539202c1722": {
+    "id": "2e7cea47-25fe-4dc9-9c35-d539202c1722",
+    "query": "task 1",
+    "created_at": "2026-03-04T13:44:50.014552",
+    "start_time": "2026-03-04T13:44:50.014552",
+    "task": "task 1",
+    "events": [],
+    "messages": [],
+    "steps": [],
+    "artifacts": {
+      "result": "ok",
+      "duration": 0,
+      "steps": [],
+      "total_time": 1.5020370483398438e-05
+    },
+    "status": "completed",
+    "total_tokens": 0,
+    "total_cost": 0.0
+  },
+  "c632d5a7-bff1-4c6f-a6b9-c3447d790edb": {
+    "id": "c632d5a7-bff1-4c6f-a6b9-c3447d790edb",
+    "query": "task 2",
+    "created_at": "2026-03-04T13:44:50.015518",
+    "start_time": "2026-03-04T13:44:50.015518",
+    "task": "task 2",
+    "events": [],
+    "messages": [],
+    "steps": [],
+    "artifacts": {
+      "result": "ok",
+      "duration": 0,
+      "steps": [],
+      "total_time": 1.1920928955078125e-05
+    },
+    "status": "completed",
+    "total_tokens": 0,
+    "total_cost": 0.0
+  }
+}

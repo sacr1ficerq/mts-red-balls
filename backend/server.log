@@ -1,22 +1,17 @@
-INFO:     Started server process [49191]
+INFO:     Started server process [51013]
 INFO:     Waiting for application startup.
-2026-03-04 13:36:51,977 - server - INFO - Starting Kaggle Solver API
+2026-03-04 13:41:35,480 - server - INFO - Starting Kaggle Solver API
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:57516 - "GET /src/app.js?v=10 HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:57516 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57518 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57516 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57518 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57518 - "GET /api/session/ebb9cef5-4a38-4c5f-84ff-a15bbafdb29c HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57516 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57516 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57524 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57524 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57524 - "POST /api/query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57524 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57524 - "GET /api/session/4be4debf-79c7-4e2b-bac4-20ac89edac3d HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57524 - "GET /api/sse/4be4debf-79c7-4e2b-bac4-20ac89edac3d HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57526 - "GET /api/workspace/files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57526 - "GET /api/workspace/files HTTP/1.1" 200 OK
-2026-03-04 13:38:35,883 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:57644 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57644 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57644 - "POST /api/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57644 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57646 - "GET /api/workspace/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57648 - "GET /api/sse/ea9c1963-c92f-4cfa-a1b0-1019d67df7d6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57644 - "GET /api/session/ea9c1963-c92f-4cfa-a1b0-1019d67df7d6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57646 - "GET /api/workspace/files HTTP/1.1" 200 OK
+2026-03-04 13:42:15,698 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 13:42:25,577 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 13:44:03,312 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-04 13:44:21,595 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
