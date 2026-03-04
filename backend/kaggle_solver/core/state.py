@@ -170,24 +170,22 @@ class StateManager:
         self.save()
 
     def save(self, path: str = None):
-        import fcntl
+        import logging
+        log = logging.getLogger(__name__)
         path = path or self.storage_path
         try:
-            with open(path, "a+") as f:
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-                try:
-                    f.seek(0)
-                    json.dump(
-                        {sid: s.to_dict() for sid, s in self.sessions.items()},
-                        f, indent=2
-                    )
-                    f.truncate()
-                finally:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-        except (IOError, OSError) as e:
-            logger.warning(f"Failed to lock file for writing: {e}")
+            data = {sid: s.to_dict() for sid, s in self.sessions.items()}
             with open(path, "w") as f:
-                json.dump(
-                    {sid: s.to_dict() for sid, s in self.sessions.items()},
-                    f, indent=2
-                )
+                json.dump(data, f, indent=2)
+            
+            log.debug(f"Saved {len(data)} sessions to {path}")
+            
+            # Also save a request/response log for debugging
+            log_path = path.replace(".json", "_requests.log")
+            with open(log_path, "a") as log_file:
+                for sid, s in data.items():
+                    if s.get("status") == "running" and s.get("steps"):
+                        for step in s.get("steps", []):
+                            log_file.write(f"{s.get('created_at')} | {sid[:8]} | {step.get('agent')} | {step.get('action')} | {step.get('input', '')[:50]} -> {str(step.get('output', ''))[:100]}\n")
+        except Exception as e:
+            log.warning(f"Failed to save sessions: {e}")

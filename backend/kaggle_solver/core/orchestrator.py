@@ -133,13 +133,20 @@ class Orchestrator:
         return log_event
 
     def run(self, query: str, session_id: Optional[str] = None) -> Session:
+        import logging
+        log = logging.getLogger(__name__)
+        log.info(f"Orchestrator.run() called with query: {query[:50]}...")
+        
         session = self.state.create_session(query, session_id)
+        log.info(f"Session created: {session.id}")
+        
         event_callback = self._create_session_callback(session)
 
         # Create session-specific sandbox
         session_sandbox_path = self.base_sandbox_path / session.id
         session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout)
         self._session_sandboxes[session.id] = session_sandbox
+        log.info(f"Created sandbox at: {session_sandbox_path}")
 
         coordinator = self.create_agent(
             name="Coordinator",
@@ -149,16 +156,20 @@ class Orchestrator:
             sandbox=session_sandbox,
             session=session
         )
+        log.info(f"Created coordinator agent, starting run()...")
 
         start_time = time.time()
         
         try:
+            log.info(f"Calling coordinator.run()...")
             result = coordinator.run(query, {"session_id": session.id})
+            log.info(f"Coordinator.run() completed, success={result.success}")
             session.status = "completed" if result.success else "error"
             session.artifacts["result"] = result.output
             session.artifacts["duration"] = result.duration
             session.artifacts["steps"] = result.steps
         except Exception as e:
+            log.error(f"Exception in coordinator.run(): {e}", exc_info=True)
             logger.error(f"Orchestrator error: {e}")
             session.status = "error"
             session.artifacts["error"] = str(e)
