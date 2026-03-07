@@ -9,7 +9,6 @@ from kaggle_solver.core.config import Config
 from kaggle_solver.llm import LLM
 from kaggle_solver.sandbox import Sandbox
 from kaggle_solver.tools.registry import ToolRegistry
-from kaggle_solver.tools import console_tool, files_tool, search_tool
 from kaggle_solver.agents.base import BaseAgent, AgentConfig, AgentResult
 from kaggle_solver.agents.registry import AgentRegistry
 
@@ -41,7 +40,7 @@ class Orchestrator:
         self.base_sandbox_path = Path(sandbox_root).resolve()
         self.base_sandbox_path.mkdir(parents=True, exist_ok=True)
         # Default sandbox for general tasks (or backward compatibility)
-        self.sandbox = Sandbox(self.base_sandbox_path, timeout=self.config.sandbox.timeout)
+        self.sandbox = Sandbox(self.base_sandbox_path, timeout=self.config.sandbox.timeout, preinstall=True)
         self.tool_registry = ToolRegistry
         self._event_callbacks: List[Callable] = []
         self._session_sandboxes: Dict[str, Sandbox] = {}
@@ -72,7 +71,7 @@ class Orchestrator:
                 agent_name = kwargs.get("name", "")
                 agent_role = kwargs.get("role", "")
                 agent_tools = kwargs.get("tools", ["tool"])
-                return self.create_agent(agent_name, agent_role, agent_tools, event_callback, None, sandbox, session)
+                return self.create_agent(agent_name, agent_role, agent_tools, event_callback, agent_factory_fn, sandbox, session)
             agent_factory = agent_factory_fn
         
         current_sandbox = sandbox or self.sandbox
@@ -142,9 +141,9 @@ class Orchestrator:
         
         event_callback = self._create_session_callback(session)
 
-        # Create session-specific sandbox
+        # Create session-specific sandbox with preinstalled packages
         session_sandbox_path = self.base_sandbox_path / session.id
-        session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout)
+        session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout, preinstall=True)
         self._session_sandboxes[session.id] = session_sandbox
         log.info(f"Created sandbox at: {session_sandbox_path}")
 
@@ -162,7 +161,7 @@ class Orchestrator:
         
         try:
             log.info(f"Calling coordinator.run()...")
-            result = coordinator.run(query, {"session_id": session.id})
+            result = coordinator.run(query, {"session": session})
             log.info(f"Coordinator.run() completed, success={result.success}")
             session.status = "completed" if result.success else "error"
             session.artifacts["result"] = result.output
@@ -197,7 +196,7 @@ class Orchestrator:
             session_sandbox = self._session_sandboxes[session_id]
         else:
             session_sandbox_path = self.base_sandbox_path / session.id
-            session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout)
+            session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout, preinstall=True)
             self._session_sandboxes[session.id] = session_sandbox
 
         coordinator = self.create_agent(

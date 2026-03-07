@@ -27,6 +27,11 @@ class Sandbox:
         "docker", "node", "npm", "npx"
     }
     
+    PREINSTALL_PACKAGES = [
+        "scikit-learn", "pandas", "numpy", "catboost", "xgboost", 
+        "lightgbm", "matplotlib", "seaborn", "joblib"
+    ]
+    
     BLOCKED_PATTERNS = [
         "rm -rf /", "rm -rf *", "rm -rf .",
         "> /dev/sd", "dd if=",
@@ -39,11 +44,34 @@ class Sandbox:
 
     MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
     
-    def __init__(self, root: Path, timeout: int = 60):
+    def __init__(self, root: Path, timeout: int = 60, preinstall: bool = True):
         self.root = root.resolve()
         self.timeout = timeout
         self.root.mkdir(parents=True, exist_ok=True)
         self._created_files = set()
+        
+        # Preinstall common ML packages
+        if preinstall:
+            self._preinstall_packages()
+    
+    def _preinstall_packages(self):
+        """Preinstall common ML packages."""
+        import subprocess
+        import sys
+        for pkg in self.PREINSTALL_PACKAGES:
+            try:
+                # Install to system Python (works because we're using system python3)
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "-q", "--user", pkg],
+                    capture_output=True,
+                    timeout=180
+                )
+                if result.returncode == 0:
+                    logger.info(f"Preinstalled: {pkg}")
+                else:
+                    logger.warning(f"Failed to install {pkg}: {result.stderr.decode()[:100]}")
+            except Exception as e:
+                logger.warning(f"Failed to preinstall {pkg}: {e}")
 
     def _secure_path(self, path: str) -> Path:
         # Remove all path traversal attempts iteratively
@@ -127,26 +155,17 @@ class Sandbox:
             shutil.rmtree(p)
 
     def execute(self, command: str, timeout: int = None) -> Result:
-        # Fix: replace 'python' with 'python3' (python may not exist)
-        if command.startswith("python "):
-            command = "python3" + command[6:]
+        if timeout is None:
+            timeout = self.timeout
+            
+        cmd = command.strip().split()
         
-        # Block shell operators that could enable command chaining/injection
-        # But allow semicolons in python -c commands (common pattern)
-        shell_operators = ["&&", "||", "|"]
-        is_python_c = "python3 -c" in command or "python -c" in command
-        for op in shell_operators:
-            if op in command:
-                return Result(False, error=f"Shell operator '{op}' not allowed for security", return_code=1)
+        if not cmd:
+            return Result(False, error="Empty command")
         
-        # Block other dangerous shell operators in non-python commands
-        if not is_python_c and ";" in command:
-            return Result(False, error="Shell operator ';' not allowed for security", return_code=1)
+        if cmd[0] not in self.ALLOWED_COMMANDS:
+            return Result(False, error=f"Command not allowed: {cmd[0]}")
         
-        if not self._is_command_safe(command):
-            return Result(False, error="Command contains blocked patterns", return_code=1)
-
-        # Use shlex.split for safe parsing
         try:
             import shlex
             cmd_parts = shlex.split(command)
@@ -168,8 +187,13 @@ class Sandbox:
         timeout = timeout or self.timeout
         
         try:
+            import site
+            user_site = site.getusersitepackages()
             env = {**os.environ, "HOME": str(self.root)}
             env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + env.get("PATH", "")
+            # Add user site-packages to PYTHONPATH so installed packages are found
+            if user_site:
+                env["PYTHONPATH"] = user_site
             
             # Use shell=False for security - pass args as list
             r = run(

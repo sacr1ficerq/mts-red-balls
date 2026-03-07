@@ -79,7 +79,7 @@ class AgentConstants:
     
     # Maximum number of context events to subscribe to
     # Prevents context window overflow while maintaining relevance
-    MAX_CONTEXT_EVENTS = 3
+    MAX_CONTEXT_EVENTS = 10
     
     # Maximum consecutive plan actions before forcing delegation
     # Prevents infinite planning loops
@@ -92,11 +92,73 @@ class AgentConstants:
     # Approximate tokens per character (rough estimate)
     # Used for token counting when exact tokenizer unavailable
     CHARS_PER_TOKEN = 4
+    
+    # Agent to tools mapping for sub-agent creation
+    AGENT_TOOLS = {
+        "SearchAgent": ["search"],
+        "CodeAgent": ["console", "files"],
+        "CriticAgent": ["search", "console"],
+        "Coordinator": ["delegate", "tool"],
+    }
+    
+    # Tools schema for function calling
+    TOOLS_SCHEMA = {
+        "console": {
+            "type": "function",
+            "function": {
+                "name": "console",
+                "description": "Run shell commands in sandbox",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Command to run"}
+                    },
+                    "required": ["query"]
+                }
+            }
+        },
+        "files": {
+            "type": "function", 
+            "function": {
+                "name": "files",
+                "description": "File operations: read, write, edit",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "op": {"type": "string", "enum": ["read", "write", "edit"]},
+                        "path": {"type": "string"},
+                        "content": {"type": "string"}
+                    },
+                    "required": ["op", "path"]
+                }
+            }
+        },
+        "search": {
+            "type": "function",
+            "function": {
+                "name": "search",
+                "description": "Web search",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"}
+                    },
+                    "required": ["query"]
+                }
+            }
+        }
+    }
 
 
 class BaseAgent(ABC):
     MAX_CONTEXT_EVENTS = AgentConstants.MAX_CONTEXT_EVENTS
     MAX_CONSECUTIVE_PLANS = AgentConstants.MAX_CONSECUTIVE_PLANS
+    AGENT_TOOLS = AgentConstants.AGENT_TOOLS
+    
+    @staticmethod
+    def get_tools_for_agent(agent_name: str) -> List[str]:
+        """Get the list of tools for a given agent name."""
+        return BaseAgent.AGENT_TOOLS.get(agent_name, ["tool"])
     
     def __init__(
         self,
@@ -223,13 +285,16 @@ class BaseAgent(ABC):
                 logger.warning("Consecutive plans detected, forcing delegation")
                 steps = action.get("steps", [])
                 if steps:
-                    task = steps[0].get("task", "search")
+                    first_step = steps[0]
+                    target_agent = first_step.get("agent", "SearchAgent")
+                    task = first_step.get("task", "search")
                     self._emit("delegate", {
-                        "target_agent": "SearchAgent", 
+                        "target_agent": target_agent, 
                         "task": task,
                         "expanded": True
                     })
-                    sub = self.agent_factory(name="SearchAgent", role="Execute SearchAgent", tools=["tool"])
+                    agent_tools = self.get_tools_for_agent(target_agent)
+                    sub = self.agent_factory(name=target_agent, role=f"Execute {target_agent}", tools=agent_tools)
                     sub_context = {"event_ids": []}
                     if self.session:
                         sub_context["session"] = self.session
@@ -282,7 +347,11 @@ class BaseAgent(ABC):
                 self.add_message("tool", f"{action.get('tool')}: {output}")
                 full.append(tool_msg)
                 
-                # Continue loop to process tool result - don't return here!
+                logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
+                logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
+                
+                # Continue loop to process tool result!
+                continue
 
             elif action.get("action") == "delegate" and self.agent_factory:
                 target = action.get("agent", "")
@@ -300,7 +369,8 @@ class BaseAgent(ABC):
                     "expanded": True
                 })
                 
-                sub = self.agent_factory(name=target, role=f"Execute {target}", tools=["tool"])
+                agent_tools = self.get_tools_for_agent(target)
+                sub = self.agent_factory(name=target, role=f"Execute {target}", tools=agent_tools)
                 
                 # Pass context with event IDs and plan info
                 sub_context = {"event_ids": context_ids}
@@ -324,21 +394,9 @@ class BaseAgent(ABC):
                 self.add_message("tool", f"delegate to {target}: {sub_result.output}")
                 full.append(tool_msg)
 
-                # After delegate, optionally run CriticAgent for validation
-                if self.agent_factory and sub_result.output:
-                    critic = self.agent_factory(name="CriticAgent", role="Validate results", tools=["tool"])
-                    critic_result = critic.run(f"Validate and improve this answer: {sub_result.output}", context=sub_context, is_sub_call=True)
-                    if critic_result.output:
-                        # Emit critic result
-                        self._emit("tool", {
-                            "tool_name": "critic",
-                            "input": "validate and improve",
-                            "output": critic_result.output[:2000],
-                            "success": critic_result.success,
-                            "expanded": True
-                        })
-                        self.add_message("tool", f"CriticAgent: {critic_result.output}")
-                        full.append({"role": "tool", "content": f"CriticAgent: {critic_result.output}"})
+                # After delegate, return the sub-agent result as final result
+                # This is the expected behavior: Coordinator delegates and returns the result
+                return AgentResult(success=sub_result.success, output=sub_result.output, duration=time.time() - start)
 
             elif action.get("action") == "done":
                 self._emit("result", {"content": action.get("result", "")})
@@ -364,8 +422,42 @@ class BaseAgent(ABC):
                     "expanded": True
                 })
                 
-                # Just emit plan - coordinator decides when and how to delegate
-                plan_text = f"Plan created with {len(steps)} steps. Now delegate the first step."
+                logger.info(f">>> PLAN CREATED: {len(steps)} steps, agent_factory={self.agent_factory}")
+                
+                # CRITICAL: After creating plan, MUST delegate first step!
+                if steps and self.agent_factory:
+                    first_step = steps[0]
+                    target_agent = first_step.get("agent", "CodeAgent")
+                    task = first_step.get("task", "")
+                    
+                    logger.info(f">>> DELEGATING first step: {target_agent}: {task[:50]}...")
+                    
+                    # Emit delegate event
+                    self._emit("delegate", {
+                        "target_agent": target_agent,
+                        "task": task,
+                        "plan_id": plan_id,
+                        "expanded": True
+                    })
+                    
+                    # Create and run sub-agent
+                    agent_tools = self.get_tools_for_agent(target_agent)
+                    sub = self.agent_factory(name=target_agent, role=f"Execute {target_agent}", tools=agent_tools)
+                    sub_context = {"event_ids": []}
+                    if self.session:
+                        sub_context["session"] = self.session
+                    
+                    sub_result = sub.run(task, context=sub_context, is_sub_call=True)
+                    
+                    # Add result to messages and continue
+                    self.add_message("tool", f"{target_agent} result: {sub_result.output}")
+                    full.append({"role": "tool", "content": f"{target_agent} result: {sub_result.output}"})
+                    
+                    # Continue to let model decide next step or done
+                    continue
+                
+                # Fallback if no agent_factory
+                plan_text = f"Plan created with {len(steps)} steps."
                 tool_call_id = f"call_plan_{self._iteration}"
                 tool_msg = {"role": "tool", "content": plan_text, "tool_call_id": tool_call_id}
                 self.add_message("tool", plan_text)

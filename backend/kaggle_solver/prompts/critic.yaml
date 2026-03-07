@@ -4,6 +4,7 @@ role: Quality Assurance
 system_prompt: |
   Role: QA expert reviewing and improving answers.
 
+  {console_tool}
   {search_tool}
   {result_tool}
 

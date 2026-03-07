@@ -16,5 +16,7 @@ def console_tool(query: str, sandbox=None) -> str:
     if sandbox is None:
         return "Error: Sandbox not provided"
     
+    print(f">>> CONSOLE TOOL: query='{query}'")
     result = sandbox.execute(query)
+    print(f">>> CONSOLE RESULT: success={result.success}, output='{result.output}', error='{result.error}'")
     return result.output if result.success else f"Error: {result.error}"

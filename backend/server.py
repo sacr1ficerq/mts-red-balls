@@ -10,6 +10,7 @@ import asyncio
 import logging
 import json
 import threading
+import time
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -47,8 +48,8 @@ class RateLimiter:
         self.active_requests: Dict[str, int] = defaultdict(int)
         self._lock = threading.Lock()
     
-    def check(self, client_id: str) -> bool:
-        """Check if request is allowed."""
+    def try_acquire(self, client_id: str) -> bool:
+        """Atomically check if request is allowed and record it."""
         with self._lock:
             now = datetime.now()
             minute_ago = now - timedelta(minutes=1)
@@ -63,12 +64,18 @@ class RateLimiter:
             if len(self.requests[client_id]) >= self.requests_per_minute:
                 return False
             
+            # Atomically record the request
+            self.requests[client_id].append(now)
+            self.active_requests[client_id] += 1
             return True
     
+    def check(self, client_id: str) -> bool:
+        """Check if request is allowed (without recording)."""
+        return self.try_acquire(client_id)
+    
     def record(self, client_id: str):
-        with self._lock:
-            self.requests[client_id].append(datetime.now())
-            self.active_requests[client_id] += 1
+        """Record a request (for backward compatibility)."""
+        self.try_acquire(client_id)
     
     def release(self, client_id: str):
         with self._lock:
@@ -126,17 +133,17 @@ def serve_index_html():
 
 
 # Global orchestrator instance
-orchestrator: Optional[Orchestrator] = None
+_orchestrator: Optional[Orchestrator] = None
 _orchestrator_lock = threading.Lock()
 
 
 def get_orchestrator() -> Orchestrator:
-    global orchestrator
-    if orchestrator is None:
+    global _orchestrator
+    if _orchestrator is None:
         with _orchestrator_lock:
-            if orchestrator is None:
-                orchestrator = Orchestrator()
-    return orchestrator
+            if _orchestrator is None:
+                _orchestrator = Orchestrator()
+    return _orchestrator
 
 
 class QueryRequest(BaseModel):
@@ -210,39 +217,55 @@ def health_check():
 @app.get("/api/sse/{session_id}")
 async def sse_session_events(session_id: str):
     """Server-Sent Events stream for session events."""
-    from fastapi.responses import StreamingResponse
+    from fastapi.responses import StreamingResponse, JSONResponse
     import asyncio
+    
+    # Validate session_id
+    if not session_id or not session_id.replace("-", "").replace("_", "").isalnum():
+        return JSONResponse({"error": "Invalid session ID"}, status_code=400)
     
     orch = get_orchestrator()
     session = orch.get_session(session_id)
     if not session:
-        from fastapi.responses import JSONResponse
-        return JSONResponse({"error": "Session not found"}, status_code=404)
+        return {"error": "Session not found"}, 404
     
     initial_events = list(session.events)
+    max_duration = 3600  # 1 hour max
+    start_time = time.time()
     
     async def event_generator():
-        # Send initial events
-        for event in initial_events:
-            yield f"data: {json.dumps(event)}\n\n"
-        
-        # Then stream new events
-        last_idx = len(initial_events)
-        while True:
-            await asyncio.sleep(0.5)
-            session = orch.get_session(session_id)
-            if not session:
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Session not found'})}\n\n"
-                break
-            if len(session.events) > last_idx:
-                for event in session.events[last_idx:]:
-                    yield f"data: {json.dumps(event)}\n\n"
-                last_idx = len(session.events)
+        nonlocal start_time
+        try:
+            # Send initial events
+            for event in initial_events:
+                yield f"data: {json.dumps(event)}\n\n"
             
-            # Stop when session is done
-            if session.status != "running":
-                yield f"data: {json.dumps({'type': 'session_done', 'status': session.status})}\n\n"
-                break
+            # Then stream new events
+            last_idx = len(initial_events)
+            while True:
+                # Check for timeout
+                if time.time() - start_time > max_duration:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Connection timeout'})}\n\n"
+                    break
+                
+                await asyncio.sleep(0.5)
+                session = orch.get_session(session_id)
+                if not session:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Session not found'})}\n\n"
+                    break
+                if len(session.events) > last_idx:
+                    for event in session.events[last_idx:]:
+                        yield f"data: {json.dumps(event)}\n\n"
+                    last_idx = len(session.events)
+                
+                # Stop when session is done
+                if session.status != "running":
+                    yield f"data: {json.dumps({'type': 'session_done', 'status': session.status})}\n\n"
+                    break
+        except asyncio.CancelledError:
+            # Client disconnected - cleanup
+            logger.info(f"SSE connection closed for session {session_id}")
+            raise
     
     return StreamingResponse(
         event_generator(),
@@ -259,17 +282,23 @@ def get_client_id(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def validate_session_id(session_id: str) -> bool:
+    """Validate session_id format to prevent injection attacks."""
+    if not session_id:
+        return False
+    # Allow only alphanumeric, hyphens, underscores
+    return all(c.isalnum() or c in '-_' for c in session_id)
+
+
 @app.post("/api/query")
 async def query(request: QueryRequest, req: Request):
     client_id = get_client_id(req)
     
-    if not rate_limiter.check(client_id):
+    if not rate_limiter.try_acquire(client_id):
         raise HTTPException(
             status_code=429,
             detail="Rate limit exceeded. Please try again later."
         )
-    
-    rate_limiter.record(client_id)
     
     try:
         orch = get_orchestrator()
@@ -293,42 +322,52 @@ async def query(request: QueryRequest, req: Request):
                 output=str(event.get("data", {}))
             )
         
-        # Create sandbox for this session
+        # Create sandbox for this session with preinstalled packages
         from kaggle_solver.sandbox import Sandbox
         session_sandbox_path = orch.base_sandbox_path / session_id
-        session_sandbox = Sandbox(session_sandbox_path, timeout=orch.config.sandbox.timeout)
+        session_sandbox = Sandbox(session_sandbox_path, timeout=orch.config.sandbox.timeout, preinstall=True)
         orch._session_sandboxes[session_id] = session_sandbox
         
-        # Run synchronously (simpler than background thread)
-        try:
-            coordinator = orch.create_agent(
-                name="Coordinator",
-                role="Plan and delegate tasks",
-                tools=["delegate", "message", "tool"],
-                event_callback=event_callback,
-                sandbox=session_sandbox
-            )
-            result = coordinator.run(request.query, {"session_id": session_id})
-            session.status = "completed" if result.success else "error"
-            session.artifacts["result"] = result.output
-            session.artifacts["duration"] = result.duration
-            session.artifacts["steps"] = result.steps
-            orch.state.save()
-            logger.info(f"Session {session_id} completed with status: {session.status}")
-            
-            return {
-                "session_id": session_id,
-                "status": session.status,
-                "result": result.output
-            }
-        except Exception as e:
-            logger.error(f"Query error: {e}", exc_info=True)
+        # Run in BACKGROUND THREAD - return immediately
+        import threading
+        def run_task_background():
+            try:
+                coordinator = orch.create_agent(
+                    name="Coordinator",
+                    role="Plan and delegate tasks",
+                    tools=["delegate", "message", "tool"],
+                    event_callback=event_callback,
+                    sandbox=session_sandbox
+                )
+                result = coordinator.run(request.query, {"session": session})
+                session.status = "completed" if result.success else "error"
+                session.artifacts["result"] = result.output
+                session.artifacts["duration"] = result.duration
+                session.artifacts["steps"] = result.steps
+                orch.state.save()
+                logger.info(f"Session {session_id} completed with status: {session.status}")
+            except Exception as e:
+                logger.error(f"Background task error: {e}")
+                session.status = "error"
+                session.artifacts["error"] = str(e)
+                orch.state.save()
+        
+        thread = threading.Thread(target=run_task_background)
+        thread.start()
+        
+        # Return immediately with session_id
+        return {
+            "session_id": session_id,
+            "status": "running",
+            "events": session.events,
+            "result": None
+        }
+    except Exception as e:
+        logger.error(f"Query error: {e}", exc_info=True)
+        if 'session' in locals() and session:
             session.status = "error"
             session.artifacts["error"] = str(e)
             orch.state.save()
-            raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        logger.error(f"Query error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         rate_limiter.release(client_id)
@@ -336,6 +375,8 @@ async def query(request: QueryRequest, req: Request):
 
 @app.get("/api/session/{session_id}")
 def get_session(session_id: str):
+    if not validate_session_id(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session ID")
     orch = get_orchestrator()
     session = orch.get_session(session_id)
     if not session:
@@ -349,6 +390,8 @@ class ContinueRequest(BaseModel):
 
 @app.post("/api/session/{session_id}/continue")
 async def continue_session(session_id: str, request: ContinueRequest):
+    if not validate_session_id(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session ID")
     try:
         orch = get_orchestrator()
         session = orch.get_session(session_id)
@@ -384,6 +427,8 @@ class OptionSelectionRequest(BaseModel):
 
 @app.post("/api/session/{session_id}/select")
 async def select_option(session_id: str, request: OptionSelectionRequest):
+    if not validate_session_id(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session ID")
     try:
         orch = get_orchestrator()
         session = orch.get_session(session_id)
@@ -439,6 +484,8 @@ def clear_sessions():
 
 @app.post("/api/session/{session_id}/stop")
 def stop_session(session_id: str):
+    if not validate_session_id(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session ID")
     orch = get_orchestrator()
     success = orch.stop_session(session_id)
     if not success:

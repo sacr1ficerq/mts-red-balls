@@ -64,7 +64,7 @@ class SearchAgentPrompts:
 class CriticAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("critic.yaml", "", tools=["search", "result"])
+        return load_prompt("critic.yaml", "", tools=["console", "search", "result"])
 
 
 def get_agent_prompts(agent_name: str) -> str:
