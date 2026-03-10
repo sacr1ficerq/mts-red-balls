@@ -1,34 +1,11 @@
+# Import modules to trigger decorator registration
+# Tools are registered via @create_tool decorator in each module
 from kaggle_solver.tools.registry import ToolRegistry, ToolResult
-from kaggle_solver.tools.console import console_tool
-from kaggle_solver.tools.files import files_tool
-from kaggle_solver.tools.search import search_tool
 
-
-# Register all core tools at startup
-ToolRegistry.register(
-    "console",
-    lambda query, sandbox=None, **kwargs: console_tool(query, sandbox),
-    "Execute shell commands in sandbox",
-    {"query": {"type": "string", "description": "Command to execute"}}
-)
-
-ToolRegistry.register(
-    "files",
-    lambda op="read", path="", content="", sandbox=None, **kwargs: files_tool(op, path, content, sandbox),
-    "File operations in sandbox",
-    {
-        "op": {"type": "string", "enum": ["read", "write", "list", "delete", "exists"]},
-        "path": {"type": "string"},
-        "content": {"type": "string"}
-    }
-)
-
-ToolRegistry.register(
-    "search",
-    lambda query, llm=None, **kwargs: search_tool(query, llm),
-    "Search the web for information",
-    {"query": {"type": "string", "description": "Search query"}}
-)
+# Import modules to trigger tool registration via decorators
+import kaggle_solver.tools.console
+import kaggle_solver.tools.files
+import kaggle_solver.tools.search
 
 
 def get_rag_tool():

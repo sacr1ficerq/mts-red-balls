@@ -249,18 +249,51 @@ window.dashboard = function() {
             const task = this.newTaskInput;
             this.newTaskInput = '';
             
+            // СОЗДАЕМ СЕССИЮ СРАЗУ, чтобы показать диалог
+            const tempId = 'temp-' + Date.now();
+            this.currentSessionId = tempId;
+            this.activeSessions[tempId] = {
+                id: tempId,
+                query: task,
+                task: task,
+                status: 'running',
+                events: [
+                    {
+                        type: 'system',
+                        data: { message: 'Starting: ' + task },
+                        agent: 'Coordinator',
+                        timestamp: new Date().toISOString()
+                    }
+                ],
+                created_at: new Date().toISOString()
+            };
+            
             try {
                 const data = await API.startTask(task);
-                this.currentSessionId = data.session_id;
                 
-                await this.fetchSessions();
-                this.connectSSE(data.session_id);
+                // Заменяем временную сессию на реальную
+                delete this.activeSessions[tempId];
+                this.currentSessionId = data.session_id;
+                this.activeSessions[data.session_id] = {
+                    id: data.session_id,
+                    query: task,
+                    task: task,
+                    status: data.status,
+                    events: data.events || [],
+                    created_at: new Date().toISOString()
+                };
+                
+                if (data.status === 'running') {
+                    this.connectSSE(data.session_id);
+                }
             } catch(e) {
                 console.error('Error starting task:', e);
+                this.activeSessions[tempId].status = 'error';
             }
         },
 
         connectSSE(sessionId) {
+            console.log('[SSE] Connecting to:', sessionId);
             if (this.eventSource) {
                 this.eventSource.close();
                 this.eventSource = null;
@@ -270,7 +303,12 @@ window.dashboard = function() {
             
             this.eventSource = new EventSource(`/api/sse/${sessionId}`);
             
+            this.eventSource.onopen = () => {
+                console.log('[SSE] Connected to:', sessionId);
+            };
+            
             this.eventSource.onmessage = (e) => {
+                console.log('[SSE] Received:', e.data.substring(0, 100));
                 try {
                     const event = JSON.parse(e.data);
                     
