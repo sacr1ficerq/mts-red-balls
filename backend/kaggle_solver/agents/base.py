@@ -308,174 +308,174 @@ class BaseAgent(ABC):
                  return AgentResult(success=False, error="Agent stuck in a loop", duration=time.time() - start)
 
             if action.get("action") == "tool":
-                tool_name = action.get("tool", "")
-                
-                # Build kwargs based on tool type
-                kwargs = {}
-                if tool_name == "console":
-                    kwargs["query"] = action.get("query", "")
-                elif tool_name == "files":
-                    kwargs["op"] = action.get("op", "read")
-                    kwargs["path"] = action.get("path", "")
-                    kwargs["content"] = action.get("content", "")
-                    kwargs["search"] = action.get("search", "")
-                    kwargs["replace"] = action.get("replace", "")
-                else:
-                    for k, v in action.items():
-                        if k not in ["action", "tool"]:
-                            kwargs[k] = v
-                
-                result = self.tools.execute(
-                    tool_name,
-                    sandbox=self.sandbox,
-                    llm=self.llm,
-                    **kwargs
-                )
-                
-                output = result.output if result.success else f"Error: {result.error}"
-                self._emit("tool", {
-                    "tool_name": tool_name, 
-                    "input": str(kwargs), 
-                    "output": output[:2000],
-                    "success": result.success,
-                    "expanded": True
-                })
-                
-                # Add tool message with tool_call_id to satisfy providers that require it
-                tool_call_id = f"call_{action.get('tool', 'tool')}_{self._iteration}"
-                tool_msg = {"role": "tool", "content": f"{action.get('tool')}: {output}", "tool_call_id": tool_call_id}
-                self.add_message("tool", f"{action.get('tool')}: {output}")
-                full.append(tool_msg)
-                
-                logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
-                logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
-                
-                # Continue loop to process tool result!
+                self._handle_tool_action(action, full)
                 continue
 
             elif action.get("action") == "delegate" and self.agent_factory:
-                target = action.get("agent", "")
-                task = action.get("task", "")
-                context_ids = action.get("context_ids", [])[:3]
-                plan_id = action.get("plan_id", "")
-                step_id = action.get("step_id", 0)
-                
-                self._emit("delegate", {
-                    "target_agent": target, 
-                    "task": task,
-                    "context_ids": context_ids,
-                    "plan_id": plan_id,
-                    "step_id": step_id,
-                    "expanded": True
-                })
-                
-                agent_tools = self.get_tools_for_agent(target)
-                sub = self.agent_factory(name=target, role=f"Execute {target}", tools=agent_tools)
-                
-                # Pass context with event IDs and plan info
-                sub_context = {"event_ids": context_ids}
-                if self.session:
-                    sub_context["session"] = self.session
-                
-                sub_result = sub.run(task, context=sub_context, is_sub_call=True)
-                
-                # Emit delegate result as tool event
-                self._emit("tool", {
-                    "tool_name": "delegate", 
-                    "input": f"delegate to {target}: {task}",
-                    "output": sub_result.output[:2000],
-                    "success": sub_result.success,
-                    "expanded": True
-                })
-                
-                # Add tool message with tool_call_id
-                tool_call_id = f"call_delegate_{self._iteration}"
-                tool_msg = {"role": "tool", "content": f"delegate to {target}: {sub_result.output}", "tool_call_id": tool_call_id}
-                self.add_message("tool", f"delegate to {target}: {sub_result.output}")
-                full.append(tool_msg)
-
-                # After delegate, return the sub-agent result as final result
-                # This is the expected behavior: Coordinator delegates and returns the result
-                return AgentResult(success=sub_result.success, output=sub_result.output, duration=time.time() - start)
+                return self._handle_delegate_action(action, full, start)
 
             elif action.get("action") == "done":
                 self._emit("result", {"content": action.get("result", "")})
                 return AgentResult(success=True, output=action.get("result", ""), duration=time.time() - start)
 
             elif action.get("action") == "options":
-                options = action.get("options", [])
-                question = action.get("question", "Выберите опцию:")
-                self._emit("button_options", {
-                    "question": question,
-                    "options": options,
-                    "expanded": True
-                })
-                self.add_message("tool", f"options: {question}")
-                full.append({"role": "tool", "content": f"options: {question}"})
+                self._handle_options_action(action, full)
 
             elif action.get("action") == "plan":
-                plan_id = action.get("plan_id", "")
-                steps = action.get("steps", [])
-                self._emit("plan", {
-                    "plan_id": plan_id,
-                    "steps": steps,
-                    "expanded": True
-                })
-                
-                logger.info(f">>> PLAN CREATED: {len(steps)} steps, agent_factory={self.agent_factory}")
-                
-                # CRITICAL: After creating plan, MUST delegate first step!
-                if steps and self.agent_factory:
-                    first_step = steps[0]
-                    target_agent = first_step.get("agent", "CodeAgent")
-                    task = first_step.get("task", "")
-                    
-                    logger.info(f">>> DELEGATING first step: {target_agent}: {task[:50]}...")
-                    
-                    # Emit delegate event
-                    self._emit("delegate", {
-                        "target_agent": target_agent,
-                        "task": task,
-                        "plan_id": plan_id,
-                        "expanded": True
-                    })
-                    
-                    # Create and run sub-agent
-                    agent_tools = self.get_tools_for_agent(target_agent)
-                    sub = self.agent_factory(name=target_agent, role=f"Execute {target_agent}", tools=agent_tools)
-                    sub_context = {"event_ids": []}
-                    if self.session:
-                        sub_context["session"] = self.session
-                    
-                    sub_result = sub.run(task, context=sub_context, is_sub_call=True)
-                    
-                    # Add result to messages and continue
-                    self.add_message("tool", f"{target_agent} result: {sub_result.output}")
-                    full.append({"role": "tool", "content": f"{target_agent} result: {sub_result.output}"})
-                    
-                    # Continue to let model decide next step or done
-                    continue
-                
-                # Fallback if no agent_factory
-                plan_text = f"Plan created with {len(steps)} steps."
-                tool_call_id = f"call_plan_{self._iteration}"
-                tool_msg = {"role": "tool", "content": plan_text, "tool_call_id": tool_call_id}
-                self.add_message("tool", plan_text)
-                full.append(tool_msg)
+                self._handle_plan_action(action, full)
+                continue
 
             elif action.get("action") == "update_plan":
-                plan_id = action.get("plan_id", "")
-                update = action.get("update", {})
-                update_type = update.get("type", "")
-                self._emit("update_plan", {
-                    "plan_id": plan_id,
-                    "update": update,
-                    "expanded": True
-                })
-                self.add_message("tool", f"plan updated: {update_type}")
-                full.append({"role": "tool", "content": f"plan updated: {update_type}"})
+                self._handle_update_plan_action(action, full)
 
         return AgentResult(success=False, error="Max iterations", duration=time.time() - start)
+
+    def _handle_tool_action(self, action: Dict[str, Any], full: List[Dict[str, Any]]) -> None:
+        tool_name = action.get("tool", "")
+        
+        kwargs = {}
+        if tool_name == "console":
+            kwargs["query"] = action.get("query", "")
+        elif tool_name == "files":
+            kwargs["op"] = action.get("op", "read")
+            kwargs["path"] = action.get("path", "")
+            kwargs["content"] = action.get("content", "")
+            kwargs["search"] = action.get("search", "")
+            kwargs["replace"] = action.get("replace", "")
+        else:
+            for k, v in action.items():
+                if k not in ["action", "tool"]:
+                    kwargs[k] = v
+        
+        result = self.tools.execute(
+            tool_name,
+            sandbox=self.sandbox,
+            llm=self.llm,
+            **kwargs
+        )
+        
+        output = result.output if result.success else f"Error: {result.error}"
+        self._emit("tool", {
+            "tool_name": tool_name,
+            "input": str(kwargs),
+            "output": output[:2000],
+            "success": result.success,
+            "expanded": True
+        })
+        
+        tool_call_id = f"call_{action.get('tool', 'tool')}_{self._iteration}"
+        tool_msg = {"role": "tool", "content": f"{action.get('tool')}: {output}", "tool_call_id": tool_call_id}
+        self.add_message("tool", f"{action.get('tool')}: {output}")
+        full.append(tool_msg)
+        
+        logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
+        logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
+
+    def _handle_delegate_action(self, action: Dict[str, Any], full: List[Dict[str, Any]], start: float) -> AgentResult:
+        target = action.get("agent", "")
+        task = action.get("task", "")
+        context_ids = action.get("context_ids", [])[:3]
+        plan_id = action.get("plan_id", "")
+        step_id = action.get("step_id", 0)
+        
+        self._emit("delegate", {
+            "target_agent": target,
+            "task": task,
+            "context_ids": context_ids,
+            "plan_id": plan_id,
+            "step_id": step_id,
+            "expanded": True
+        })
+        
+        agent_tools = self.get_tools_for_agent(target)
+        sub = self.agent_factory(name=target, role=f"Execute {target}", tools=agent_tools)
+        
+        sub_context = {"event_ids": context_ids}
+        if self.session:
+            sub_context["session"] = self.session
+        
+        sub_result = sub.run(task, context=sub_context, is_sub_call=True)
+        
+        self._emit("tool", {
+            "tool_name": "delegate",
+            "input": f"delegate to {target}: {task}",
+            "output": sub_result.output[:2000],
+            "success": sub_result.success,
+            "expanded": True
+        })
+        
+        tool_call_id = f"call_delegate_{self._iteration}"
+        tool_msg = {"role": "tool", "content": f"delegate to {target}: {sub_result.output}", "tool_call_id": tool_call_id}
+        self.add_message("tool", f"delegate to {target}: {sub_result.output}")
+        full.append(tool_msg)
+
+        return AgentResult(success=sub_result.success, output=sub_result.output, duration=time.time() - start)
+
+    def _handle_options_action(self, action: Dict[str, Any], full: List[Dict[str, Any]]) -> None:
+        options = action.get("options", [])
+        question = action.get("question", "Выберите опцию:")
+        self._emit("button_options", {
+            "question": question,
+            "options": options,
+            "expanded": True
+        })
+        self.add_message("tool", f"options: {question}")
+        full.append({"role": "tool", "content": f"options: {question}"})
+
+    def _handle_plan_action(self, action: Dict[str, Any], full: List[Dict[str, Any]]) -> None:
+        plan_id = action.get("plan_id", "")
+        steps = action.get("steps", [])
+        self._emit("plan", {
+            "plan_id": plan_id,
+            "steps": steps,
+            "expanded": True
+        })
+        
+        logger.info(f">>> PLAN CREATED: {len(steps)} steps, agent_factory={self.agent_factory}")
+        
+        if steps and self.agent_factory:
+            first_step = steps[0]
+            target_agent = first_step.get("agent", "CodeAgent")
+            task = first_step.get("task", "")
+            
+            logger.info(f">>> DELEGATING first step: {target_agent}: {task[:50]}...")
+            
+            self._emit("delegate", {
+                "target_agent": target_agent,
+                "task": task,
+                "plan_id": plan_id,
+                "expanded": True
+            })
+            
+            agent_tools = self.get_tools_for_agent(target_agent)
+            sub = self.agent_factory(name=target_agent, role=f"Execute {target_agent}", tools=agent_tools)
+            sub_context = {"event_ids": []}
+            if self.session:
+                sub_context["session"] = self.session
+            
+            sub_result = sub.run(task, context=sub_context, is_sub_call=True)
+            
+            self.add_message("tool", f"{target_agent} result: {sub_result.output}")
+            full.append({"role": "tool", "content": f"{target_agent} result: {sub_result.output}"})
+            return
+        
+        plan_text = f"Plan created with {len(steps)} steps."
+        tool_call_id = f"call_plan_{self._iteration}"
+        tool_msg = {"role": "tool", "content": plan_text, "tool_call_id": tool_call_id}
+        self.add_message("tool", plan_text)
+        full.append(tool_msg)
+
+    def _handle_update_plan_action(self, action: Dict[str, Any], full: List[Dict[str, Any]]) -> None:
+        plan_id = action.get("plan_id", "")
+        update = action.get("update", {})
+        update_type = update.get("type", "")
+        self._emit("update_plan", {
+            "plan_id": plan_id,
+            "update": update,
+            "expanded": True
+        })
+        self.add_message("tool", f"plan updated: {update_type}")
+        full.append({"role": "tool", "content": f"plan updated: {update_type}"})
 
     def _parse(self, response: str) -> Dict[str, Any]:
         import re

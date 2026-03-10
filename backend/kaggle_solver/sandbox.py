@@ -108,10 +108,16 @@ class Sandbox:
             if pattern in cmd_lower:
                 return False
         
-        # Allow semicolons in Python -c commands (e.g., python3 -c "import x; print(x)")
-        # But block them in shell commands for chaining
-        if ";" in command and not command.strip().startswith("python"):
-            return False
+        # Block shell operators for chaining
+        shell_operators = ["&&", "||", "|", ";"]
+        is_python_cmd = command.strip().startswith("python")
+        
+        for op in shell_operators:
+            if op in command:
+                # Allow semicolons in Python -c commands
+                if op == ";" and is_python_cmd:
+                    continue
+                return False
             
         return True
 
@@ -162,6 +168,9 @@ class Sandbox:
         
         if not cmd:
             return Result(False, error="Empty command")
+            
+        if not self._is_command_safe(command):
+            return Result(False, error="Shell operator or blocked pattern detected")
         
         if cmd[0] not in self.ALLOWED_COMMANDS:
             return Result(False, error=f"Command not allowed: {cmd[0]}")

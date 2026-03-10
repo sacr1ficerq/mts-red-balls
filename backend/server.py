@@ -71,7 +71,21 @@ class RateLimiter:
     
     def check(self, client_id: str) -> bool:
         """Check if request is allowed (without recording)."""
-        return self.try_acquire(client_id)
+        with self._lock:
+            now = datetime.now()
+            minute_ago = now - timedelta(minutes=1)
+            
+            if self.active_requests[client_id] >= self.max_concurrent:
+                return False
+            
+            recent_requests = [
+                t for t in self.requests[client_id] if t > minute_ago
+            ]
+            
+            if len(recent_requests) >= self.requests_per_minute:
+                return False
+            
+            return True
     
     def record(self, client_id: str):
         """Record a request (for backward compatibility)."""
@@ -290,8 +304,10 @@ def validate_session_id(session_id: str) -> bool:
     return all(c.isalnum() or c in '-_' for c in session_id)
 
 
+from fastapi import BackgroundTasks
+
 @app.post("/api/query")
-async def query(request: QueryRequest, req: Request):
+async def query(request: QueryRequest, req: Request, background_tasks: BackgroundTasks):
     client_id = get_client_id(req)
     
     if not rate_limiter.try_acquire(client_id):
@@ -329,7 +345,6 @@ async def query(request: QueryRequest, req: Request):
         orch._session_sandboxes[session_id] = session_sandbox
         
         # Run in BACKGROUND THREAD - return immediately
-        import threading
         def run_task_background():
             try:
                 coordinator = orch.create_agent(
@@ -352,8 +367,7 @@ async def query(request: QueryRequest, req: Request):
                 session.artifacts["error"] = str(e)
                 orch.state.save()
         
-        thread = threading.Thread(target=run_task_background)
-        thread.start()
+        background_tasks.add_task(run_task_background)
         
         # Return immediately with session_id
         return {
@@ -389,7 +403,7 @@ class ContinueRequest(BaseModel):
 
 
 @app.post("/api/session/{session_id}/continue")
-async def continue_session(session_id: str, request: ContinueRequest):
+async def continue_session(session_id: str, request: ContinueRequest, background_tasks: BackgroundTasks):
     if not validate_session_id(session_id):
         raise HTTPException(status_code=400, detail="Invalid session ID")
     try:
@@ -407,9 +421,7 @@ async def continue_session(session_id: str, request: ContinueRequest):
                 session.status = "error"
                 session.artifacts["error"] = str(e)
 
-        import threading
-        thread = threading.Thread(target=run_in_background, daemon=True)
-        thread.start()
+        background_tasks.add_task(run_in_background)
 
         return {
             "session_id": session.id,
@@ -426,7 +438,7 @@ class OptionSelectionRequest(BaseModel):
 
 
 @app.post("/api/session/{session_id}/select")
-async def select_option(session_id: str, request: OptionSelectionRequest):
+async def select_option(session_id: str, request: OptionSelectionRequest, background_tasks: BackgroundTasks):
     if not validate_session_id(session_id):
         raise HTTPException(status_code=400, detail="Invalid session ID")
     try:
@@ -455,9 +467,7 @@ async def select_option(session_id: str, request: OptionSelectionRequest):
                 session.status = "error"
                 session.artifacts["error"] = str(e)
 
-        import threading
-        thread = threading.Thread(target=run_in_background, daemon=True)
-        thread.start()
+        background_tasks.add_task(run_in_background)
 
         return {
             "session_id": session.id,

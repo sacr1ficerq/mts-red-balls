@@ -80,8 +80,8 @@ def get_agent_prompts(agent_name: str) -> str:
 def should_use_powerful_model(query: str) -> bool:
     from kaggle_solver.core.config import ConfigHolder
     config = ConfigHolder().get_config()
-    complex_tasks = config.complex_tasks if hasattr(config, 'complex_tasks') else ["analyze", "train", "model", "ml", "ai", "chart", "visual", "graph", "report"]
-    simple_tasks = config.simple_tasks if hasattr(config, 'simple_tasks') else ["hi", "hello", "hey", "what is", "how to", "find", "search", "info", "code", "file"]
+    complex_tasks = config.complex_tasks
+    simple_tasks = config.simple_tasks
     
     query_lower = query.lower()
     for simple in simple_tasks:

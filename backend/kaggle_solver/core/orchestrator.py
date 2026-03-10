@@ -131,38 +131,42 @@ class Orchestrator:
         
         return log_event
 
-    def run(self, query: str, session_id: Optional[str] = None) -> Session:
-        import logging
-        log = logging.getLogger(__name__)
-        log.info(f"Orchestrator.run() called with query: {query[:50]}...")
-        
-        session = self.state.create_session(query, session_id)
-        log.info(f"Session created: {session.id}")
-        
+    def _setup_session_environment(self, session: Session, role: str) -> BaseAgent:
         event_callback = self._create_session_callback(session)
 
-        # Create session-specific sandbox with preinstalled packages
-        session_sandbox_path = self.base_sandbox_path / session.id
-        session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout, preinstall=True)
-        self._session_sandboxes[session.id] = session_sandbox
-        log.info(f"Created sandbox at: {session_sandbox_path}")
+        if session.id in self._session_sandboxes:
+            session_sandbox = self._session_sandboxes[session.id]
+        else:
+            session_sandbox_path = self.base_sandbox_path / session.id
+            session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout, preinstall=True)
+            self._session_sandboxes[session.id] = session_sandbox
+            logger.info(f"Created sandbox at: {session_sandbox_path}")
 
         coordinator = self.create_agent(
             name="Coordinator",
-            role="Plan and delegate tasks",
+            role=role,
             tools=["delegate", "message", "tool"],
             event_callback=event_callback,
             sandbox=session_sandbox,
             session=session
         )
-        log.info(f"Created coordinator agent, starting run()...")
+        return coordinator
+
+    def run(self, query: str, session_id: Optional[str] = None) -> Session:
+        logger.info(f"Orchestrator.run() called with query: {query[:50]}...")
+        
+        session = self.state.create_session(query, session_id)
+        logger.info(f"Session created: {session.id}")
+        
+        coordinator = self._setup_session_environment(session, role="Plan and delegate tasks")
+        logger.info(f"Created coordinator agent, starting run()...")
 
         start_time = time.time()
         
         try:
-            log.info(f"Calling coordinator.run()...")
+            logger.info(f"Calling coordinator.run()...")
             result = coordinator.run(query, {"session": session})
-            log.info(f"Coordinator.run() completed, success={result.success}")
+            logger.info(f"Coordinator.run() completed, success={result.success}")
             session.status = "completed" if result.success else "error"
             session.artifacts["result"] = result.output
             session.artifacts["duration"] = result.duration
@@ -189,23 +193,8 @@ class Orchestrator:
             raise ValueError(f"Session not found: {session_id}")
         
         session.add_message("user", message)
-        event_callback = self._create_session_callback(session)
-
-        # Retrieve or recreate session sandbox
-        if session_id in self._session_sandboxes:
-            session_sandbox = self._session_sandboxes[session_id]
-        else:
-            session_sandbox_path = self.base_sandbox_path / session.id
-            session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout, preinstall=True)
-            self._session_sandboxes[session.id] = session_sandbox
-
-        coordinator = self.create_agent(
-            name="Coordinator",
-            role="Continue conversation with context",
-            tools=["delegate", "message", "tool"],
-            event_callback=event_callback,
-            sandbox=session_sandbox
-        )
+        
+        coordinator = self._setup_session_environment(session, role="Continue conversation with context")
         
         for msg in session.messages[:-1]:
             coordinator.add_message(msg["role"], msg["content"])
