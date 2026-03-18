@@ -86,26 +86,28 @@
         </div>
 
         <!-- Plan Display -->
-        <div x-show="currentPlan && currentPlan.steps && currentPlan.steps.length > 0" class="border-t border-gray-100 bg-blue-50 flex-shrink-0">
-            <div class="px-3 py-2 border-b border-blue-100">
-                <span class="text-xs font-bold text-blue-600 uppercase flex items-center gap-2">
-                    <i class="fas fa-tasks"></i> План
-                </span>
-            </div>
-            <div class="px-3 py-2 text-xs max-h-32 overflow-y-auto custom-scrollbar">
-                <template x-for="step in currentPlan.steps" :key="step.id">
-                    <div class="flex items-center gap-2 py-1">
-                        <div class="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
-                             :class="step.status === 'completed' ? 'bg-emerald-500' : (step.status === 'active' ? 'bg-blue-500' : 'bg-gray-300')">
-                            <i class="fas text-[8px]" 
-                               :class="step.status === 'completed' ? 'fa-check text-white' : (step.status === 'active' ? 'fa-spinner text-white fa-spin' : 'fa-minus text-white')"></i>
+        <template x-if="currentPlan && currentPlan.steps && currentPlan.steps.length > 0">
+            <div class="border-t border-gray-100 bg-blue-50 flex-shrink-0">
+                <div class="px-3 py-2 border-b border-blue-100">
+                    <span class="text-xs font-bold text-blue-600 uppercase flex items-center gap-2">
+                        <i class="fas fa-tasks"></i> План
+                    </span>
+                </div>
+                <div class="px-3 py-2 text-xs max-h-32 overflow-y-auto custom-scrollbar">
+                    <template x-for="step in currentPlan.steps" :key="step.id">
+                        <div class="flex items-center gap-2 py-1">
+                            <div class="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
+                                 :class="step.status === 'completed' ? 'bg-emerald-500' : (step.status === 'active' ? 'bg-blue-500' : 'bg-gray-300')">
+                                <i class="fas text-[8px]"
+                                   :class="step.status === 'completed' ? 'fa-check text-white' : (step.status === 'active' ? 'fa-spinner text-white fa-spin' : 'fa-minus text-white')"></i>
+                            </div>
+                            <span class="truncate" :class="step.status === 'completed' ? 'text-gray-400 line-through' : (step.status === 'active' ? 'text-blue-700 font-medium' : 'text-gray-500')"
+                                  x-text="step.task"></span>
                         </div>
-                        <span class="truncate" :class="step.status === 'completed' ? 'text-gray-400 line-through' : (step.status === 'active' ? 'text-blue-700 font-medium' : 'text-gray-500')" 
-                              x-text="step.task"></span>
-                    </div>
-                </template>
+                    </template>
+                </div>
             </div>
-        </div>
+        </template>
 
         <!-- Files Tree - 1/3 height when open, collapsed at bottom when closed -->
         <div class="border-t border-gray-100 bg-gray-50 flex-shrink-0 transition-all duration-300" 
@@ -458,8 +460,8 @@
                 <div class="max-w-3xl mx-auto">
                     <div class="relative">
                         <textarea x-model="newTaskInput"
-                                  @keydown.ctrl.enter="startTask()"
-                                  placeholder="Новая задача..."
+                                  @keydown.enter="if(!$event.shiftKey) { $event.preventDefault(); startTask(); }"
+                                  placeholder="Новая задача... (Shift+Enter для новой строки)"
                                   class="w-full px-4 py-2 pr-10 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-red-300 focus:ring-1 focus:ring-red-200 resize-none"
                                   rows="1"></textarea>
                         <button @click="startTask()"
@@ -482,8 +484,8 @@
                 <p class="text-gray-500 mb-4">Напишите задачу для начала работы</p>
                 <div class="max-w-2xl mx-auto">
                     <textarea x-model="newTaskInput"
-                              @keydown.ctrl.enter="startTask()"
-                              placeholder="На например: Найди информацию о последних моделях LLM"
+                              @keydown.enter="if(!$event.shiftKey) { $event.preventDefault(); startTask(); }"
+                              placeholder="На например: Найди информацию о последних моделях LLM (Shift+Enter для новой строки)"
                               class="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-red-300 focus:ring-1 focus:ring-red-200 resize-none"
                               rows="2"></textarea>
                     <button @click="startTask()"

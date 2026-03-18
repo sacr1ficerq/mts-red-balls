@@ -1,6 +1,7 @@
 __pycache__
 node_modules
 .env
+.env-copy
 .env.local
 logs/
 backend/logs/

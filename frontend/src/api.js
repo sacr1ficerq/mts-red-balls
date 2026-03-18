@@ -23,6 +23,11 @@ export async function getSession(sessionId) {
     return res.json();
 }
 
+export async function fetchSessionData(sessionId) {
+    const res = await fetch(`${API_BASE}/session/${sessionId}`);
+    return res.json();
+}
+
 export async function stopSession(sessionId) {
     const res = await fetch(`${API_BASE}/session/${sessionId}/stop`, {
         method: 'POST'
@@ -32,6 +37,25 @@ export async function stopSession(sessionId) {
 
 export async function getTools() {
     const res = await fetch(`${API_BASE}/tools`);
+    return res.json();
+}
+
+export async function selectOption(sessionId, option) {
+    const res = await fetch(`${API_BASE}/session/${sessionId}/select`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ option })
+    });
+    return res.json();
+}
+
+export async function fetchFileTree() {
+    const res = await fetch(`${API_BASE}/workspace/files`);
+    return res.json();
+}
+
+export async function readFile(path) {
+    const res = await fetch(`${API_BASE}/workspace/read?path=${encodeURIComponent(path)}`);
     return res.json();
 }
 

@@ -17,6 +17,17 @@ class Result:
 
 
 class Sandbox:
+    # ==================== PREINSTALL CONFIGURATION ====================
+    # Set to False to disable all package preinstallation
+    ENABLE_PREINSTALL = False
+    
+    # Packages to preinstall when ENABLE_PREINSTALL is True
+    PREINSTALL_PACKAGES = [
+        "scikit-learn", "pandas", "numpy", "catboost", "xgboost",
+        "lightgbm", "matplotlib", "seaborn", "joblib"
+    ]
+    # ==================================================================
+    
     ALLOWED_COMMANDS = {
         "python", "python3", "pip", "pip3",
         "ls", "cat", "head", "tail", "grep", "find",
@@ -26,11 +37,6 @@ class Sandbox:
         "date", "time", "touch", "which", "cd", "exit",
         "docker", "node", "npm", "npx"
     }
-    
-    PREINSTALL_PACKAGES = [
-        "scikit-learn", "pandas", "numpy", "catboost", "xgboost", 
-        "lightgbm", "matplotlib", "seaborn", "joblib"
-    ]
     
     BLOCKED_PATTERNS = [
         "rm -rf /", "rm -rf *", "rm -rf .",
@@ -44,20 +50,27 @@ class Sandbox:
 
     MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
     
-    def __init__(self, root: Path, timeout: int = 60, preinstall: bool = True):
+    def __init__(self, root: Path, timeout: int = 60, preinstall: bool = None):
         self.root = root.resolve()
         self.timeout = timeout
         self.root.mkdir(parents=True, exist_ok=True)
         self._created_files = set()
         
         # Preinstall common ML packages
-        if preinstall:
+        # Use class-level ENABLE_PREINSTALL if preinstall parameter not explicitly set
+        should_preinstall = preinstall if preinstall is not None else self.ENABLE_PREINSTALL
+        if should_preinstall:
             self._preinstall_packages()
     
     def _preinstall_packages(self):
         """Preinstall common ML packages."""
+        if not self.ENABLE_PREINSTALL:
+            logger.info("Preinstall disabled by ENABLE_PREINSTALL=False")
+            return
+            
         import subprocess
         import sys
+        logger.info(f"Preinstalling {len(self.PREINSTALL_PACKAGES)} packages...")
         for pkg in self.PREINSTALL_PACKAGES:
             try:
                 # Install to system Python (works because we're using system python3)

@@ -27,15 +27,50 @@ ConfigHolder().set_config(Config.load(str(CONFIG_PATH)))
 Path("logs").mkdir(exist_ok=True)
 log_file = f"logs/server_{datetime.now().strftime('%Y%m%d')}.log"
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()
-    ]
-)
+# Detailed logging format for debugging
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(message)s"
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+# Force reconfiguration of root logger (basicConfig won't work if handlers already exist)
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+
+# Clear any existing handlers
+root_logger.handlers.clear()
+
+# Create handlers with the new format
+file_handler = logging.FileHandler(log_file, mode='a')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
+
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.DEBUG)
+stream_handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
+
+# Add handlers to root logger
+root_logger.addHandler(file_handler)
+root_logger.addHandler(stream_handler)
+
+# Ensure all child loggers propagate to root
+for name in logging.root.manager.loggerDict:
+    child_logger = logging.getLogger(name)
+    child_logger.propagate = True
+    child_logger.setLevel(logging.DEBUG)
+
+# Set specific log levels for noisy libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Log startup info
+logger.info("=" * 60)
+logger.info("Kaggle Solver API Server Starting")
+logger.info(f"Log file: {log_file}")
+logger.info(f"Log level: DEBUG")
+logger.info("=" * 60)
 
 
 class RateLimiter:
@@ -338,10 +373,11 @@ async def query(request: QueryRequest, req: Request, background_tasks: Backgroun
                 output=str(event.get("data", {}))
             )
         
-        # Create sandbox for this session with preinstalled packages
+        # Create sandbox for this session
+        # preinstall is controlled by Sandbox.ENABLE_PREINSTALL class constant
         from kaggle_solver.sandbox import Sandbox
         session_sandbox_path = orch.base_sandbox_path / session_id
-        session_sandbox = Sandbox(session_sandbox_path, timeout=orch.config.sandbox.timeout, preinstall=True)
+        session_sandbox = Sandbox(session_sandbox_path, timeout=orch.config.sandbox.timeout)
         orch._session_sandboxes[session_id] = session_sandbox
         
         # Run in BACKGROUND THREAD - return immediately

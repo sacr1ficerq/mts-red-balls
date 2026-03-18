@@ -40,7 +40,8 @@ class Orchestrator:
         self.base_sandbox_path = Path(sandbox_root).resolve()
         self.base_sandbox_path.mkdir(parents=True, exist_ok=True)
         # Default sandbox for general tasks (or backward compatibility)
-        self.sandbox = Sandbox(self.base_sandbox_path, timeout=self.config.sandbox.timeout, preinstall=True)
+        # preinstall is controlled by Sandbox.ENABLE_PREINSTALL class constant
+        self.sandbox = Sandbox(self.base_sandbox_path, timeout=self.config.sandbox.timeout)
         self.tool_registry = ToolRegistry
         self._event_callbacks: List[Callable] = []
         self._session_sandboxes: Dict[str, Sandbox] = {}
@@ -112,15 +113,39 @@ class Orchestrator:
         session_log_file = LOG_DIR / f"session_{session.id}.log"
         
         def log_event(event: Dict[str, Any]):
+            # Log to file
             try:
                 with open(session_log_file, "a") as f:
                     f.write(json.dumps(event, ensure_ascii=False) + "\n")
             except Exception:
                 pass
+            
+            # Log to stdout for docker logs
+            event_type = event.get("type", "unknown")
+            agent_name = event.get("agent", "System")
+            data = event.get("data", {})
+            
+            if event_type == "thought":
+                logger.info(f"[{agent_name}] THOUGHT: {str(data.get('content', ''))[:200]}...")
+            elif event_type == "tool":
+                tool_name = data.get("tool_name", "unknown")
+                logger.info(f"[{agent_name}] TOOL: {tool_name}")
+                logger.info(f"  Input: {str(data.get('input', {}))[:100]}")
+                logger.info(f"  Output: {str(data.get('output', ''))[:100]}")
+            elif event_type == "delegate":
+                target = data.get("agent", "unknown")
+                logger.info(f"[{agent_name}] DELEGATE -> {target}")
+            elif event_type == "result":
+                logger.info(f"[{agent_name}] RESULT: {str(data.get('content', ''))[:200]}...")
+            else:
+                logger.info(f"[{agent_name}] {event_type.upper()}: {str(data)[:100]}")
+            
+            # Emit to SSE
             try:
                 self._emit_event(session.id, event)
             except Exception:
                 pass
+            
             session.add_event(event)
             session.add_step(
                 agent=event.get("agent", "System"),
@@ -138,7 +163,8 @@ class Orchestrator:
             session_sandbox = self._session_sandboxes[session.id]
         else:
             session_sandbox_path = self.base_sandbox_path / session.id
-            session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout, preinstall=True)
+            # preinstall is controlled by Sandbox.ENABLE_PREINSTALL class constant
+            session_sandbox = Sandbox(session_sandbox_path, timeout=self.config.sandbox.timeout)
             self._session_sandboxes[session.id] = session_sandbox
             logger.info(f"Created sandbox at: {session_sandbox_path}")
 
@@ -153,31 +179,45 @@ class Orchestrator:
         return coordinator
 
     def run(self, query: str, session_id: Optional[str] = None) -> Session:
-        logger.info(f"Orchestrator.run() called with query: {query[:50]}...")
+        logger.info("=" * 60)
+        logger.info(f"ORCHESTRATOR.RUN() STARTED")
+        logger.info(f"  Query: {query[:100]}...")
+        logger.info(f"  Session ID: {session_id or 'new'}")
+        logger.info("=" * 60)
         
         session = self.state.create_session(query, session_id)
         logger.info(f"Session created: {session.id}")
         
         coordinator = self._setup_session_environment(session, role="Plan and delegate tasks")
-        logger.info(f"Created coordinator agent, starting run()...")
+        logger.info(f"Coordinator agent created, starting execution...")
 
         start_time = time.time()
         
         try:
-            logger.info(f"Calling coordinator.run()...")
+            logger.info("-" * 40)
+            logger.info("Calling coordinator.run()...")
             result = coordinator.run(query, {"session": session})
-            logger.info(f"Coordinator.run() completed, success={result.success}")
+            logger.info("-" * 40)
+            logger.info(f"Coordinator.run() COMPLETED")
+            logger.info(f"  Success: {result.success}")
+            logger.info(f"  Duration: {result.duration:.2f}s")
+            logger.info(f"  Steps: {result.steps}")
+            logger.info(f"  Output preview: {result.output[:200] if result.output else 'None'}...")
+            
             session.status = "completed" if result.success else "error"
             session.artifacts["result"] = result.output
             session.artifacts["duration"] = result.duration
             session.artifacts["steps"] = result.steps
         except Exception as e:
-            log.error(f"Exception in coordinator.run(): {e}", exc_info=True)
-            logger.error(f"Orchestrator error: {e}")
+            logger.error("=" * 60)
+            logger.error(f"EXCEPTION in coordinator.run(): {e}", exc_info=True)
+            logger.error("=" * 60)
             session.status = "error"
             session.artifacts["error"] = str(e)
         
         session.artifacts["total_time"] = time.time() - start_time
+        logger.info(f"Session {session.id} finished with status: {session.status}")
+        logger.info(f"Total time: {session.artifacts['total_time']:.2f}s")
         
         self.state.sessions[session.id] = session
         self.state.save()
