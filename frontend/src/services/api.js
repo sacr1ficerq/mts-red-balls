@@ -1,43 +1,58 @@
-// API service - all HTTP calls
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+async function request(url, options = {}) {
+    const response = await fetch(url, options);
+    const isJson = response.headers.get('content-type')?.includes('application/json');
+    const payload = isJson ? await response.json() : await response.text();
+
+    if (!response.ok) {
+        const message = typeof payload === 'string'
+            ? payload
+            : payload?.error || payload?.message || `Request failed: ${response.status}`;
+        throw new Error(message);
+    }
+
+    return payload;
+}
+
 window.API = {
-    async fetchSessions() {
-        const res = await fetch('/api/sessions');
-        return res.json();
+    fetchSessions() {
+        return request('/api/sessions');
     },
 
-    async fetchSessionData(sessionId) {
-        const res = await fetch(`/api/session/${sessionId}`);
-        return res.json();
+    fetchSessionData(sessionId) {
+        return request(`/api/session/${sessionId}`);
     },
 
-    async startTask(task) {
-        const res = await fetch('/api/query', {
+    startTask(task) {
+        return request('/api/query', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: JSON_HEADERS,
             body: JSON.stringify({ query: task })
         });
-        return res.json();
     },
 
-    async stopSession(sessionId) {
-        await fetch(`/api/session/${sessionId}/stop`, { method: 'POST' });
+    stopSession(sessionId) {
+        return request(`/api/session/${sessionId}/stop`, { method: 'POST' });
     },
 
-    async selectOption(sessionId, option) {
-        await fetch(`/api/session/${sessionId}/select`, {
+    clearHistory() {
+        return request('/api/sessions/clear', { method: 'POST' });
+    },
+
+    selectOption(sessionId, option) {
+        return request(`/api/session/${sessionId}/select`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: JSON_HEADERS,
             body: JSON.stringify({ selected: option })
         });
     },
 
-    async fetchFileTree() {
-        const res = await fetch('/api/workspace/files');
-        return res.json();
+    fetchFileTree() {
+        return request('/api/workspace/files');
     },
 
-    async readFile(path) {
-        const res = await fetch(`/api/workspace/read?path=${encodeURIComponent(path)}`);
-        return res.json();
+    readFile(path) {
+        return request(`/api/workspace/read?path=${encodeURIComponent(path)}`);
     }
 };

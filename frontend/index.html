@@ -6,10 +6,8 @@
     <title>МТС агентство «Красные яйца»</title>
     
     <!-- External Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     
@@ -17,11 +15,11 @@
     <link rel="stylesheet" href="src/css/styles.css">
     <style>[x-cloak] { display: none !important; }</style>
     
-    <!-- Local Scripts - modules first, then app.js -->
-    <script src="src/services/api.js?v=40"></script>
-    <script src="src/utils/formatters.js?v=40"></script>
-    <script src="src/utils/styles.js?v=40"></script>
-    <script src="src/app.js?v=40"></script>
+    <!-- Local Scripts -->
+    <script type="module" src="src/services/api.js?v=40"></script>
+    <script type="module" src="src/utils/formatters.js?v=40"></script>
+    <script type="module" src="src/utils/styles.js?v=40"></script>
+    <script type="module" src="src/app.js?v=40"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-50 h-screen flex overflow-hidden text-sm" x-data="dashboard()" x-init="init()" x-cloak>

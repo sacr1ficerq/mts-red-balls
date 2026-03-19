@@ -29,7 +29,7 @@ services:
             - /app/node_modules
         environment:
             - DOCKER_ENV=true
-        command: npm run dev -- --host
+        command: bun run dev --host
         # Configure logging to stdout
         logging:
             driver: "json-file"
