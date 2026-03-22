@@ -2,7 +2,7 @@
 
 Production-ready multi-agent system for solving Kaggle competitions using LLM-powered agents with secure sandbox execution.
 
-## 🚀 Features
+## Features
 
 - **6 Specialized Agents**: HypothesisGenerator, DataPreprocessor, FeatureEngineer, ModelTrainer, DataParser, KaggleSubmitter
 - **Kaggle MCP Integration**: Download data, submit solutions, track leaderboard
@@ -11,7 +11,7 @@ Production-ready multi-agent system for solving Kaggle competitions using LLM-po
 - **Web Interface**: Real-time agent execution monitoring with Alpine.js
 - **Comprehensive Testing**: 230+ tests with 93.5% pass rate
 
-## 📋 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -40,18 +40,16 @@ npm install
 ### Running
 
 ```bash
-# Start backend (from project root)
-cd backend
-python3 server.py
+# Start backend and frontend (from project root)
+make run-local
 
-# Start frontend (in another terminal)
-cd frontend
-npm run dev
+# Or use Docker
+make run
 ```
 
 Open http://localhost:5173 in your browser.
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 backend/
@@ -71,7 +69,7 @@ frontend/
     └── services/        # API client
 ```
 
-## 🤖 Agents
+## Agents
 
 ### CoordinatorAgent
 Plans and delegates tasks to specialized agents.
@@ -94,7 +92,7 @@ Automatically parses and understands data structure.
 ### KaggleSubmitterAgent
 Submits solutions to Kaggle competitions.
 
-## 🔧 Configuration
+## Configuration
 
 Edit `backend/config.yaml`:
 
@@ -109,35 +107,40 @@ sandbox:
   timeout: 120
 ```
 
-## 🧪 Testing
+## Testing
 
 ```bash
-cd backend
-python3 -m pytest tests/ -v
+# Run all tests
+make test
+
+# Run specific test suites
+make test-openrouter
+make test-model-access
+make test-all
 ```
 
-## 📊 Performance
+## Performance
 
 - **Prompt Optimization**: 60-88% reduction in token usage
 - **Rate Limiting**: 8 requests/minute with token bucket algorithm
 - **Timeout**: 300s agent timeout, 60s LLM timeout
 - **Retry Logic**: 3 attempts with exponential backoff (1s → 2s → 4s)
 
-## 🔒 Security
+## Security
 
 - Path traversal protection with `os.path.normpath()`
 - Command injection prevention
 - Secure sandbox execution
 - Input validation
 
-## 📚 Documentation
+## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Agent System](docs/AGENTS.md)
 - [Production Guide](docs/PRODUCTION.md)
 - [API Reference](docs/API.md)
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -145,11 +148,11 @@ python3 -m pytest tests/ -v
 4. Run tests: `python3 -m pytest tests/ -v`
 5. Submit a pull request
 
-## 📄 License
+## License
 
 MIT License
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Built with:
 - FastAPI (backend)
