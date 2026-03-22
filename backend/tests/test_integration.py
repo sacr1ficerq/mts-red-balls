@@ -1,6 +1,7 @@
 """Integration tests for agent workflows."""
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+import asyncio
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from pathlib import Path
 import tempfile
 
@@ -20,7 +21,7 @@ class ConcreteAgent(BaseAgent):
 def mock_llm():
     """Mock LLM that returns configured responses."""
     llm = Mock()
-    llm.chat = Mock()
+    llm.chat = AsyncMock()
     return llm
 
 
@@ -58,7 +59,7 @@ class TestAgentIntegration:
     
     def test_agent_completes_with_done_action(self, agent_config, mock_llm, mock_sandbox, mock_tool_registry):
         """Test agent completes when LLM returns done action."""
-        mock_llm.chat.return_value = '{"action": "done", "result": "Success"}'
+        mock_llm.chat = AsyncMock(return_value='{"action": "done", "result": "Success"}')
         
         agent = ConcreteAgent(
             agent_config,
@@ -67,7 +68,7 @@ class TestAgentIntegration:
             mock_tool_registry
         )
         
-        result = agent.run("test query")
+        result = asyncio.run(agent.run("test query"))
         
         assert result.success is True
         assert result.output == "Success"
@@ -75,10 +76,10 @@ class TestAgentIntegration:
     
     def test_agent_executes_tool(self, agent_config, mock_llm, mock_sandbox, mock_tool_registry):
         """Test agent executes tool when LLM returns tool action."""
-        mock_llm.chat.side_effect = [
+        mock_llm.chat = AsyncMock(side_effect=[
             '{"action": "tool", "tool": "console", "query": "echo hello"}',
             '{"action": "done", "result": "Command executed"}'
-        ]
+        ])
         
         agent = ConcreteAgent(
             agent_config,
@@ -87,13 +88,13 @@ class TestAgentIntegration:
             mock_tool_registry
         )
         
-        result = agent.run("run a command")
+        result = asyncio.run(agent.run("run a command"))
         
         assert mock_tool_registry.execute.called
     
     def test_agent_delegates_to_sub_agent(self, agent_config, mock_llm, mock_sandbox, mock_tool_registry):
         """Test agent delegates task to another agent."""
-        mock_llm.chat.return_value = '{"action": "delegate", "agent": "SearchAgent", "task": "search query"}'
+        mock_llm.chat = AsyncMock(return_value='{"action": "delegate", "agent": "SearchAgent", "task": "search query"}')
         
         def create_sub_agent(name, role, tools, event_callback=None):
             sub_agent = ConcreteAgent(
@@ -113,14 +114,14 @@ class TestAgentIntegration:
             mock_tool_registry
         )
         
-        result = agent.run("delegate this task")
+        result = asyncio.run(agent.run("delegate this task"))
         
         # Should have called LLM at least twice (initial + after delegate)
         assert mock_llm.chat.call_count >= 1
     
     def test_agent_handles_invalid_json(self, agent_config, mock_llm, mock_sandbox, mock_tool_registry):
         """Test agent handles invalid JSON gracefully."""
-        mock_llm.chat.return_value = "This is not JSON"
+        mock_llm.chat = AsyncMock(return_value="This is not JSON")
         
         agent = ConcreteAgent(
             agent_config,
@@ -129,7 +130,7 @@ class TestAgentIntegration:
             mock_tool_registry
         )
         
-        result = agent.run("test")
+        result = asyncio.run(agent.run("test"))
         
         # Should treat as done with raw text
         assert result.success is True
@@ -137,7 +138,7 @@ class TestAgentIntegration:
     def test_agent_respects_max_iterations(self, agent_config, mock_llm, mock_sandbox, mock_tool_registry):
         """Test agent stops after max iterations."""
         agent_config.max_iterations = 2
-        mock_llm.chat.return_value = '{"action": "tool", "tool": "console", "query": "echo test"}'
+        mock_llm.chat = AsyncMock(return_value='{"action": "tool", "tool": "console", "query": "echo test"}')
         
         agent = ConcreteAgent(
             agent_config,
@@ -146,14 +147,14 @@ class TestAgentIntegration:
             mock_tool_registry
         )
         
-        result = agent.run("test")
+        result = asyncio.run(agent.run("test"))
         
         # Should have called chat max_iterations times
         assert mock_llm.chat.call_count == 2
     
     def test_agent_with_context_events(self, agent_config, mock_llm, mock_sandbox, mock_tool_registry):
         """Test agent uses context events."""
-        mock_llm.chat.return_value = '{"action": "done", "result": "OK"}'
+        mock_llm.chat = AsyncMock(return_value='{"action": "done", "result": "OK"}')
         
         # Create mock session with events
         mock_session = Mock()
@@ -169,7 +170,7 @@ class TestAgentIntegration:
             session=mock_session
         )
         
-        result = agent.run("test", context={"event_ids": [1, 2, 3]})
+        result = asyncio.run(agent.run("test", context={"event_ids": [1, 2, 3]}))
         
         assert mock_session.get_events_by_ids.called
         assert result.success is True

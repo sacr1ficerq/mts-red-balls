@@ -1,5 +1,6 @@
 import pytest
-from unittest.mock import Mock
+import asyncio
+from unittest.mock import Mock, AsyncMock
 from kaggle_solver.agents.base import BaseAgent, AgentConfig, AgentResult
 
 class ConcreteAgent(BaseAgent):
@@ -19,13 +20,13 @@ class TestDelegation:
         agent = ConcreteAgent(config, Mock(), Mock(), Mock(), agent_factory=agent_factory)
         
         # First call returns plan - then auto-delegate happens and returns
-        agent.llm.chat.return_value = '{"action": "plan", "plan_id": "test123", "steps": [{"id": 1, "task": "do task"}]}'
+        agent.llm.chat = AsyncMock(return_value='{"action": "plan", "plan_id": "test123", "steps": [{"id": 1, "task": "do task"}]}')
         
         sub_agent = Mock()
-        sub_agent.run.return_value = AgentResult(success=True, output="AgentB result")
+        sub_agent.run = AsyncMock(return_value=AgentResult(success=True, output="AgentB result"))
         agent_factory.return_value = sub_agent
         
-        result = agent.run("start")
+        result = asyncio.run(agent.run("start"))
         
         assert result.success
         assert "AgentB result" in result.output
@@ -38,9 +39,9 @@ class TestDelegation:
         
         # LLM returns delegate action, but no factory to handle it
         # Agent should detect it's repeating and stop
-        agent.llm.chat.return_value = '{"action": "delegate", "agent": "AgentB", "task": "task"}'
+        agent.llm.chat = AsyncMock(return_value='{"action": "delegate", "agent": "AgentB", "task": "task"}')
         
-        result = agent.run("start")
+        result = asyncio.run(agent.run("start"))
         
         # Without factory, delegate is ignored, agent loops and eventually detects repetition
         assert result.error in ["Agent stuck in a loop", "Max iterations"]

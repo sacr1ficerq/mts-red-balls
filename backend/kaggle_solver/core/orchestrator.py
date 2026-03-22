@@ -4,6 +4,7 @@ import logging
 import time
 import json
 
+from kaggle_solver.constants import AgentType, AgentConstants, StateConstants, LoggingConstants
 from kaggle_solver.core.state import StateManager, Session
 from kaggle_solver.core.config import Config
 from kaggle_solver.llm import LLM
@@ -14,7 +15,7 @@ from kaggle_solver.agents.registry import AgentRegistry
 
 logger = logging.getLogger(__name__)
 
-LOG_DIR = Path(__file__).parent.parent.parent.parent / "logs"
+LOG_DIR = Path(__file__).parent.parent.parent.parent / LoggingConstants.LOG_DIR
 LOG_DIR.mkdir(exist_ok=True)
 
 
@@ -169,7 +170,7 @@ class Orchestrator:
             logger.info(f"Created sandbox at: {session_sandbox_path}")
 
         coordinator = self.create_agent(
-            name="Coordinator",
+            name=AgentType.COORDINATOR.value,
             role=role,
             tools=["delegate", "message", "tool"],
             event_callback=event_callback,
@@ -178,7 +179,7 @@ class Orchestrator:
         )
         return coordinator
 
-    def run(self, query: str, session_id: Optional[str] = None) -> Session:
+    async def run(self, query: str, session_id: Optional[str] = None) -> Session:
         logger.info("=" * 60)
         logger.info(f"ORCHESTRATOR.RUN() STARTED")
         logger.info(f"  Query: {query[:100]}...")
@@ -196,7 +197,7 @@ class Orchestrator:
         try:
             logger.info("-" * 40)
             logger.info("Calling coordinator.run()...")
-            result = coordinator.run(query, {"session": session})
+            result = await coordinator.run(query, {"session": session})
             logger.info("-" * 40)
             logger.info(f"Coordinator.run() COMPLETED")
             logger.info(f"  Success: {result.success}")
@@ -227,7 +228,7 @@ class Orchestrator:
     def get_session(self, session_id: str) -> Optional[Session]:
         return self.state.get_session(session_id)
 
-    def continue_session(self, session_id: str, message: str) -> Session:
+    async def continue_session(self, session_id: str, message: str) -> Session:
         session = self.state.get_session(session_id)
         if not session:
             raise ValueError(f"Session not found: {session_id}")
@@ -244,7 +245,7 @@ class Orchestrator:
         
         try:
             context = session.get_context()
-            result = coordinator.run(message, context)
+            result = await coordinator.run(message, context)
             session.status = "completed" if result.success else "error"
             session.artifacts["result"] = result.output
             session.artifacts["duration"] = result.duration

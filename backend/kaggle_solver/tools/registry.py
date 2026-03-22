@@ -2,15 +2,17 @@ from dataclasses import dataclass
 from typing import Dict, Callable, Any, Optional, List
 import logging
 
+from kaggle_solver.constants import ToolConstants
+
 logger = logging.getLogger(__name__)
 
-TOOL_CONSOLE = "console"
-TOOL_FILES = "files"
-TOOL_SEARCH = "search"
-TOOL_RAG = "rag"
+TOOL_CONSOLE = ToolConstants.TOOL_CONSOLE
+TOOL_FILES = ToolConstants.TOOL_FILES
+TOOL_SEARCH = ToolConstants.TOOL_SEARCH
+TOOL_RAG = ToolConstants.TOOL_RAG
 
-TOOLS_REQUIRING_LLM = {TOOL_SEARCH, TOOL_RAG}
-TOOLS_REQUIRING_SANDBOX = {TOOL_CONSOLE, TOOL_FILES}
+TOOLS_REQUIRING_LLM = ToolConstants.TOOLS_REQUIRING_LLM
+TOOLS_REQUIRING_SANDBOX = ToolConstants.TOOLS_REQUIRING_SANDBOX
 
 
 @dataclass

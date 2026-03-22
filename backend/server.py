@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from contextlib import asynccontextmanager
 
+from kaggle_solver.constants import ServerConstants, StateConstants, LoggingConstants
 from kaggle_solver.core.config import ConfigHolder, Config
 from kaggle_solver.core.orchestrator import Orchestrator
 import kaggle_solver.tools  # noqa: F401 - triggers tool registration
@@ -24,11 +25,11 @@ CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
 ConfigHolder().set_config(Config.load(str(CONFIG_PATH)))
 
-Path("logs").mkdir(exist_ok=True)
-log_file = f"logs/server_{datetime.now().strftime('%Y%m%d')}.log"
+Path(LoggingConstants.LOG_DIR).mkdir(exist_ok=True)
+log_file = f"{LoggingConstants.LOG_DIR}/{LoggingConstants.SERVER_LOG_FILE}"
 
 # Detailed logging format for debugging
-LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(message)s"
+LOG_FORMAT = LoggingConstants.LOG_FORMAT
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 # Force reconfiguration of root logger (basicConfig won't work if handlers already exist)
@@ -159,9 +160,10 @@ app.router.lifespan_context = lifespan
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=ServerConstants.CORS_ORIGINS,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 if FRONTEND_DIR.exists():
@@ -390,7 +392,7 @@ async def query(request: QueryRequest, req: Request, background_tasks: Backgroun
                     event_callback=event_callback,
                     sandbox=session_sandbox
                 )
-                result = coordinator.run(request.query, {"session": session})
+                result = asyncio.run(coordinator.run(request.query, {"session": session}))
                 session.status = "completed" if result.success else "error"
                 session.artifacts["result"] = result.output
                 session.artifacts["duration"] = result.duration
@@ -451,7 +453,7 @@ async def continue_session(session_id: str, request: ContinueRequest, background
         # Run in background thread
         def run_in_background():
             try:
-                orch.continue_session(session_id, request.message)
+                asyncio.run(orch.continue_session(session_id, request.message))
             except Exception as e:
                 logger.error(f"Background continue error: {e}", exc_info=True)
                 session.status = "error"
@@ -497,7 +499,7 @@ async def select_option(session_id: str, request: OptionSelectionRequest, backgr
         # Continue session with the selection
         def run_in_background():
             try:
-                orch.continue_session(session_id, user_message)
+                asyncio.run(orch.continue_session(session_id, user_message))
             except Exception as e:
                 logger.error(f"Background select error: {e}", exc_info=True)
                 session.status = "error"
@@ -540,40 +542,57 @@ def stop_session(session_id: str):
 
 
 @app.get("/api/workspace/files")
-def list_workspace_files():
-    """List files in the workspace directory as a tree."""
+def list_workspace_files(session_id: str = ""):
+    """List files in the workspace directory as a tree structure.
+    
+    Args:
+        session_id: Optional session ID to list files from session-specific folder
+    """
     orch = get_orchestrator()
     try:
-        files = orch.sandbox.list(".")
+        # Use session-specific folder if session_id is provided
+        base_path = session_id if session_id else "."
         
-        def build_tree(paths):
-            tree = {}
-            for p in paths:
-                parts = p.strip('/').split('/')
-                current = tree
-                for part in parts:
-                    if part not in current:
-                        current[part] = {}
-                    current = current[part]
+        # Get immediate children (not recursive) to build proper tree
+        items = orch.sandbox.list_dir(base_path)
+        
+        def build_item_tree(items, base_path):
+            """Build tree structure from immediate directory items."""
+            tree = []
+            for item in sorted(items):
+                # list_dir returns full relative paths, extract just the name
+                item_name = item.split("/")[-1] if "/" in item else item
+                full_path = item
+                
+                is_dir = orch.sandbox.is_dir(full_path)
+                
+                if is_dir:
+                    # Get children of this directory
+                    children = orch.sandbox.list_dir(full_path)
+                    tree.append({
+                        "name": item_name,
+                        "path": full_path,
+                        "type": "folder",
+                        "children": build_item_tree(children, full_path)
+                    })
+                else:
+                    tree.append({
+                        "name": item_name,
+                        "path": full_path,
+                        "type": "file"
+                    })
             return tree
         
-        def flatten_tree(tree, prefix=""):
-            result = []
-            for name, children in sorted(tree.items()):
-                path = prefix + "/" + name if prefix else name
-                if children:
-                    result.append({"name": name, "path": path, "type": "folder"})
-                    result.extend(flatten_tree(children, path))
-                else:
-                    result.append({"name": name, "path": path, "type": "file"})
-            return result
+        tree = build_item_tree(items, base_path)
         
-        tree = build_tree(files)
-        flat = flatten_tree(tree)
-        
-        return {"files": flat, "root": str(orch.sandbox.root), "tree": tree}
+        return {
+            "files": tree,
+            "root": str(orch.sandbox.root),
+            "base_path": base_path,
+            "session_id": session_id
+        }
     except Exception as e:
-        return {"files": [], "tree": {}, "error": str(e)}
+        return {"files": [], "root": str(orch.sandbox.root), "error": str(e)}
 
 
 @app.get("/api/workspace/read")

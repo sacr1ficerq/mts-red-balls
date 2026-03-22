@@ -19,7 +19,7 @@
     <script type="module" src="src/services/api.js?v=40"></script>
     <script type="module" src="src/utils/formatters.js?v=40"></script>
     <script type="module" src="src/utils/styles.js?v=40"></script>
-    <script type="module" src="src/app.js?v=40"></script>
+    <script type="module" src="src/app.js?v=44"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-50 h-screen flex overflow-hidden text-sm" x-data="dashboard()" x-init="init()" x-cloak>
@@ -74,7 +74,7 @@
                 <span x-show="sortedHistoricalSessions.length > 0" class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full" x-text="sortedHistoricalSessions.length"></span>
             </div>
             <template x-for="session in sortedHistoricalSessions" :key="session.id">
-                <div @click="selectSession(session.id)"
+                <div @click="selectSession(session.id)" onclick="alert('Clicked session: ' + this.getAttribute('data-id'))" :data-id="session.id"
                      class="cursor-pointer px-3 py-2 rounded-md transition-colors flex items-center gap-2"
                      :class="currentSessionId === session.id ? 'bg-gray-100 text-gray-900' : 'hover:bg-gray-50 text-gray-500'">
                     <i class="fas fa-history text-xs flex-shrink-0 opacity-50"></i>
@@ -118,23 +118,26 @@
                 </span>
                 <i class="fas text-gray-400 text-xs" :class="fileTreeOpen ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
             </div>
-            <div x-show="fileTreeOpen" class="overflow-y-auto px-2 pb-2 text-xs custom-scrollbar" 
+            <div x-show="fileTreeOpen" class="overflow-y-auto px-2 pb-2 text-xs custom-scrollbar"
                  :style="'height: calc(100% - 36px); max-height: 200px;'">
-                <template x-if="fileTree && Object.keys(fileTree).length > 0">
+                <div x-data="{ test: 'Alpine.js работает!' }" class="text-xs px-2 py-1 text-green-600">
+                    Тест: <span x-text="test"></span>
+                </div>
+                <template x-if="fileTree && fileTree.length > 0">
                     <div class="space-y-0.5">
-                        <template x-for="(value, key) in fileTree" :key="key">
+                        <template x-for="item in fileTree" :key="item.path">
                             <div>
-                                <div class="flex items-center gap-1.5 py-1 px-2 cursor-pointer hover:bg-gray-200 rounded-md" 
-                                     @click="if(value && Object.keys(value).length > 0) { toggleFolder(key); } else { loading=true; readFile(key).then(c => { selectedFile=key; fileContent=c; loading=false; }) }">
-                                    <i class="fas text-[10px]" :class="fileTreeOpenPaths[key] ? 'fa-folder-open text-amber-500' : (value && Object.keys(value).length > 0 ? 'fa-folder text-amber-500' : 'fa-file-code text-gray-400')"></i>
-                                    <span x-text="key" class="truncate text-gray-600"></span>
+                                <div class="flex items-center gap-1.5 py-1 px-2 cursor-pointer hover:bg-gray-200 rounded-md"
+                                     @click="if(item.type === 'folder') { toggleFolder(item.path); } else { loading=true; readFile(item.path).then(c => { selectedFile=item.path; fileContent=c; loading=false; }) }">
+                                    <i class="fas text-[10px]" :class="fileTreeOpenPaths[item.path] ? 'fa-folder-open text-amber-500' : (item.type === 'folder' ? 'fa-folder text-amber-500' : 'fa-file-code text-gray-400')"></i>
+                                    <span x-text="item.name" class="truncate text-gray-600"></span>
                                 </div>
-                                <div x-show="fileTreeOpenPaths[key]" class="pl-3 border-l border-gray-200 ml-2">
-                                    <template x-for="(v2, k2) in value" :key="k2">
+                                <div x-show="fileTreeOpenPaths[item.path] && item.children" class="pl-3 border-l border-gray-200 ml-2">
+                                    <template x-for="child in item.children" :key="child.path">
                                         <div class="flex items-center gap-1.5 py-1 px-2 cursor-pointer hover:bg-gray-200 rounded-md"
-                                             @click="loading=true; readFile(key + '/' + k2).then(c => { selectedFile=key+'/'+k2; fileContent=c; loading=false; })">
-                                            <i class="fas text-[10px]" :class="v2 && Object.keys(v2).length > 0 ? 'fa-folder text-amber-500' : 'fa-file-code text-gray-400'"></i>
-                                            <span x-text="k2" class="truncate text-gray-600"></span>
+                                             @click="if(child.type === 'folder') { toggleFolder(child.path); } else { loading=true; readFile(child.path).then(c => { selectedFile=child.path; fileContent=c; loading=false; }) }">
+                                            <i class="fas text-[10px]" :class="fileTreeOpenPaths[child.path] ? 'fa-folder-open text-amber-500' : (child.type === 'folder' ? 'fa-folder text-amber-500' : 'fa-file-code text-gray-400')"></i>
+                                            <span x-text="child.name" class="truncate text-gray-600"></span>
                                         </div>
                                     </template>
                                 </div>
@@ -142,7 +145,7 @@
                         </template>
                     </div>
                 </template>
-                <template x-if="!fileTree || Object.keys(fileTree).length === 0">
+                <template x-if="!fileTree || fileTree.length === 0">
                     <div class="text-gray-400 text-xs px-2 py-1">Нет файлов</div>
                 </template>
                 

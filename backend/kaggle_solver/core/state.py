@@ -5,6 +5,8 @@ import uuid
 import json
 import logging
 
+from kaggle_solver.constants import StateConstants
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,8 +23,8 @@ class Step:
 
 @dataclass
 class Session:
-    MAX_EVENTS_IN_MEMORY = 1000
-    MAX_MESSAGES = 500
+    MAX_EVENTS_IN_MEMORY = StateConstants.MAX_EVENTS_IN_MEMORY
+    MAX_MESSAGES = StateConstants.MAX_EVENTS_PER_SESSION
     
     id: str
     query: str

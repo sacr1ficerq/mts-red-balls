@@ -48,8 +48,11 @@ window.API = {
         });
     },
 
-    fetchFileTree() {
-        return request('/api/workspace/files');
+    fetchFileTree(sessionId = '') {
+        const url = sessionId
+            ? `/api/workspace/files?session_id=${encodeURIComponent(sessionId)}`
+            : '/api/workspace/files';
+        return request(url);
     },
 
     readFile(path) {

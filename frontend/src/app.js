@@ -98,7 +98,7 @@ window.dashboard = function() {
         historicalSessions: [],
         historicalSessionData: null,
         metrics: createMetrics(),
-        fileTree: null,
+        fileTree: [],
         fileTreeOpen: true,
         fileTreeOpenPaths: {},
         expandedEvents: {},
@@ -107,7 +107,8 @@ window.dashboard = function() {
 
         init() {
             this.fetchSessions();
-            this.fetchFileTree();
+            // Load files for the test session
+            this.fetchFileTree('dfe00adb-a728-4319-9be3-aae90a8fdc21');
         },
 
         get currentSession() {
@@ -265,19 +266,27 @@ window.dashboard = function() {
         },
 
         async selectSession(id) {
+            alert('selectSession called with id: ' + id);
+            console.log('selectSession called with id:', id);
             this.currentSessionId = id;
             this.currentPlan = null;
 
             const session = this.activeSessions[id];
+            console.log('Session from activeSessions:', session);
             if (session?.status === 'running') {
                 this.syncMetrics(session);
                 this.syncCurrentPlan();
                 this.connectSSE(id);
-                return;
+            } else {
+                console.log('Session not running or not in activeSessions, fetching session data');
+                this.closeEventSource();
+                await this.fetchSessionData(id);
             }
 
-            this.closeEventSource();
-            await this.fetchSessionData(id);
+            // Refresh file tree for the selected session
+            console.log('About to fetch file tree for session:', id);
+            await this.fetchFileTree(id);
+            console.log('File tree after fetch:', this.fileTree);
         },
 
         async stopSession() {
@@ -460,12 +469,21 @@ window.dashboard = function() {
             };
         },
 
-        async fetchFileTree() {
+        async fetchFileTree(sessionId = '') {
             try {
-                const data = await API.fetchFileTree();
-                this.fileTree = data.tree || {};
+                console.log('=== fetchFileTree START ===');
+                console.log('Fetching file tree for session:', sessionId);
+                const data = await API.fetchFileTree(sessionId);
+                console.log('File tree data:', data);
+                console.log('Files from data:', data.files);
+                console.log('Files length:', data.files ? data.files.length : 0);
+                this.fileTree = data.files || [];
+                console.log('File tree set to:', this.fileTree);
+                console.log('File tree length:', this.fileTree.length);
+                console.log('=== fetchFileTree END ===');
             } catch (error) {
                 console.error('Error fetching files:', error);
+                this.fileTree = [];
             }
         },
 

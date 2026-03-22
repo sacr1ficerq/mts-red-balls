@@ -1,10 +1,1 @@
-/Users/baratelia/Hse/agents/mts-red-balls/backend/server.py:149: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
-  class QueryRequest(BaseModel):
-INFO:     Started server process [10349]
-INFO:     Waiting for application startup.
-2026-03-07 03:19:52,815 - __main__ - INFO - Starting Kaggle Solver API
-INFO:     Application startup complete.
-ERROR:    [Errno 48] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
-INFO:     Waiting for application shutdown.
-2026-03-07 03:19:52,817 - __main__ - INFO - Shutting down Kaggle Solver API
-INFO:     Application shutdown complete.
+nohup: python: No such file or directory

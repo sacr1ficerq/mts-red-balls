@@ -5,6 +5,8 @@ import shutil
 import logging
 import os
 
+from kaggle_solver.constants import SandboxConstants
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,25 +30,9 @@ class Sandbox:
     ]
     # ==================================================================
     
-    ALLOWED_COMMANDS = {
-        "python", "python3", "pip", "pip3",
-        "ls", "cat", "head", "tail", "grep", "find",
-        "mkdir", "rm", "rmdir", "cp", "mv",
-        "curl", "wget", "tar", "unzip", "zip",
-        "chmod", "chown", "echo", "pwd", "whoami",
-        "date", "time", "touch", "which", "cd", "exit",
-        "docker", "node", "npm", "npx"
-    }
+    ALLOWED_COMMANDS = SandboxConstants.ALLOWED_COMMANDS
     
-    BLOCKED_PATTERNS = [
-        "rm -rf /", "rm -rf *", "rm -rf .",
-        "> /dev/sd", "dd if=",
-        "mkfs", "dd if=/dev/zero",
-        "chmod 777", "chown -R",
-        ":(){:|:&};:", "fork()",
-        "/bin/sh", "/bin/bash", "nc -e", "socat",
-        "wget http", "curl http", # Prevent downloading from arbitrary URLs if strict
-    ]
+    BLOCKED_PATTERNS = SandboxConstants.BLOCKED_PATTERNS
 
     MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
     
@@ -174,20 +160,28 @@ class Sandbox:
             shutil.rmtree(p)
 
     def execute(self, command: str, timeout: int = None) -> Result:
+        """Execute a command in the sandbox with enhanced security.
+        
+        Security measures:
+        - Only whitelisted commands allowed
+        - No shell operators (&&, ||, ;, |, etc.)
+        - No absolute paths
+        - No path traversal (..)
+        - Command output size limited
+        - Timeout enforced
+        """
         if timeout is None:
             timeout = self.timeout
             
-        cmd = command.strip().split()
-        
-        if not cmd:
+        # Validate command is not empty
+        if not command or not command.strip():
             return Result(False, error="Empty command")
-            
+        
+        # Check for shell operators and blocked patterns
         if not self._is_command_safe(command):
             return Result(False, error="Shell operator or blocked pattern detected")
         
-        if cmd[0] not in self.ALLOWED_COMMANDS:
-            return Result(False, error=f"Command not allowed: {cmd[0]}")
-        
+        # Parse command safely
         try:
             import shlex
             cmd_parts = shlex.split(command)
@@ -197,25 +191,35 @@ class Sandbox:
         if not cmd_parts:
             return Result(False, error="Empty command")
 
+        # CRITICAL: Only allow whitelisted commands - NO ./ scripts
         first_cmd = cmd_parts[0]
-        if first_cmd not in self.ALLOWED_COMMANDS and not first_cmd.startswith("./"):
-             return Result(False, error=f"Command not allowed: {first_cmd}")
+        if first_cmd not in self.ALLOWED_COMMANDS:
+            return Result(False, error=f"Command not allowed: {first_cmd}")
 
-        # Block absolute paths
-        for part in cmd_parts:
+        # Block absolute paths and path traversal
+        for part in cmd_parts[1:]:  # Skip the command itself
+            # Block absolute paths
             if part.startswith("/") and not part.startswith("--"):
                 return Result(False, error="Absolute paths not allowed", return_code=1)
+            # Block path traversal
+            if ".." in part:
+                return Result(False, error="Path traversal not allowed", return_code=1)
+            # Block environment variable expansion
+            if "$" in part:
+                return Result(False, error="Environment variable expansion not allowed", return_code=1)
 
         timeout = timeout or self.timeout
         
         try:
             import site
             user_site = site.getusersitepackages()
-            env = {**os.environ, "HOME": str(self.root)}
-            env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + env.get("PATH", "")
-            # Add user site-packages to PYTHONPATH so installed packages are found
-            if user_site:
-                env["PYTHONPATH"] = user_site
+            
+            # Create minimal, safe environment
+            env = {
+                "HOME": str(self.root),
+                "PATH": "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+                "PYTHONPATH": user_site if user_site else "",
+            }
             
             # Use shell=False for security - pass args as list
             r = run(
@@ -227,7 +231,13 @@ class Sandbox:
                 timeout=timeout,
                 env=env
             )
+            
+            # Limit output size to prevent memory issues
             output = r.stdout + (r.stderr if r.stderr else "")
+            max_output_size = 1024 * 1024  # 1MB
+            if len(output) > max_output_size:
+                output = output[:max_output_size] + "\n... (output truncated)"
+            
             return Result(
                 success=r.returncode == 0,
                 output=output,

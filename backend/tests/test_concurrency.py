@@ -1,5 +1,6 @@
 import pytest
-from unittest.mock import Mock
+import asyncio
+from unittest.mock import Mock, AsyncMock
 from kaggle_solver.core.orchestrator import Orchestrator
 from kaggle_solver.core.config import Config, SandboxConfig, LLMConfig
 
@@ -40,13 +41,13 @@ class TestConcurrency:
     def test_run_creates_isolated_sandbox(self, orchestrator):
         # Mock create_agent to avoid actual execution
         orchestrator.create_agent = Mock()
-        orchestrator.create_agent.return_value.run.return_value = Mock(success=True, output="ok", duration=0, steps=[])
+        orchestrator.create_agent.return_value.run = AsyncMock(return_value=Mock(success=True, output="ok", duration=0, steps=[]))
         
         # Run session 1
-        session1 = orchestrator.run("task 1")
+        session1 = asyncio.run(orchestrator.run("task 1"))
         
         # Run session 2
-        session2 = orchestrator.run("task 2")
+        session2 = asyncio.run(orchestrator.run("task 2"))
         
         # Check if sandboxes were created in _session_sandboxes
         assert session1.id in orchestrator._session_sandboxes

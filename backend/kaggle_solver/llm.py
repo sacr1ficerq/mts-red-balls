@@ -1,11 +1,12 @@
 import os
-import time
+import asyncio
 import json
 import logging
-from typing import List, Dict, Optional, Callable, Generator
+from typing import List, Dict, Optional, Callable, AsyncGenerator
 
-from openai import OpenAI, APIError, RateLimitError, APITimeoutError
+from openai import AsyncOpenAI, APIError, RateLimitError, APITimeoutError
 from kaggle_solver import get_project_root
+from kaggle_solver.constants import LLMConstants
 
 logger = logging.getLogger(__name__)
 
@@ -19,34 +20,72 @@ if ENV_FILE.exists():
 
 
 class LLMError(Exception):
+    """Custom exception for LLM-related errors."""
     pass
 
 
 class LLM:
+    """Async LLM client with retry logic and exponential backoff."""
+    
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             logger.warning("No API key found for LLM. Using mock mode.")
             self.client = None
         else:
-            self.client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=self.api_key)
-        self.max_retries = 3
-        self.retry_base_delay = 1.0
+            self.client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=self.api_key)
+        
+        # Use constants from LLMConstants
+        self.max_retries = LLMConstants.MAX_RETRIES
+        self.retry_base_delay = LLMConstants.RETRY_DELAY
+        self.retry_backoff = LLMConstants.RETRY_BACKOFF
         self.mock_mode = self.client is None
 
-    def chat(self, model: str, messages: List[Dict[str, str]], temperature: float = 0.7,
-             max_tokens: int = 4096, tools: Optional[List[Dict]] = None,
-             tool_choice: Optional[Dict] = None) -> str:
+    async def chat(self, model: str, messages: List[Dict[str, str]], temperature: float = 0.7,
+                   max_tokens: int = 4096, tools: Optional[List[Dict]] = None,
+                   tool_choice: Optional[Dict] = None) -> str:
         if self.mock_mode:
             last_msg = messages[-1]["content"] if messages else ""
             return f'{{"action": "done", "result": "Mock response to: {last_msg[:100]}..."}}'
         
         for attempt in range(self.max_retries):
             try:
-                response = self.client.chat.completions.create(
+                response = await self.client.chat.completions.create(
                     model=model, messages=messages, temperature=temperature,
                     max_tokens=max_tokens, tools=tools, tool_choice=tool_choice
                 )
+                
+                # Check if response is valid and has choices
+                if response is None:
+                    logger.error(f"LLM API returned None response for model {model}")
+                    if attempt < self.max_retries - 1:
+                        delay = self.retry_base_delay * (self.retry_backoff ** attempt)
+                        logger.warning(f"Retrying in {delay}s...")
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        raise LLMError(f"LLM API returned None after {self.max_retries} attempts")
+                
+                if not hasattr(response, 'choices') or response.choices is None:
+                    logger.error(f"LLM API returned response without choices for model {model}")
+                    if attempt < self.max_retries - 1:
+                        delay = self.retry_base_delay * (self.retry_backoff ** attempt)
+                        logger.warning(f"Retrying in {delay}s...")
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        raise LLMError(f"LLM API returned response without choices after {self.max_retries} attempts")
+                
+                if len(response.choices) == 0:
+                    logger.error(f"LLM API returned empty choices for model {model}")
+                    if attempt < self.max_retries - 1:
+                        delay = self.retry_base_delay * (self.retry_backoff ** attempt)
+                        logger.warning(f"Retrying in {delay}s...")
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        raise LLMError(f"LLM API returned empty choices after {self.max_retries} attempts")
+                
                 msg = response.choices[0].message
                 if hasattr(msg, 'tool_calls') and msg.tool_calls:
                     content = msg.content or ""
@@ -61,34 +100,41 @@ class LLM:
                                 except:
                                     return json.dumps({"action": "tool", "tool": func.name, "tool_call_id": tool_call_id, "query": func.arguments})
                     return content
-                return msg.content or ""
+                
+                # Check if content is empty and log warning
+                content = msg.content or ""
+                if not content:
+                    logger.warning(f"LLM API returned empty content for model {model}")
+                
+                return content
             except RateLimitError:
-                delay = self.retry_base_delay * (2 ** attempt)
+                delay = self.retry_base_delay * (self.retry_backoff ** attempt)
                 logger.warning(f"Rate limit hit, retrying in {delay}s...")
-                time.sleep(delay)
+                await asyncio.sleep(delay)
                 continue
             except APITimeoutError:
-                delay = self.retry_base_delay * (2 ** attempt)
+                delay = self.retry_base_delay * (self.retry_backoff ** attempt)
                 logger.warning(f"API timeout, retrying in {delay}s...")
-                time.sleep(delay)
+                await asyncio.sleep(delay)
                 continue
             except APIError as e:
                 if attempt < self.max_retries - 1:
-                    delay = self.retry_base_delay * (2 ** attempt)
+                    delay = self.retry_base_delay * (self.retry_backoff ** attempt)
                     logger.warning(f"API error: {e}, retrying in {delay}s...")
-                    time.sleep(delay)
+                    await asyncio.sleep(delay)
                 else:
                     raise LLMError(f"LLM API error after {self.max_retries} attempts: {e}")
         raise LLMError("Max retries exceeded")
 
-    def chat_streaming(self, model: str, messages: List[Dict[str, str]], temperature: float = 0.7,
-                      max_tokens: int = 4096, on_token: Optional[Callable[[str], None]] = None) -> Generator[str, None, None]:
+    async def chat_streaming(self, model: str, messages: List[Dict[str, str]], temperature: float = 0.7,
+                            max_tokens: int = 4096, on_token: Optional[Callable[[str], None]] = None) -> AsyncGenerator[str, None]:
+        """Async streaming chat completion."""
         try:
-            stream = self.client.chat.completions.create(
+            stream = await self.client.chat.completions.create(
                 model=model, messages=messages, temperature=temperature,
                 max_tokens=max_tokens, stream=True
             )
-            for chunk in stream:
+            async for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta.content:
                     token = chunk.choices[0].delta.content
                     if on_token:
@@ -97,8 +143,9 @@ class LLM:
         except APIError as e:
             raise LLMError(f"LLM streaming error: {e}")
 
-    def generate(self, model: str, prompt: str, temperature: float = 0.7, max_tokens: int = 4096) -> str:
-        return self.chat(model=model, messages=[
+    async def generate(self, model: str, prompt: str, temperature: float = 0.7, max_tokens: int = 4096) -> str:
+        """Async generate method."""
+        return await self.chat(model=model, messages=[
             {"role": "system", "content": "You are a helpful AI assistant."},
             {"role": "user", "content": prompt}
         ], temperature=temperature, max_tokens=max_tokens)

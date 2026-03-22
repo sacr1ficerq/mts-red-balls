@@ -1,6 +1,7 @@
 import pytest
 import json
-from unittest.mock import Mock, patch, MagicMock
+import asyncio
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 
 from kaggle_solver.agents.base import AgentConfig, AgentResult
 from kaggle_solver.agents import CoordinatorAgent, CodeAgent, SearchAgent, CriticAgent
@@ -30,7 +31,7 @@ class ConcreteCritic(CriticAgent):
 @pytest.fixture
 def mock_llm():
     llm = Mock()
-    llm.chat = Mock(return_value='{"action": "done", "result": "ok"}')
+    llm.chat = AsyncMock(return_value='{"action": "done", "result": "ok"}')
     return llm
 
 
@@ -90,18 +91,18 @@ class TestCoordinatorAgent:
         agent = create_agent(ConcreteCoordinator, config, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback)
         
         # Mock LLM to return plan first, then delegate with plan_id
-        mock_llm.chat.side_effect = [
+        mock_llm.chat = AsyncMock(side_effect=[
             '{"action": "plan", "plan_id": "test123", "steps": [{"id": 1, "task": "do work"}]}',
             '{"action": "delegate", "agent": "CodeAgent", "task": "do work", "plan_id": "test123", "step_id": 1}',
             '{"action": "done", "result": "completed"}'
-        ]
+        ])
         
         # Create sub-agent mock
         sub_agent = Mock()
-        sub_agent.run.return_value = AgentResult(success=True, output="work done")
+        sub_agent.run = AsyncMock(return_value=AgentResult(success=True, output="work done"))
         agent.agent_factory = Mock(return_value=sub_agent)
         
-        result = agent.run("delegate this task")
+        result = asyncio.run(agent.run("delegate this task"))
         
         assert sub_agent.run.called
     
@@ -166,10 +167,10 @@ class TestCodeAgent:
         )
         agent = create_agent(ConcreteCode, config, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback)
         
-        mock_llm.chat.return_value = '{"action": "tool", "tool": "console", "query": "echo hello"}'
+        mock_llm.chat = AsyncMock(return_value='{"action": "tool", "tool": "console", "query": "echo hello"}')
         mock_tool_registry.execute.return_value = ToolResult(success=True, output="hello")
         
-        result = agent.run("run echo command")
+        result = asyncio.run(agent.run("run echo command"))
         
         mock_tool_registry.execute.assert_called()
         call_args = mock_tool_registry.execute.call_args
@@ -185,10 +186,10 @@ class TestCodeAgent:
         )
         agent = create_agent(ConcreteCode, config, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback)
         
-        mock_llm.chat.return_value = '{"action": "tool", "tool": "files", "query": "test.py"}'
+        mock_llm.chat = AsyncMock(return_value='{"action": "tool", "tool": "files", "query": "test.py"}')
         mock_tool_registry.execute.return_value = ToolResult(success=True, output="file content")
         
-        result = agent.run("read file")
+        result = asyncio.run(agent.run("read file"))
         
         mock_tool_registry.execute.assert_called()
         call_args = mock_tool_registry.execute.call_args
@@ -229,10 +230,10 @@ class TestSearchAgent:
         )
         agent = create_agent(ConcreteSearch, config, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback)
         
-        mock_llm.chat.return_value = '{"action": "tool", "tool": "search", "query": "python tutorial"}'
+        mock_llm.chat = AsyncMock(return_value='{"action": "tool", "tool": "search", "query": "python tutorial"}')
         mock_tool_registry.execute.return_value = ToolResult(success=True, output="search results")
         
-        result = agent.run("search for python")
+        result = asyncio.run(agent.run("search for python"))
         
         mock_tool_registry.execute.assert_called()
         call_args = mock_tool_registry.execute.call_args
@@ -273,9 +274,9 @@ class TestCriticAgent:
         )
         agent = create_agent(ConcreteCritic, config, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback)
         
-        mock_llm.chat.return_value = '{"action": "done", "result": "VALID - solution looks good"}'
+        mock_llm.chat = AsyncMock(return_value='{"action": "done", "result": "VALID - solution looks good"}')
         
-        result = agent.run("validate this solution")
+        result = asyncio.run(agent.run("validate this solution"))
         
         assert result.success is True
     
@@ -426,9 +427,9 @@ class TestAgentToolsIntegration:
         config = AgentConfig(name="Coordinator", role="test", tools=["tool"], max_iterations=2)
         agent = create_agent(ConcreteCoordinator, config, mock_llm, mock_sandbox, mock_tool_registry, mock_event_callback)
         
-        mock_llm.chat.return_value = '{"action": "tool", "tool": "console", "query": "ls"}'
+        mock_llm.chat = AsyncMock(return_value='{"action": "tool", "tool": "console", "query": "ls"}')
         
-        result = agent.run("list files")
+        result = asyncio.run(agent.run("list files"))
         
         mock_tool_registry.execute.assert_called()
     

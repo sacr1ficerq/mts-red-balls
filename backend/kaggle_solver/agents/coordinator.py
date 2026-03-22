@@ -2,6 +2,7 @@ import yaml
 import logging
 from pathlib import Path
 from kaggle_solver import get_project_root
+from kaggle_solver.constants import AgentType, AgentConstants
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +70,10 @@ class CriticAgentPrompts:
 
 def get_agent_prompts(agent_name: str) -> str:
     prompts = {
-        "Coordinator": CoordinatorAgentPrompts.system_prompt(),
-        "CodeAgent": CodeAgentPrompts.system_prompt(),
-        "SearchAgent": SearchAgentPrompts.system_prompt(),
-        "CriticAgent": CriticAgentPrompts.system_prompt(),
+        AgentType.COORDINATOR.value: CoordinatorAgentPrompts.system_prompt(),
+        AgentType.CODE.value: CodeAgentPrompts.system_prompt(),
+        AgentType.SEARCH.value: SearchAgentPrompts.system_prompt(),
+        AgentType.CRITIC.value: CriticAgentPrompts.system_prompt(),
     }
     return prompts.get(agent_name, f"You are {agent_name}.")
 
