@@ -8,6 +8,12 @@ from enum import Enum
 from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime
 
+from kaggle_solver.constants import (
+    AgentAction,
+    AgentConstants,
+    AgentType,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -201,7 +207,7 @@ class BaseAgent(ABC):
         """Return the system prompt for this agent."""
         pass
 
-    def run(self, user_input: str, context: Optional[Dict[str, Any]] = None, is_sub_call: bool = False) -> AgentResult:
+    async def run(self, user_input: str, context: Optional[Dict[str, Any]] = None, is_sub_call: bool = False) -> AgentResult:
         """Execute the agent loop to accomplish the user's task.
         
         The agent follows a think-act-observe loop:
@@ -255,7 +261,7 @@ class BaseAgent(ABC):
         for self._iteration in range(1, self.config.max_iterations + 1):
             try:
                 max_output_tokens = AgentConstants.MAX_OUTPUT_TOKENS
-                resp = self.llm.chat(
+                resp = await self.llm.chat(
                     model=self.config.model,
                     messages=full,
                     temperature=self.config.temperature,
@@ -298,7 +304,7 @@ class BaseAgent(ABC):
                     sub_context = {"event_ids": []}
                     if self.session:
                         sub_context["session"] = self.session
-                    sub_result = sub.run(task, context=sub_context, is_sub_call=True)
+                    sub_result = await sub.run(task, context=sub_context, is_sub_call=True)
                     self._emit("result", {"content": sub_result.output})
                     return AgentResult(success=True, output=sub_result.output, duration=time.time() - start)
             
@@ -312,17 +318,25 @@ class BaseAgent(ABC):
                 continue
 
             elif action.get("action") == "delegate" and self.agent_factory:
-                return self._handle_delegate_action(action, full, start)
+                # Execute delegation and add result to conversation, then continue loop
+                # This allows the agent to process the result and decide next action (e.g., respond with "done")
+                await self._handle_delegate_action(action, full, start)
+                continue
 
             elif action.get("action") == "done":
                 self._emit("result", {"content": action.get("result", "")})
                 return AgentResult(success=True, output=action.get("result", ""), duration=time.time() - start)
+            
+            elif action.get("action") == "error":
+                error_msg = action.get("error", "Unknown error")
+                logger.error(f"Agent encountered error: {error_msg}")
+                return AgentResult(success=False, error=error_msg, duration=time.time() - start)
 
             elif action.get("action") == "options":
                 self._handle_options_action(action, full)
 
             elif action.get("action") == "plan":
-                self._handle_plan_action(action, full)
+                await self._handle_plan_action(action, full)
                 continue
 
             elif action.get("action") == "update_plan":
@@ -363,15 +377,18 @@ class BaseAgent(ABC):
             "expanded": True
         })
         
-        tool_call_id = f"call_{action.get('tool', 'tool')}_{self._iteration}"
-        tool_msg = {"role": "tool", "content": f"{action.get('tool')}: {output}", "tool_call_id": tool_call_id}
-        self.add_message("tool", f"{action.get('tool')}: {output}")
+        # Add tool result as user message to guide LLM to next step
+        # This prevents LLM from thinking the tool result is its own response
+        tool_msg = {"role": "user", "content": f"Tool {action.get('tool')} executed successfully. Output: {output}\n\nContinue with the next step of your workflow."}
+        # Add to self.messages so it persists across iterations
+        self.add_message("user", f"Tool {action.get('tool')} executed successfully. Output: {output}\n\nContinue with the next step of your workflow.")
+        # Also add to full for current iteration
         full.append(tool_msg)
         
         logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
         logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
 
-    def _handle_delegate_action(self, action: Dict[str, Any], full: List[Dict[str, Any]], start: float) -> AgentResult:
+    async def _handle_delegate_action(self, action: Dict[str, Any], full: List[Dict[str, Any]], start: float) -> AgentResult:
         target = action.get("agent", "")
         task = action.get("task", "")
         context_ids = action.get("context_ids", [])[:3]
@@ -394,7 +411,7 @@ class BaseAgent(ABC):
         if self.session:
             sub_context["session"] = self.session
         
-        sub_result = sub.run(task, context=sub_context, is_sub_call=True)
+        sub_result = await sub.run(task, context=sub_context, is_sub_call=True)
         
         self._emit("tool", {
             "tool_name": "delegate",
@@ -404,10 +421,11 @@ class BaseAgent(ABC):
             "expanded": True
         })
         
-        tool_call_id = f"call_delegate_{self._iteration}"
-        tool_msg = {"role": "tool", "content": f"delegate to {target}: {sub_result.output}", "tool_call_id": tool_call_id}
-        self.add_message("tool", f"delegate to {target}: {sub_result.output}")
-        full.append(tool_msg)
+        # Add delegation result as user message (not tool message to avoid tool_call_id issues)
+        # This allows the agent to process the result and decide next action
+        delegate_msg = {"role": "user", "content": f"Delegation to {target} completed. Result: {sub_result.output}\n\nNow provide your final answer to the user."}
+        self.add_message("user", f"Delegation to {target} completed. Result: {sub_result.output}\n\nNow provide your final answer to the user.")
+        full.append(delegate_msg)
 
         return AgentResult(success=sub_result.success, output=sub_result.output, duration=time.time() - start)
 
@@ -422,7 +440,7 @@ class BaseAgent(ABC):
         self.add_message("tool", f"options: {question}")
         full.append({"role": "tool", "content": f"options: {question}"})
 
-    def _handle_plan_action(self, action: Dict[str, Any], full: List[Dict[str, Any]]) -> None:
+    async def _handle_plan_action(self, action: Dict[str, Any], full: List[Dict[str, Any]]) -> None:
         plan_id = action.get("plan_id", "")
         steps = action.get("steps", [])
         self._emit("plan", {
@@ -453,7 +471,7 @@ class BaseAgent(ABC):
             if self.session:
                 sub_context["session"] = self.session
             
-            sub_result = sub.run(task, context=sub_context, is_sub_call=True)
+            sub_result = await sub.run(task, context=sub_context, is_sub_call=True)
             
             self.add_message("tool", f"{target_agent} result: {sub_result.output}")
             full.append({"role": "tool", "content": f"{target_agent} result: {sub_result.output}"})
@@ -543,7 +561,9 @@ class BaseAgent(ABC):
             if isinstance(first_obj, dict) and "action" in first_obj:
                 action = first_obj.get("action", "")
                 # Only these actions are allowed
-                if action in ("tool", "delegate", "options", "plan", "update_plan", "done"):
+                if action in (AgentAction.TOOL.value, AgentAction.DELEGATE.value,
+                            AgentAction.OPTIONS.value, AgentAction.PLAN.value,
+                            AgentAction.UPDATE_PLAN.value, AgentAction.DONE.value):
                     return first_obj
         
         # Try to handle truncated JSON - response might be cut off mid-JSON
@@ -567,7 +587,9 @@ class BaseAgent(ABC):
                 if plan_match:
                     partial_result["plan"] = "..."
                 
-                if action_type in ("tool", "delegate", "options", "plan", "update_plan", "done"):
+                if action_type in (AgentAction.TOOL.value, AgentAction.DELEGATE.value,
+                                 AgentAction.OPTIONS.value, AgentAction.PLAN.value,
+                                 AgentAction.UPDATE_PLAN.value, AgentAction.DONE.value):
                     logger.warning(f"Using truncated JSON with action: {action_type}")
                     return partial_result
         
@@ -577,7 +599,9 @@ class BaseAgent(ABC):
                 direct_parse = json.loads(response_stripped)
                 if isinstance(direct_parse, dict) and "action" in direct_parse:
                     action = direct_parse.get("action", "")
-                    if action in ("tool", "delegate", "options", "plan", "update_plan", "done"):
+                    if action in (AgentAction.TOOL.value, AgentAction.DELEGATE.value,
+                                 AgentAction.OPTIONS.value, AgentAction.PLAN.value,
+                                 AgentAction.UPDATE_PLAN.value, AgentAction.DONE.value):
                         return direct_parse
             except:
                 pass
@@ -593,8 +617,15 @@ class BaseAgent(ABC):
             try:
                 json_resp = json.loads(cleaned_response)
                 if "result" in json_resp:
-                    return {"action": "done", "result": json_resp["result"]}
+                    return {"action": AgentAction.DONE.value, "result": json_resp["result"]}
             except:
                 pass
         
-        return {"action": "done", "result": cleaned_response if cleaned_response else response}
+        # CRITICAL: If response is empty, this is an error - don't return "done"
+        # Empty responses from LLM should be treated as errors, not completion
+        if not cleaned_response and not response:
+            logger.error("LLM returned empty response - treating as error")
+            # Return a special error action that will be caught by the main loop
+            return {"action": AgentAction.ERROR.value, "error": "LLM returned empty response"}
+        
+        return {"action": AgentAction.DONE.value, "result": cleaned_response if cleaned_response else response}

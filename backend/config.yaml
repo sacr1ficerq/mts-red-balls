@@ -1,5 +1,5 @@
 llm:
-  model: "minimax/minimax-m2.7"
+  model: "anthropic/claude-3.5-sonnet"
   temperature: 0.7
   max_tokens: 4096
   max_retries: 5
@@ -53,7 +53,7 @@ agents:
   CodeAgent:
     role: "Write and execute Python code in sandbox"
     tools: ["console", "files"]
-    max_iterations: 5
+    max_iterations: 10
   SearchAgent:
     role: "Search the web for information"
     tools: ["search"]
