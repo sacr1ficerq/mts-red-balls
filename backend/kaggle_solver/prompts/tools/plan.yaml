@@ -1,26 +1,60 @@
 plan_tool: |
-  plan: Create a plan with steps (task + agent for each step).
-  Input: plan_id, steps list with {id, task, agent}
-  Output: none
+  plan: Create a plan with steps for multi-step tasks. MANDATORY for tasks with 3+ steps.
+  
+  When to use:
+  - Tasks with 3+ steps that need to be executed in sequence
+  - Tasks that require different types of work (file creation, code writing, execution)
+  - Tasks where you need to track progress
+  - Tasks numbered as 1), 2), 3) or similar
+  
+  Input: plan_id (unique identifier), steps list with {id, task, agent}
+  
+  Available agents:
+  - CodeAgent: Creates files, writes code, executes Python scripts, runs console commands
+  - SearchAgent: Searches the web for information
+  
+  Output: none (plan is displayed to user)
   
   Usage:
-  {"action": "plan", "plan_id": "1", "steps": [{"id": 1, "agent": "SearchAgent", "task": "search query"}]}
+  {"action": "plan", "plan_id": "1", "steps": [
+    {"id": 1, "agent": "CodeAgent", "task": "Create CSV file with sales data"},
+    {"id": 2, "agent": "CodeAgent", "task": "Write script to calculate total sales"},
+    {"id": 3, "agent": "CodeAgent", "task": "Run the script and show result"}
+  ]}
+  
+  After creating a plan, the system will automatically execute the first step.
+  Wait for the result, then delegate the next step using the "delegate" action.
 
 update_plan_tool: |
   update_plan: Update a specific step in the plan.
-  Input: plan_id, step_id, new_task/new_agent
-  Output: none
+  
+  When to use:
+  - When you need to modify a step's task description
+  - When you need to change the agent for a step
+  - When a step fails and you need to adjust the approach
+  
+  Input: plan_id, step_id, update object with new_task and/or new_agent
+  
+  Output: none (plan is updated and displayed)
   
   Usage:
-  {"action": "update_plan", "plan_id": "1", "step_id": 1, "task": "new task"}
+  {"action": "update_plan", "plan_id": "1", "update": {"step_id": 2, "task": "Updated task description"}}
+  {"action": "update_plan", "plan_id": "1", "update": {"step_id": 3, "agent": "SearchAgent"}}
 
 delegate_tool: |
   delegate: Delegate task to an agent.
+  
+  When to use:
+  - For simple single-step tasks
+  - For executing individual steps from a plan
+  - When you don't need planning
+  
   Available agents:
   - SearchAgent: searches web for information (task in English)
   - CodeAgent: writes and executes Python code
   
   Input: agent name, task description
+  
   Output: agent execution result
   
   Usage:
@@ -29,8 +63,17 @@ delegate_tool: |
 
 result_tool: |
   done: Return final result to user.
+  
+  When to use:
+  - After completing all steps of a plan
+  - After receiving a delegation result
+  - For simple greetings or questions that need NO code/files/commands
+  
   Input: final answer in user's language
-  Output: none
+  
+  Output: none (result is displayed to user)
   
   Usage:
   {"action": "done", "result": "your answer"}
+  
+  CRITICAL: ALWAYS use "done" to return your final answer - never just write text without the action.

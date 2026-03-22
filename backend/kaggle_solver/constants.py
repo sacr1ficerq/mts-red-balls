@@ -65,6 +65,7 @@ class AgentConstants:
         AgentType.SEARCH.value: ["search"],
         AgentType.CODE.value: ["console", "files"],
         AgentType.CRITIC.value: ["message"],
+        AgentType.COORDINATOR.value: ["delegate", "tool"],
     }
     
     # Agent to prompt file mapping
@@ -74,13 +75,66 @@ class AgentConstants:
         AgentType.SEARCH.value: "prompts/search.yaml",
         AgentType.CRITIC.value: "prompts/critic.yaml",
     }
+    
+    # Tools schema for function calling
+    TOOLS_SCHEMA = {
+        "console": {
+            "type": "function",
+            "function": {
+                "name": "console",
+                "description": "Run shell commands in sandbox",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Command to run"}
+                    },
+                    "required": ["query"]
+                }
+            }
+        },
+        "files": {
+            "type": "function",
+            "function": {
+                "name": "files",
+                "description": "File operations: read, write, edit",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "op": {"type": "string", "enum": ["read", "write", "edit"]},
+                        "path": {"type": "string"},
+                        "content": {"type": "string"}
+                    },
+                    "required": ["op", "path"]
+                }
+            }
+        },
+        "search": {
+            "type": "function",
+            "function": {
+                "name": "search",
+                "description": "Web search",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"}
+                    },
+                    "required": ["query"]
+                }
+            }
+        }
+    }
 
 
 class SandboxConstants:
     """Sandbox execution constants."""
     
+    # Size constants (in bytes)
+    ONE_KB = 1024
+    ONE_MB = 1024 * 1024
+    ONE_GB = 1024 * 1024 * 1024
+    
     # Allowed commands for execution
-    ALLOWED_COMMANDS = {"python", "python3", "pip", "ls", "cat", "head", "mkdir", "rm", "cp", "mv", "echo"}
+    ALLOWED_COMMANDS = {"python", "python3", "pip", "ls", "cat", "head", "mkdir", "rm", "cp", "mv", "echo", "date"}
     
     # Blocked shell patterns
     BLOCKED_PATTERNS = [
@@ -90,10 +144,19 @@ class SandboxConstants:
     ]
     
     # Maximum file size for reading (in bytes)
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+    MAX_FILE_SIZE = 10 * ONE_MB  # 10 MB
+    
+    # Maximum file size for writing (in bytes)
+    MAX_WRITE_FILE_SIZE = 100 * ONE_MB  # 100 MB
+    
+    # Maximum command output size (in bytes)
+    MAX_OUTPUT_SIZE = ONE_MB  # 1 MB
     
     # Command execution timeout (in seconds)
     COMMAND_TIMEOUT = 60
+    
+    # Preinstall timeout (in seconds)
+    PREINSTALL_TIMEOUT = 180
 
 
 class ServerConstants:

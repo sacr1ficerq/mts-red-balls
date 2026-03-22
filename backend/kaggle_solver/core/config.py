@@ -11,6 +11,7 @@ class LLMConfig:
     max_tokens: int = 4096
     max_retries: int = 3
     retry_delay: float = 1.0
+    requests_per_minute: int = 8
 
 
 @dataclass

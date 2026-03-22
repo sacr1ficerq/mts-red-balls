@@ -34,7 +34,7 @@ class Sandbox:
     
     BLOCKED_PATTERNS = SandboxConstants.BLOCKED_PATTERNS
 
-    MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
+    MAX_FILE_SIZE = SandboxConstants.MAX_WRITE_FILE_SIZE
     
     def __init__(self, root: Path, timeout: int = 60, preinstall: bool = None):
         self.root = root.resolve()
@@ -63,7 +63,7 @@ class Sandbox:
                 result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", "-q", "--user", pkg],
                     capture_output=True,
-                    timeout=180
+                    timeout=SandboxConstants.PREINSTALL_TIMEOUT
                 )
                 if result.returncode == 0:
                     logger.info(f"Preinstalled: {pkg}")
@@ -73,16 +73,34 @@ class Sandbox:
                 logger.warning(f"Failed to preinstall {pkg}: {e}")
 
     def _secure_path(self, path: str) -> Path:
-        # Remove all path traversal attempts iteratively
-        clean = path
-        while ".." in clean:
-            clean = clean.replace("..", "")
+        """Securely resolve a path within the sandbox.
+        
+        This method prevents path traversal attacks by:
+        1. Normalizing the path to resolve any .. or . components
+        2. Ensuring the resolved path is within the sandbox root
+        3. Checking for symlinks that point outside the sandbox
+        
+        Args:
+            path: The path to secure (can be relative or absolute)
+            
+        Returns:
+            The resolved, secure Path object
+            
+        Raises:
+            ValueError: If the path attempts to escape the sandbox
+        """
+        # CRITICAL: Use os.path.normpath to properly normalize path components
+        # This handles all forms of path traversal (.., ., etc.)
+        clean = os.path.normpath(path)
+        
+        # Remove leading slashes to make it relative to sandbox root
         clean = clean.lstrip("/")
         
-        # Resolve to absolute path
+        # Resolve to absolute path within sandbox
         full = (self.root / clean).resolve()
 
-        # Check if resolved path is within sandbox
+        # CRITICAL: Check if resolved path is within sandbox
+        # This is the primary defense against path traversal
         try:
             full.relative_to(self.root)
         except ValueError:
@@ -103,19 +121,25 @@ class Sandbox:
 
     def _is_command_safe(self, command: str) -> bool:
         cmd_lower = command.lower()
-        for pattern in self.BLOCKED_PATTERNS:
-            if pattern in cmd_lower:
-                return False
+        
+        # Check if this is a Python command (for special handling)
+        is_python_cmd = command.strip().startswith("python") or command.strip().startswith("python3")
         
         # Block shell operators for chaining
         shell_operators = ["&&", "||", "|", ";"]
-        is_python_cmd = command.strip().startswith("python")
         
         for op in shell_operators:
             if op in command:
                 # Allow semicolons in Python -c commands
                 if op == ";" and is_python_cmd:
                     continue
+                return False
+        
+        # Check blocked patterns (but skip semicolon for Python commands)
+        for pattern in self.BLOCKED_PATTERNS:
+            if pattern == ";" and is_python_cmd:
+                continue
+            if pattern in cmd_lower:
                 return False
             
         return True
@@ -167,8 +191,17 @@ class Sandbox:
         - No shell operators (&&, ||, ;, |, etc.)
         - No absolute paths
         - No path traversal (..)
+        - No environment variable expansion
         - Command output size limited
         - Timeout enforced
+        - shell=False to prevent shell injection
+        
+        Args:
+            command: The command string to execute
+            timeout: Optional timeout in seconds (defaults to instance timeout)
+            
+        Returns:
+            Result object with success status, output, and error information
         """
         if timeout is None:
             timeout = self.timeout
@@ -181,7 +214,7 @@ class Sandbox:
         if not self._is_command_safe(command):
             return Result(False, error="Shell operator or blocked pattern detected")
         
-        # Parse command safely
+        # Parse command safely using shlex to handle quoted arguments
         try:
             import shlex
             cmd_parts = shlex.split(command)
@@ -196,17 +229,27 @@ class Sandbox:
         if first_cmd not in self.ALLOWED_COMMANDS:
             return Result(False, error=f"Command not allowed: {first_cmd}")
 
-        # Block absolute paths and path traversal
-        for part in cmd_parts[1:]:  # Skip the command itself
-            # Block absolute paths
+        # CRITICAL: Validate all command arguments for security
+        for i, part in enumerate(cmd_parts[1:], start=1):  # Skip the command itself
+            # Block absolute paths (except for flags starting with --)
             if part.startswith("/") and not part.startswith("--"):
-                return Result(False, error="Absolute paths not allowed", return_code=1)
-            # Block path traversal
+                return Result(False, error=f"Absolute paths not allowed in argument {i}: {part}", return_code=1)
+            
+            # Block path traversal attempts
             if ".." in part:
-                return Result(False, error="Path traversal not allowed", return_code=1)
+                return Result(False, error=f"Path traversal not allowed in argument {i}: {part}", return_code=1)
+            
             # Block environment variable expansion
             if "$" in part:
-                return Result(False, error="Environment variable expansion not allowed", return_code=1)
+                return Result(False, error=f"Environment variable expansion not allowed in argument {i}: {part}", return_code=1)
+            
+            # Block command substitution
+            if "`" in part or "$(" in part:
+                return Result(False, error=f"Command substitution not allowed in argument {i}: {part}", return_code=1)
+            
+            # Block pipe redirection attempts
+            if ">" in part or "<" in part:
+                return Result(False, error=f"Redirection not allowed in argument {i}: {part}", return_code=1)
 
         timeout = timeout or self.timeout
         
@@ -214,17 +257,19 @@ class Sandbox:
             import site
             user_site = site.getusersitepackages()
             
-            # Create minimal, safe environment
+            # Create minimal, safe environment with no dangerous variables
             env = {
                 "HOME": str(self.root),
                 "PATH": "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
                 "PYTHONPATH": user_site if user_site else "",
+                "PYTHONUNBUFFERED": "1",  # Ensure Python output is not buffered
             }
             
-            # Use shell=False for security - pass args as list
+            # CRITICAL: Use shell=False to prevent shell injection
+            # This ensures command arguments are passed directly to the executable
             r = run(
                 cmd_parts,
-                shell=False,
+                shell=False,  # CRITICAL: Never use shell=True with user input
                 cwd=str(self.root),
                 capture_output=True,
                 text=True,
@@ -234,9 +279,8 @@ class Sandbox:
             
             # Limit output size to prevent memory issues
             output = r.stdout + (r.stderr if r.stderr else "")
-            max_output_size = 1024 * 1024  # 1MB
-            if len(output) > max_output_size:
-                output = output[:max_output_size] + "\n... (output truncated)"
+            if len(output) > SandboxConstants.MAX_OUTPUT_SIZE:
+                output = output[:SandboxConstants.MAX_OUTPUT_SIZE] + "\n... (output truncated)"
             
             return Result(
                 success=r.returncode == 0,
@@ -250,6 +294,7 @@ class Sandbox:
         except FileNotFoundError as e:
             return Result(False, error=f"Command not found: {e}")
         except Exception as e:
+            logger.error(f"Unexpected error executing command: {e}", exc_info=True)
             return Result(False, error=str(e), return_code=1)
 
     def execute_python(self, code: str, timeout: int = None) -> Result:

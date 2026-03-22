@@ -6,6 +6,7 @@ from kaggle_solver.tools.registry import ToolRegistry, ToolResult
 import kaggle_solver.tools.console
 import kaggle_solver.tools.files
 import kaggle_solver.tools.search
+import kaggle_solver.tools.kaggle
 
 
 def get_rag_tool():

@@ -1,9 +1,10 @@
 llm:
-  model: "anthropic/claude-3.5-sonnet"
+  model: "openai/gpt-oss-20b:free"
   temperature: 0.7
   max_tokens: 4096
   max_retries: 5
   retry_delay: 5.0
+  requests_per_minute: 30  # Increased rate limit
 
 sandbox:
   root: "./workspace"

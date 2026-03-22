@@ -23,18 +23,60 @@ class CriticAgent(BaseAgent):
         return get_agent_prompts("CriticAgent")
 
 
+class HypothesisGeneratorAgent(BaseAgent):
+    def system_prompt(self) -> str:
+        return get_agent_prompts("HypothesisGenerator")
+
+
+class DataPreprocessorAgent(BaseAgent):
+    def system_prompt(self) -> str:
+        return get_agent_prompts("DataPreprocessor")
+
+
+class FeatureEngineerAgent(BaseAgent):
+    def system_prompt(self) -> str:
+        return get_agent_prompts("FeatureEngineer")
+
+
+class ModelTrainerAgent(BaseAgent):
+    def system_prompt(self) -> str:
+        return get_agent_prompts("ModelTrainer")
+
+
+class DataParserAgent(BaseAgent):
+    def system_prompt(self) -> str:
+        return get_agent_prompts("DataParser")
+
+
+class KaggleSubmitterAgent(BaseAgent):
+    def system_prompt(self) -> str:
+        return get_agent_prompts("KaggleSubmitter")
+
+
 AgentRegistry.register("Coordinator", CoordinatorAgent)
 AgentRegistry.register("CodeAgent", CodeAgent)
 AgentRegistry.register("SearchAgent", SearchAgent)
 AgentRegistry.register("CriticAgent", CriticAgent)
+AgentRegistry.register("HypothesisGenerator", HypothesisGeneratorAgent)
+AgentRegistry.register("DataPreprocessor", DataPreprocessorAgent)
+AgentRegistry.register("FeatureEngineer", FeatureEngineerAgent)
+AgentRegistry.register("ModelTrainer", ModelTrainerAgent)
+AgentRegistry.register("DataParser", DataParserAgent)
+AgentRegistry.register("KaggleSubmitter", KaggleSubmitterAgent)
 
 __all__ = [
     "BaseAgent",
-    "AgentConfig", 
+    "AgentConfig",
     "AgentResult",
     "AgentRegistry",
     "CoordinatorAgent",
     "CodeAgent",
     "SearchAgent",
     "CriticAgent",
+    "HypothesisGeneratorAgent",
+    "DataPreprocessorAgent",
+    "FeatureEngineerAgent",
+    "ModelTrainerAgent",
+    "DataParserAgent",
+    "KaggleSubmitterAgent",
 ]

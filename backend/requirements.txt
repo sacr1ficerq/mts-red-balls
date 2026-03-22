@@ -4,6 +4,7 @@ openai
 pydantic
 pyyaml
 pytest
+pytest-asyncio
 python-dotenv
 duckduckgo-search
 numpy

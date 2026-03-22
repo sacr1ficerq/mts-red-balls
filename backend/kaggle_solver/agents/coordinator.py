@@ -68,12 +68,54 @@ class CriticAgentPrompts:
         return load_prompt("critic.yaml", "", tools=["console", "search", "result"])
 
 
+class HypothesisGeneratorPrompts:
+    @staticmethod
+    def system_prompt() -> str:
+        return load_prompt("hypothesis.yaml", "", tools=["console", "files", "search", "result"])
+
+
+class DataPreprocessorPrompts:
+    @staticmethod
+    def system_prompt() -> str:
+        return load_prompt("data_preprocessor.yaml", "", tools=["console", "files", "result"])
+
+
+class FeatureEngineerPrompts:
+    @staticmethod
+    def system_prompt() -> str:
+        return load_prompt("feature_engineer.yaml", "", tools=["console", "files", "result"])
+
+
+class ModelTrainerPrompts:
+    @staticmethod
+    def system_prompt() -> str:
+        return load_prompt("model_trainer.yaml", "", tools=["console", "files", "result"])
+
+
+class DataParserPrompts:
+    @staticmethod
+    def system_prompt() -> str:
+        return load_prompt("data_parser.yaml", "", tools=["console", "files", "result"])
+
+
+class KaggleSubmitterPrompts:
+    @staticmethod
+    def system_prompt() -> str:
+        return load_prompt("kaggle_submitter.yaml", "", tools=["console", "files", "result"])
+
+
 def get_agent_prompts(agent_name: str) -> str:
     prompts = {
         AgentType.COORDINATOR.value: CoordinatorAgentPrompts.system_prompt(),
         AgentType.CODE.value: CodeAgentPrompts.system_prompt(),
         AgentType.SEARCH.value: SearchAgentPrompts.system_prompt(),
         AgentType.CRITIC.value: CriticAgentPrompts.system_prompt(),
+        "HypothesisGenerator": HypothesisGeneratorPrompts.system_prompt(),
+        "DataPreprocessor": DataPreprocessorPrompts.system_prompt(),
+        "FeatureEngineer": FeatureEngineerPrompts.system_prompt(),
+        "ModelTrainer": ModelTrainerPrompts.system_prompt(),
+        "DataParser": DataParserPrompts.system_prompt(),
+        "KaggleSubmitter": KaggleSubmitterPrompts.system_prompt(),
     }
     return prompts.get(agent_name, f"You are {agent_name}.")
 

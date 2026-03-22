@@ -107,8 +107,6 @@ window.dashboard = function() {
 
         init() {
             this.fetchSessions();
-            // Load files for the test session
-            this.fetchFileTree('dfe00adb-a728-4319-9be3-aae90a8fdc21');
         },
 
         get currentSession() {
@@ -244,6 +242,7 @@ window.dashboard = function() {
             this.historicalSessionData = null;
             this.currentPlan = null;
             this.metrics = createMetrics();
+            this.fileTree = [];
         },
 
         async clearHistory() {
@@ -260,13 +259,13 @@ window.dashboard = function() {
                 this.currentSessionId = null;
                 this.currentPlan = null;
                 this.metrics = createMetrics();
+                this.fileTree = [];
             } catch (error) {
                 console.error('Error clearing history:', error);
             }
         },
 
         async selectSession(id) {
-            alert('selectSession called with id: ' + id);
             console.log('selectSession called with id:', id);
             this.currentSessionId = id;
             this.currentPlan = null;
@@ -421,6 +420,11 @@ window.dashboard = function() {
             if (this.currentSessionId === sessionId) {
                 this.syncCurrentPlan();
                 this.$nextTick(() => this.scrollToBottom());
+                
+                // Refresh file tree when file-related events occur
+                if (event.type === 'tool' && event.data?.tool_name === 'files') {
+                    this.fetchFileTree(sessionId);
+                }
             }
         },
 

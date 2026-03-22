@@ -2,6 +2,7 @@ import json
 import re
 import logging
 import time
+import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -12,6 +13,7 @@ from kaggle_solver.constants import (
     AgentAction,
     AgentConstants,
     AgentType,
+    ToolType,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,8 +29,8 @@ def parse_json_output(text: str) -> Dict[str, Any]:
     # Try direct parse
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        logger.debug(f"Direct JSON parse failed: {e}")
     
     # Find JSON in text
     start = text.find('{')
@@ -43,9 +45,10 @@ def parse_json_output(text: str) -> Dict[str, Any]:
                 if depth == 0:
                     try:
                         return json.loads(text[start:i+1])
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"JSON extraction failed: {e}")
     
+    logger.warning(f"Failed to parse JSON from text: {text[:100]}...")
     return {}
 
 
@@ -75,85 +78,6 @@ class AgentResult:
     error: str = ""
     steps: List[Dict[str, Any]] = field(default_factory=list)
     duration: float = 0.0
-
-
-class AgentConstants:
-    """Agent behavior constants.
-    
-    These values control agent behavior and limits.
-    """
-    
-    # Maximum number of context events to subscribe to
-    # Prevents context window overflow while maintaining relevance
-    MAX_CONTEXT_EVENTS = 10
-    
-    # Maximum consecutive plan actions before forcing delegation
-    # Prevents infinite planning loops
-    MAX_CONSECUTIVE_PLANS = 2
-    
-    # Maximum tokens for LLM output
-    # Based on model limits and response quality tradeoff
-    MAX_OUTPUT_TOKENS = 8192
-    
-    # Approximate tokens per character (rough estimate)
-    # Used for token counting when exact tokenizer unavailable
-    CHARS_PER_TOKEN = 4
-    
-    # Agent to tools mapping for sub-agent creation
-    AGENT_TOOLS = {
-        "SearchAgent": ["search"],
-        "CodeAgent": ["console", "files"],
-        "CriticAgent": ["search", "console"],
-        "Coordinator": ["delegate", "tool"],
-    }
-    
-    # Tools schema for function calling
-    TOOLS_SCHEMA = {
-        "console": {
-            "type": "function",
-            "function": {
-                "name": "console",
-                "description": "Run shell commands in sandbox",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "Command to run"}
-                    },
-                    "required": ["query"]
-                }
-            }
-        },
-        "files": {
-            "type": "function", 
-            "function": {
-                "name": "files",
-                "description": "File operations: read, write, edit",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "op": {"type": "string", "enum": ["read", "write", "edit"]},
-                        "path": {"type": "string"},
-                        "content": {"type": "string"}
-                    },
-                    "required": ["op", "path"]
-                }
-            }
-        },
-        "search": {
-            "type": "function",
-            "function": {
-                "name": "search",
-                "description": "Web search",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string"}
-                    },
-                    "required": ["query"]
-                }
-            }
-        }
-    }
 
 
 class BaseAgent(ABC):
@@ -207,7 +131,7 @@ class BaseAgent(ABC):
         """Return the system prompt for this agent."""
         pass
 
-    async def run(self, user_input: str, context: Optional[Dict[str, Any]] = None, is_sub_call: bool = False) -> AgentResult:
+    async def run(self, user_input: str, context: Optional[Dict[str, Any]] = None, is_sub_call: bool = False, timeout: int = 300) -> AgentResult:
         """Execute the agent loop to accomplish the user's task.
         
         The agent follows a think-act-observe loop:
@@ -220,11 +144,13 @@ class BaseAgent(ABC):
             user_input: User's request or task description
             context: Optional context including session, event IDs, etc.
             is_sub_call: Whether this is a delegated sub-call
+            timeout: Maximum execution time in seconds (default: 300)
             
         Returns:
             AgentResult with success status, output, and execution duration
         """
         start = time.time()
+        execution_timeout = start + timeout
         
         self.messages = []
         self.add_message("user", user_input)
@@ -233,6 +159,25 @@ class BaseAgent(ABC):
         if context:
             if "session" in context:
                 self.session = context["session"]
+            
+            # Handle shared artifacts from previous agents
+            if "artifacts" in context and self.session:
+                artifacts = context["artifacts"]
+                if artifacts:
+                    # Add artifacts as system context for the agent
+                    artifact_summary = []
+                    for key, value in artifacts.items():
+                        if isinstance(value, (str, int, float, bool)):
+                            artifact_summary.append(f"{key}: {value}")
+                        elif isinstance(value, dict):
+                            artifact_summary.append(f"{key}: {json.dumps(value, ensure_ascii=False)[:500]}")
+                        else:
+                            artifact_summary.append(f"{key}: {str(value)[:500]}")
+                    
+                    if artifact_summary:
+                        artifact_msg = f"[Shared Context from Previous Agents]\n" + "\n".join(artifact_summary)
+                        self.messages.insert(0, {"role": "system", "content": artifact_msg})
+                        logger.info(f"Agent received {len(artifacts)} artifacts from context")
             
             # Subscribe to events by ID
             if "event_ids" in context and self.session:
@@ -259,21 +204,53 @@ class BaseAgent(ABC):
             self._emit("system", {"message": f"Starting: {user_input}"})
 
         for self._iteration in range(1, self.config.max_iterations + 1):
-            try:
-                max_output_tokens = AgentConstants.MAX_OUTPUT_TOKENS
-                resp = await self.llm.chat(
-                    model=self.config.model,
-                    messages=full,
-                    temperature=self.config.temperature,
-                    max_tokens=max_output_tokens
-                )
-                input_tokens = sum(len(m.get("content", "")) // 4 for m in full)
-                output_tokens = len(resp) // 4
-                if hasattr(self, 'session') and self.session:
-                    self.session.add_tokens(input_tokens + output_tokens)
-            except Exception as e:
-                logger.error(f"LLM error: {e}")
-                return AgentResult(success=False, error=str(e), duration=time.time() - start)
+            # Check timeout
+            if time.time() > execution_timeout:
+                logger.error(f"Agent execution timeout after {timeout}s")
+                return AgentResult(success=False, error=f"Execution timeout after {timeout}s", duration=time.time() - start)
+            
+            # Retry logic for LLM calls
+            max_retries = 3
+            retry_delay = 1.0
+            resp = None
+            
+            for attempt in range(max_retries):
+                try:
+                    max_output_tokens = AgentConstants.MAX_OUTPUT_TOKENS
+                    resp = await asyncio.wait_for(
+                        self.llm.chat(
+                            model=self.config.model,
+                            messages=full,
+                            temperature=self.config.temperature,
+                            max_tokens=max_output_tokens
+                        ),
+                        timeout=60  # 60 second timeout per LLM call
+                    )
+                    input_tokens = sum(len(m.get("content", "")) // 4 for m in full)
+                    output_tokens = len(resp) // 4
+                    if hasattr(self, 'session') and self.session:
+                        self.session.add_tokens(input_tokens + output_tokens)
+                    break  # Success, exit retry loop
+                except asyncio.TimeoutError:
+                    logger.warning(f"LLM call timeout on attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        logger.error(f"LLM call failed after {max_retries} attempts")
+                        return AgentResult(success=False, error="LLM call timeout", duration=time.time() - start)
+                except Exception as e:
+                    logger.warning(f"LLM error on attempt {attempt + 1}/{max_retries}: {e}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        logger.error(f"LLM call failed after {max_retries} attempts: {e}")
+                        return AgentResult(success=False, error=str(e), duration=time.time() - start)
+            
+            if resp is None:
+                logger.error("LLM returned None response")
+                return AgentResult(success=False, error="LLM returned None response", duration=time.time() - start)
 
             self.add_message("assistant", resp)
             self._emit("thought", {"content": resp, "raw_response": resp, "expanded": True})
@@ -377,6 +354,55 @@ class BaseAgent(ABC):
             "expanded": True
         })
         
+        # CRITICAL: Add tool result to messages so LLM can see it and decide next action
+        self.add_message("assistant", json.dumps(action))
+        self.add_message("tool", output)
+        
+        # Update full list to include new messages
+        system = full[0] if full and full[0].get("role") == "system" else None
+        if system:
+            full[:] = [system] + self.messages
+        else:
+            full[:] = self.messages
+        
+        # Store important tool results in session artifacts for other agents
+        if self.session and result.success:
+            # Store Kaggle competition info
+            if tool_name == "kaggle_get_competition_info":
+                try:
+                    comp_info = json.loads(output)
+                    self.session.set_artifact("competition_info", comp_info)
+                    logger.info(f"Stored competition_info in session artifacts")
+                except:
+                    pass
+            
+            # Store data file paths after download
+            elif tool_name == "kaggle_download_data":
+                self.session.set_artifact("data_downloaded", True)
+                self.session.set_artifact("download_path", kwargs.get("path", "./"))
+                logger.info(f"Stored data download info in session artifacts")
+            
+            # Store model training results
+            elif tool_name == "console" and "train" in kwargs.get("query", "").lower():
+                # Try to extract metrics from training output
+                if "accuracy" in output.lower() or "loss" in output.lower():
+                    self.session.set_artifact("training_output", output)
+                    logger.info(f"Stored training output in session artifacts")
+            
+            # Store file paths for created files
+            elif tool_name == "files" and kwargs.get("op") == "write":
+                file_path = kwargs.get("path", "")
+                if file_path:
+                    # Track created files by type
+                    if "train" in file_path.lower():
+                        self.session.set_artifact("train_script_path", file_path)
+                    elif "submission" in file_path.lower():
+                        self.session.set_artifact("submission_file_path", file_path)
+                    elif "preprocess" in file_path.lower():
+                        self.session.set_artifact("preprocess_script_path", file_path)
+                    elif "feature" in file_path.lower():
+                        self.session.set_artifact("feature_script_path", file_path)
+        
         # Add tool result as user message to guide LLM to next step
         # This prevents LLM from thinking the tool result is its own response
         tool_msg = {"role": "user", "content": f"Tool {action.get('tool')} executed successfully. Output: {output}\n\nContinue with the next step of your workflow."}
@@ -388,7 +414,7 @@ class BaseAgent(ABC):
         logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
         logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
 
-    async def _handle_delegate_action(self, action: Dict[str, Any], full: List[Dict[str, Any]], start: float) -> AgentResult:
+    async def _handle_delegate_action(self, action: Dict[str, Any], full: List[Dict[str, Any]], start: float) -> None:
         target = action.get("agent", "")
         task = action.get("task", "")
         context_ids = action.get("context_ids", [])[:3]
@@ -410,6 +436,11 @@ class BaseAgent(ABC):
         sub_context = {"event_ids": context_ids}
         if self.session:
             sub_context["session"] = self.session
+            # Pass relevant artifacts to the delegated agent
+            artifacts = self.session.get_all_artifacts()
+            if artifacts:
+                sub_context["artifacts"] = artifacts
+                logger.info(f"Passing {len(artifacts)} artifacts to {target}")
         
         sub_result = await sub.run(task, context=sub_context, is_sub_call=True)
         
@@ -423,11 +454,16 @@ class BaseAgent(ABC):
         
         # Add delegation result as user message (not tool message to avoid tool_call_id issues)
         # This allows the agent to process the result and decide next action
-        delegate_msg = {"role": "user", "content": f"Delegation to {target} completed. Result: {sub_result.output}\n\nNow provide your final answer to the user."}
-        self.add_message("user", f"Delegation to {target} completed. Result: {sub_result.output}\n\nNow provide your final answer to the user.")
+        delegate_msg = {"role": "user", "content": f"Delegation to {target} completed. Result: {sub_result.output}\n\nNow provide your final answer to the user using the 'done' action."}
+        self.add_message("user", f"Delegation to {target} completed. Result: {sub_result.output}\n\nNow provide your final answer to the user using the 'done' action.")
         full.append(delegate_msg)
-
-        return AgentResult(success=sub_result.success, output=sub_result.output, duration=time.time() - start)
+        
+        # Emit result event immediately to ensure it's displayed
+        # This ensures the final answer is shown even if coordinator doesn't use "done" action
+        self._emit("result", {"content": sub_result.output})
+        
+        logger.info(f">>> DELEGATION COMPLETED: {target}, output: {sub_result.output[:100]}")
+        logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
 
     def _handle_options_action(self, action: Dict[str, Any], full: List[Dict[str, Any]]) -> None:
         options = action.get("options", [])
@@ -473,8 +509,21 @@ class BaseAgent(ABC):
             
             sub_result = await sub.run(task, context=sub_context, is_sub_call=True)
             
-            self.add_message("tool", f"{target_agent} result: {sub_result.output}")
-            full.append({"role": "tool", "content": f"{target_agent} result: {sub_result.output}"})
+            # Add delegation result as user message (not tool message to avoid tool_call_id issues)
+            # This allows the agent to process the result and decide next action
+            remaining_steps = len(steps) - 1
+            if remaining_steps > 0:
+                next_step = steps[1]
+                next_agent = next_step.get("agent", "CodeAgent")
+                next_task = next_step.get("task", "")
+                delegate_msg = {"role": "user", "content": f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nNext step ({steps[1].get('id')}): Delegate to {next_agent} with task: {next_task}"}
+                self.add_message("user", f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nNext step ({steps[1].get('id')}): Delegate to {next_agent} with task: {next_task}")
+            else:
+                delegate_msg = {"role": "user", "content": f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nAll plan steps completed. Now provide your final answer to the user using the 'done' action."}
+                self.add_message("user", f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nAll plan steps completed. Now provide your final answer to the user using the 'done' action.")
+            full.append(delegate_msg)
+            
+            logger.info(f">>> PLAN STEP COMPLETED: {target_agent}, output: {sub_result.output[:100]}")
             return
         
         plan_text = f"Plan created with {len(steps)} steps."
@@ -537,8 +586,8 @@ class BaseAgent(ABC):
                                     obj = json.loads(repaired)
                                     logger.warning(f"Repaired malformed JSON: {json_str[:100]}...")
                                     objects.append(obj)
-                                except json.JSONDecodeError:
-                                    pass
+                                except json.JSONDecodeError as e:
+                                    logger.debug(f"Failed to repair JSON: {e}")
             return objects
 
         json_objects = extract_json_objects(response)

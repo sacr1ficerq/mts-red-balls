@@ -18,7 +18,8 @@ class TestMultiModelSelection:
     FREE_MODELS = [
         "openrouter/free",
         "google/gemma-3n-e5b-it",
-        "meta-llama/llama-3.2-3b-instruct"
+        "meta-llama/llama-3.2-3b-instruct",
+        "openai/gpt-oss-20b:free"
     ]
     
     def test_free_models_defined(self):

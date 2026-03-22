@@ -33,7 +33,7 @@ class Orchestrator:
         self.config = config or Config.load()
         storage_path = Path(__file__).parent.parent.parent / "data" / "sessions.json"
         self.state = StateManager(str(storage_path))
-        self.llm = LLM()
+        self.llm = LLM(requests_per_minute=self.config.llm.requests_per_minute)
         # Sandbox root is the base directory. Sessions will use subdirectories.
         sandbox_root = self.config.sandbox.root
         if not Path(sandbox_root).is_absolute():
@@ -118,8 +118,8 @@ class Orchestrator:
             try:
                 with open(session_log_file, "a") as f:
                     f.write(json.dumps(event, ensure_ascii=False) + "\n")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to write event to log file: {e}")
             
             # Log to stdout for docker logs
             event_type = event.get("type", "unknown")
@@ -144,8 +144,8 @@ class Orchestrator:
             # Emit to SSE
             try:
                 self._emit_event(session.id, event)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to emit event to SSE: {e}")
             
             session.add_event(event)
             session.add_step(

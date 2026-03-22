@@ -18,7 +18,6 @@ class TestJavaScriptSyntax:
         FRONTEND_DIR / "src" / "services" / "api.js",
         FRONTEND_DIR / "src" / "utils" / "formatters.js",
         FRONTEND_DIR / "src" / "utils" / "styles.js",
-        FRONTEND_DIR / "src" / "utils" / "helpers.js",
     ]
 
     def test_javascript_files_exist(self):

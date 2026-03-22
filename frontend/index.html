@@ -74,7 +74,7 @@
                 <span x-show="sortedHistoricalSessions.length > 0" class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full" x-text="sortedHistoricalSessions.length"></span>
             </div>
             <template x-for="session in sortedHistoricalSessions" :key="session.id">
-                <div @click="selectSession(session.id)" onclick="alert('Clicked session: ' + this.getAttribute('data-id'))" :data-id="session.id"
+                <div @click="selectSession(session.id)"
                      class="cursor-pointer px-3 py-2 rounded-md transition-colors flex items-center gap-2"
                      :class="currentSessionId === session.id ? 'bg-gray-100 text-gray-900' : 'hover:bg-gray-50 text-gray-500'">
                     <i class="fas fa-history text-xs flex-shrink-0 opacity-50"></i>
@@ -249,7 +249,7 @@
                         </div>
                         
                         <!-- System -->
-                        <template x-if="event.type === 'system'">
+                        <template x-if="event.type === 'system' && event.data.message">
                             <div class="flex gap-4">
                                 <div class="flex-shrink-0 mt-1">
                                     <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
@@ -263,7 +263,7 @@
                         </template>
 
                         <!-- Thought/Agent -->
-                        <template x-if="event.type === 'thought'">
+                        <template x-if="event.type === 'thought' && event.data.content">
                             <div class="flex gap-4">
                                 <div class="flex-shrink-0 mt-1">
                                     <div class="w-8 h-8 rounded-full flex items-center justify-center border"
@@ -288,7 +288,7 @@
                         </template>
 
                         <!-- Tool - Зеленый -->
-                        <template x-if="event.type === 'tool'">
+                        <template x-if="event.type === 'tool' && event.data.tool_name">
                             <div class="flex gap-4">
                                 <div class="flex-shrink-0 mt-1">
                                     <div class="w-8 h-8 rounded-full flex items-center justify-center border"
@@ -323,7 +323,7 @@
                         </template>
 
                         <!-- Delegate -->
-                        <template x-if="event.type === 'delegate'">
+                        <template x-if="event.type === 'delegate' && event.data.task">
                             <div class="flex gap-4">
                                 <div class="flex-shrink-0 mt-1">
                                     <div class="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center border border-purple-200">
@@ -351,7 +351,7 @@
                         </template>
 
                         <!-- Plan Created -->
-                        <template x-if="event.type === 'plan'">
+                        <template x-if="event.type === 'plan' && event.data.steps && event.data.steps.length > 0">
                             <div class="flex gap-4">
                                 <div class="flex-shrink-0 mt-1">
                                     <div class="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center border border-amber-200">
@@ -376,7 +376,7 @@
                         </template>
 
                         <!-- Plan Updated -->
-                        <template x-if="event.type === 'update_plan'">
+                        <template x-if="event.type === 'update_plan' && event.data.update">
                             <div class="flex gap-4">
                                 <div class="flex-shrink-0 mt-1">
                                     <div class="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center border border-orange-200">
@@ -394,7 +394,7 @@
                         </template>
 
                         <!-- Button Options - Human-in-the-loop -->
-                        <template x-if="event.type === 'button_options'">
+                        <template x-if="event.type === 'button_options' && event.data.question">
                             <div class="flex gap-4">
                                 <div class="flex-shrink-0 mt-1">
                                     <div class="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center border border-amber-200">
@@ -420,8 +420,8 @@
                             </div>
                         </template>
 
-                        <!-- Result - only last -->
-                        <template x-if="event.type === 'result' && index === currentSessionEvents.length - 1">
+                        <!-- Result -->
+                        <template x-if="event.type === 'result' && event.data.content">
                             <div class="flex gap-4 mt-4">
                                 <div class="flex-shrink-0 mt-1">
                                     <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center border border-emerald-200">

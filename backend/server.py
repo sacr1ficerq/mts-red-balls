@@ -550,8 +550,17 @@ def list_workspace_files(session_id: str = ""):
     """
     orch = get_orchestrator()
     try:
+        # Require session_id to prevent showing all sessions' files
+        if not session_id:
+            return {
+                "files": [],
+                "root": str(orch.sandbox.root),
+                "base_path": "",
+                "session_id": session_id
+            }
+        
         # Use session-specific folder if session_id is provided
-        base_path = session_id if session_id else "."
+        base_path = session_id
         
         # Get immediate children (not recursive) to build proper tree
         items = orch.sandbox.list_dir(base_path)

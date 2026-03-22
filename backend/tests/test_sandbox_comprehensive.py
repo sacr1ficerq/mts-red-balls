@@ -345,14 +345,16 @@ class TestIntegrationScenarios:
             sandbox.write("data.csv", data)
             
             # Process
-            code = """python3 -c "
-with open('data.csv', 'r') as f:
+            # Write Python script to file
+            script = """with open('data.csv', 'r') as f:
     total = 0
     for line in f:
         total += sum(map(int, line.strip().split(',')))
-    print('Sum:', total)
-\""" """
-            result = sandbox.execute(code)
+    print('Sum:', total)"""
+            sandbox.write("process.py", script)
+            
+            # Execute script
+            result = sandbox.execute("python3 process.py")
             assert result.success is True
             assert "45" in result.output
     

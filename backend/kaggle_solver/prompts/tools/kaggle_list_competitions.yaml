@@ -1,0 +1,36 @@
+name: kaggle_list_competitions
+description: |
+  List Kaggle competitions with optional filtering by category or search query. Use this to discover 
+  competitions and find ones that match your interests or skill level.
+
+parameters:
+  query:
+    type: string
+    required: false
+    description: Search query to filter competitions (optional)
+  category:
+    type: string
+    required: false
+    description: Competition category (e.g., 'gettingStarted', 'featured', 'research')
+
+examples:
+  - query: "List all getting started competitions"
+    parameters:
+      category: "gettingStarted"
+  - query: "Search for house price competitions"
+    parameters:
+      query: "house price"
+
+output_format: |
+  Returns a JSON object with list of competitions:
+  [
+    {
+      "name": "titanic",
+      "title": "Titanic - Machine Learning from Disaster",
+      "description": "Predict which passengers survived...",
+      "category": "gettingStarted",
+      "reward": "None",
+      "deadline": "2024-12-31",
+      "total_teams": 15000
+    }
+  ]

@@ -1,8 +1,11 @@
+import logging
 from kaggle_solver.tools.registry import create_tool
+
+logger = logging.getLogger(__name__)
 
 
 @create_tool(
-    name="console", 
+    name="console",
     description="Execute shell commands (python3, ls, cat, mkdir, rm, cp, etc.) in sandbox"
 )
 def console_tool(query: str, sandbox=None) -> str:
@@ -16,7 +19,7 @@ def console_tool(query: str, sandbox=None) -> str:
     if sandbox is None:
         return "Error: Sandbox not provided"
     
-    print(f">>> CONSOLE TOOL: query='{query}'")
+    logger.debug(f"CONSOLE TOOL: query='{query}'")
     result = sandbox.execute(query)
-    print(f">>> CONSOLE RESULT: success={result.success}, output='{result.output}', error='{result.error}'")
+    logger.debug(f"CONSOLE RESULT: success={result.success}, output='{result.output}', error='{result.error}'")
     return result.output if result.success else f"Error: {result.error}"

@@ -83,6 +83,42 @@ class Session:
             "history": self.messages[-10:] if self.messages else [],
             "artifacts": self.artifacts
         }
+    
+    def set_artifact(self, key: str, value: Any):
+        """Set a shared artifact that can be accessed by other agents."""
+        self.artifacts[key] = value
+        logger.debug(f"Session {self.id}: Set artifact '{key}'")
+    
+    def get_artifact(self, key: str, default: Any = None) -> Any:
+        """Get a shared artifact."""
+        return self.artifacts.get(key, default)
+    
+    def has_artifact(self, key: str) -> bool:
+        """Check if an artifact exists."""
+        return key in self.artifacts
+    
+    def update_artifact(self, key: str, value: Any):
+        """Update an existing artifact."""
+        if key in self.artifacts:
+            self.artifacts[key] = value
+            logger.debug(f"Session {self.id}: Updated artifact '{key}'")
+        else:
+            self.set_artifact(key, value)
+    
+    def delete_artifact(self, key: str):
+        """Delete an artifact."""
+        if key in self.artifacts:
+            del self.artifacts[key]
+            logger.debug(f"Session {self.id}: Deleted artifact '{key}'")
+    
+    def get_all_artifacts(self) -> Dict[str, Any]:
+        """Get all artifacts."""
+        return self.artifacts.copy()
+    
+    def clear_artifacts(self):
+        """Clear all artifacts."""
+        self.artifacts.clear()
+        logger.debug(f"Session {self.id}: Cleared all artifacts")
 
     def to_dict(self) -> Dict:
         return {
@@ -145,7 +181,7 @@ class StateManager:
                     
                     self.sessions[sid] = session
             except Exception as e:
-                print(f"Error loading sessions: {e}")
+                logger.error(f"Error loading sessions: {e}")
 
     def _ensure_storage_dir(self):
         import os
