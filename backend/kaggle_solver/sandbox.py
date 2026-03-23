@@ -31,9 +31,9 @@ class Sandbox:
     # ==================================================================
     
     ALLOWED_COMMANDS = SandboxConstants.ALLOWED_COMMANDS
-    
     BLOCKED_PATTERNS = SandboxConstants.BLOCKED_PATTERNS
-
+    BLOCKED_ESCAPE_SEQUENCES = SandboxConstants.BLOCKED_ESCAPE_SEQUENCES
+    BLOCKED_PATH_PREFIXES = SandboxConstants.BLOCKED_PATH_PREFIXES
     MAX_FILE_SIZE = SandboxConstants.MAX_WRITE_FILE_SIZE
     
     def __init__(self, root: Path, timeout: int = 60, preinstall: bool = None):
@@ -79,6 +79,7 @@ class Sandbox:
         1. Normalizing the path to resolve any .. or . components
         2. Ensuring the resolved path is within the sandbox root
         3. Checking for symlinks that point outside the sandbox
+        4. Blocking access to device paths (/dev, /proc, /sys, etc.)
         
         Args:
             path: The path to secure (can be relative or absolute)
@@ -89,6 +90,12 @@ class Sandbox:
         Raises:
             ValueError: If the path attempts to escape the sandbox
         """
+        # Block device paths and other sensitive system paths
+        path_lower = path.lower()
+        for blocked_prefix in self.BLOCKED_PATH_PREFIXES:
+            if path_lower.startswith(blocked_prefix.lower()):
+                raise ValueError(f"Security: device path not allowed: {path}")
+        
         # CRITICAL: Use os.path.normpath to properly normalize path components
         # This handles all forms of path traversal (.., ., etc.)
         clean = os.path.normpath(path)
@@ -120,6 +127,20 @@ class Sandbox:
         return full
 
     def _is_command_safe(self, command: str) -> bool:
+        """Check if a command is safe to execute.
+        
+        Security checks:
+        1. Block shell operators for command chaining
+        2. Block dangerous patterns (network tools, privilege escalation)
+        3. Block escape sequences that could bypass validation
+        4. Block command substitution patterns
+        
+        Args:
+            command: The command string to validate
+            
+        Returns:
+            True if the command is safe, False otherwise
+        """
         cmd_lower = command.lower()
         
         # Check if this is a Python command (for special handling)
@@ -140,6 +161,26 @@ class Sandbox:
             if pattern == ";" and is_python_cmd:
                 continue
             if pattern in cmd_lower:
+                return False
+        
+        # Block escape sequences that could be used to bypass validation
+        # Note: newlines and carriage returns are allowed in Python commands
+        for seq in self.BLOCKED_ESCAPE_SEQUENCES:
+            if seq in command:
+                # Allow \n and \r in Python commands for multi-line code
+                if is_python_cmd and seq in ("\n", "\r"):
+                    continue
+                return False
+        
+        # Additional check: block raw escape characters (except newlines/tabs in Python commands)
+        if is_python_cmd:
+            # For Python commands, only block truly dangerous control characters
+            dangerous_chars = [c for c in command if ord(c) < 32 and c not in ' \t\n\r']
+            if dangerous_chars:
+                return False
+        else:
+            # For non-Python commands, block all control characters except space and tab
+            if any(ord(c) < 32 and c not in ' \t' for c in command):
                 return False
             
         return True

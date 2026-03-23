@@ -4,6 +4,7 @@ from datetime import datetime
 import uuid
 import json
 import logging
+import threading
 
 from kaggle_solver.constants import StateConstants
 
@@ -23,6 +24,11 @@ class Step:
 
 @dataclass
 class Session:
+    """Thread-safe session data container.
+    
+    All modifications to session state are protected by a lock
+    to prevent race conditions in concurrent access scenarios.
+    """
     MAX_EVENTS_IN_MEMORY = StateConstants.MAX_EVENTS_IN_MEMORY
     MAX_MESSAGES = StateConstants.MAX_EVENTS_PER_SESSION
     
@@ -37,108 +43,136 @@ class Session:
     total_tokens: int = 0
     total_cost: float = 0.0
     _event_counter: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def add_step(self, agent: str, action: str, input: str, output: str, success: bool = True):
-        step = Step(
-            id=len(self.steps) + 1,
-            agent=agent,
-            action=action,
-            input=input,
-            output=output,
-            success=success
-        )
-        self.steps.append(step)
+        """Add a step to the session (thread-safe)."""
+        with self._lock:
+            step = Step(
+                id=len(self.steps) + 1,
+                agent=agent,
+                action=action,
+                input=input,
+                output=output,
+                success=success
+            )
+            self.steps.append(step)
 
     def add_event(self, event: Dict[str, Any]) -> int:
-        self._event_counter += 1
-        event["event_id"] = self._event_counter
+        """Add an event to the session (thread-safe).
         
-        # Keep only recent events in memory
-        if len(self.events) >= self.MAX_EVENTS_IN_MEMORY:
-            self.events = self.events[-self.MAX_EVENTS_IN_MEMORY//2:]
-        
-        self.events.append(event)
-        return self._event_counter
+        Returns:
+            The event ID assigned to this event.
+        """
+        with self._lock:
+            self._event_counter += 1
+            event["event_id"] = self._event_counter
+            
+            # Keep only recent events in memory
+            if len(self.events) >= self.MAX_EVENTS_IN_MEMORY:
+                self.events = self.events[-self.MAX_EVENTS_IN_MEMORY//2:]
+            
+            self.events.append(event)
+            return self._event_counter
     
     def add_message(self, role: str, content: str):
-        # Keep only recent messages
-        if len(self.messages) >= self.MAX_MESSAGES:
-            self.messages = self.messages[-self.MAX_MESSAGES//2:]
-        self.messages.append({"role": role, "content": content})
+        """Add a message to the session (thread-safe)."""
+        with self._lock:
+            # Keep only recent messages
+            if len(self.messages) >= self.MAX_MESSAGES:
+                self.messages = self.messages[-self.MAX_MESSAGES//2:]
+            self.messages.append({"role": role, "content": content})
 
     def get_events_by_ids(self, event_ids: List[int]) -> List[Dict[str, Any]]:
-        return [e for e in self.events if e.get("event_id") in event_ids]
+        """Get events by their IDs (thread-safe)."""
+        with self._lock:
+            return [e for e in self.events if e.get("event_id") in event_ids]
 
     def get_latest_events(self, count: int = 3) -> List[Dict[str, Any]]:
-        return self.events[-count:] if self.events else []
+        """Get the latest N events (thread-safe)."""
+        with self._lock:
+            return self.events[-count:] if self.events else []
 
     def add_tokens(self, tokens: int, cost: float = 0.0):
-        self.total_tokens += tokens
-        self.total_cost += cost
+        """Add token usage to the session (thread-safe)."""
+        with self._lock:
+            self.total_tokens += tokens
+            self.total_cost += cost
 
     def get_context(self) -> Dict[str, Any]:
-        """Get context for continuing conversation."""
-        return {
-            "session_id": self.id,
-            "history": self.messages[-10:] if self.messages else [],
-            "artifacts": self.artifacts
-        }
+        """Get context for continuing conversation (thread-safe)."""
+        with self._lock:
+            return {
+                "session_id": self.id,
+                "history": self.messages[-10:] if self.messages else [],
+                "artifacts": self.artifacts.copy()
+            }
     
     def set_artifact(self, key: str, value: Any):
-        """Set a shared artifact that can be accessed by other agents."""
-        self.artifacts[key] = value
+        """Set a shared artifact (thread-safe)."""
+        with self._lock:
+            self.artifacts[key] = value
         logger.debug(f"Session {self.id}: Set artifact '{key}'")
     
     def get_artifact(self, key: str, default: Any = None) -> Any:
-        """Get a shared artifact."""
-        return self.artifacts.get(key, default)
+        """Get a shared artifact (thread-safe)."""
+        with self._lock:
+            return self.artifacts.get(key, default)
     
     def has_artifact(self, key: str) -> bool:
-        """Check if an artifact exists."""
-        return key in self.artifacts
+        """Check if an artifact exists (thread-safe)."""
+        with self._lock:
+            return key in self.artifacts
     
     def update_artifact(self, key: str, value: Any):
-        """Update an existing artifact."""
-        if key in self.artifacts:
-            self.artifacts[key] = value
-            logger.debug(f"Session {self.id}: Updated artifact '{key}'")
-        else:
-            self.set_artifact(key, value)
+        """Update an existing artifact (thread-safe)."""
+        with self._lock:
+            if key in self.artifacts:
+                self.artifacts[key] = value
+                logger.debug(f"Session {self.id}: Updated artifact '{key}'")
+            else:
+                self.artifacts[key] = value
+                logger.debug(f"Session {self.id}: Set artifact '{key}'")
     
     def delete_artifact(self, key: str):
-        """Delete an artifact."""
-        if key in self.artifacts:
-            del self.artifacts[key]
-            logger.debug(f"Session {self.id}: Deleted artifact '{key}'")
+        """Delete an artifact (thread-safe)."""
+        with self._lock:
+            if key in self.artifacts:
+                del self.artifacts[key]
+                logger.debug(f"Session {self.id}: Deleted artifact '{key}'")
     
     def get_all_artifacts(self) -> Dict[str, Any]:
-        """Get all artifacts."""
-        return self.artifacts.copy()
+        """Get all artifacts (thread-safe)."""
+        with self._lock:
+            return self.artifacts.copy()
     
     def clear_artifacts(self):
-        """Clear all artifacts."""
-        self.artifacts.clear()
+        """Clear all artifacts (thread-safe)."""
+        with self._lock:
+            self.artifacts.clear()
         logger.debug(f"Session {self.id}: Cleared all artifacts")
 
     def to_dict(self) -> Dict:
-        return {
-            "id": self.id,
-            "query": self.query,
-            "created_at": self.created_at,
-            "start_time": self.created_at,
-            "task": self.query,
-            "events": self.events,
-            "messages": self.messages,
-            "steps": [
-                {"id": s.id, "agent": s.agent, "action": s.action,
-                 "input": s.input, "output": s.output, "success": s.success}
-                for s in self.steps
-            ],
-            "artifacts": self.artifacts,
-            "status": self.status,
-            "total_tokens": self.total_tokens,
-            "total_cost": self.total_cost
-        }
+        """Convert session to dictionary (thread-safe)."""
+        with self._lock:
+            return {
+                "id": self.id,
+                "query": self.query,
+                "created_at": self.created_at,
+                "start_time": self.created_at,
+                "task": self.query,
+                "events": list(self.events),
+                "messages": list(self.messages),
+                "steps": [
+                    {"id": s.id, "agent": s.agent, "action": s.action,
+                     "input": s.input, "output": s.output, "success": s.success}
+                    for s in self.steps
+                ],
+                "artifacts": dict(self.artifacts),
+                "status": self.status,
+                "total_tokens": self.total_tokens,
+                "total_cost": self.total_cost
+            }
 
 
 class StateManager:

@@ -83,6 +83,7 @@ class AgentResult:
 class BaseAgent(ABC):
     MAX_CONTEXT_EVENTS = AgentConstants.MAX_CONTEXT_EVENTS
     MAX_CONSECUTIVE_PLANS = AgentConstants.MAX_CONSECUTIVE_PLANS
+    MAX_CONTEXT_MESSAGES = AgentConstants.MAX_CONTEXT_MESSAGES
     AGENT_TOOLS = AgentConstants.AGENT_TOOLS
 
     @staticmethod
@@ -125,8 +126,17 @@ class BaseAgent(ABC):
             )
 
     def add_message(self, role: str, content: str) -> None:
-        """Add a message to the conversation history."""
+        """Add a message to the conversation history with memory limit."""
         self.messages.append({"role": role, "content": content})
+        # Prevent unbounded memory growth - keep only recent messages
+        if len(self.messages) > self.MAX_CONTEXT_MESSAGES:
+            # Keep system messages and recent messages
+            system_messages = [m for m in self.messages if m.get("role") == "system"]
+            other_messages = [m for m in self.messages if m.get("role") != "system"]
+            # Keep most recent non-system messages
+            kept_other = other_messages[-(self.MAX_CONTEXT_MESSAGES - len(system_messages)):]
+            self.messages = system_messages + kept_other
+            logger.debug(f"Trimmed message history to {len(self.messages)} messages")
 
     def _extract_artifacts(self, output: str) -> str:
         """Extract inline artifact directives from final output.
@@ -248,9 +258,10 @@ class BaseAgent(ABC):
                     duration=time.time() - start,
                 )
 
-            # Retry logic for LLM calls
-            max_retries = 3
-            retry_delay = 1.0
+            # Retry logic for LLM calls using centralized constants
+            max_retries = AgentConstants.LLM_MAX_RETRIES
+            retry_delay = AgentConstants.LLM_RETRY_DELAY
+            llm_timeout = AgentConstants.LLM_CALL_TIMEOUT
             resp = None
 
             for attempt in range(max_retries):
@@ -263,7 +274,7 @@ class BaseAgent(ABC):
                             temperature=self.config.temperature,
                             max_tokens=max_output_tokens,
                         ),
-                        timeout=60,  # 60 second timeout per LLM call
+                        timeout=llm_timeout,
                     )
                     input_tokens = sum(len(m.get("content", "")) // 4 for m in full)
                     output_tokens = len(resp) // 4
@@ -723,8 +734,56 @@ class BaseAgent(ABC):
             for block in code_blocks:
                 try:
                     json_objects.append(json.loads(block))
-                except:
-                    pass
+                except json.JSONDecodeError:
+                    # Try to repair the block
+                    try:
+                        repaired = repair_json(block)
+                        json_objects.append(json.loads(repaired))
+                    except json.JSONDecodeError:
+                        pass
+
+        # Final fallback: regex extraction for severely malformed JSON
+        # This handles cases where JSON structure is completely broken
+        if not json_objects:
+            action_match = re.search(
+                r'"action"\s*[:=]\s*["\']?(\w+)["\']?', response, re.IGNORECASE
+            )
+            if action_match:
+                action_type = action_match.group(1).lower()
+                # Map common variations to standard actions
+                action_map = {
+                    "tool": AgentAction.TOOL.value,
+                    "delegate": AgentAction.DELEGATE.value,
+                    "done": AgentAction.DONE.value,
+                    "error": AgentAction.ERROR.value,
+                    "options": AgentAction.OPTIONS.value,
+                    "plan": AgentAction.PLAN.value,
+                    "update_plan": AgentAction.UPDATE_PLAN.value,
+                }
+                normalized_action = action_map.get(action_type)
+                if normalized_action:
+                    extracted = {"action": normalized_action}
+                    # Try to extract other common fields
+                    # Use a regex that handles escaped quotes and backslashes
+                    for field in ["tool", "query", "task", "result", "error", "agent"]:
+                        # Match quoted strings with proper escape handling
+                        field_match = re.search(
+                            rf'"{field}"\s*[:=]\s*"((?:[^"\\]|\\.)*)"',
+                            response,
+                            re.DOTALL,
+                        )
+                        if field_match:
+                            # Unescape the captured value
+                            value = field_match.group(1)
+                            try:
+                                # Use json to properly unescape the string
+                                extracted[field] = json.loads(f'"{value}"')
+                            except json.JSONDecodeError:
+                                extracted[field] = value
+                    logger.warning(
+                        f"Used regex fallback to extract action: {normalized_action}"
+                    )
+                    return extracted
 
         # Take ONLY THE FIRST valid action - execute one at a time!
         # Multiple actions in one response is NOT allowed - this causes loops

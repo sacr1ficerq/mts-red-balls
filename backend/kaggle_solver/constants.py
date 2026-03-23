@@ -60,6 +60,17 @@ class AgentConstants:
     # Maximum iterations for agent execution
     MAX_ITERATIONS = 10
     
+    # Maximum messages in conversation history
+    # Prevents unbounded memory growth during long agent runs
+    MAX_CONTEXT_MESSAGES = 50
+    
+    # LLM call retry configuration
+    LLM_MAX_RETRIES = 3
+    LLM_RETRY_DELAY = 1.0
+    
+    # LLM call timeout in seconds
+    LLM_CALL_TIMEOUT = 60
+    
     # Agent to tools mapping for sub-agent creation
     AGENT_TOOLS = {
         AgentType.SEARCH.value: ["search"],
@@ -138,9 +149,25 @@ class SandboxConstants:
     
     # Blocked shell patterns
     BLOCKED_PATTERNS = [
-        "&&", "||", ";", "|", "&", ">", ">>", "<", "`", "$(", "$(",
+        # Shell operators
+        "&&", "||", ";", "|", "&", ">", ">>", "<",
+        # Command substitution
+        "`", "$(",
+        # Network tools
         "wget", "curl", "nc", "netcat", "telnet", "ssh", "ftp",
+        # Privilege escalation
         "chmod", "chown", "su", "sudo", "eval", "exec",
+    ]
+    
+    # Blocked escape sequences in commands
+    BLOCKED_ESCAPE_SEQUENCES = [
+        "\n", "\r", "\t", "\x00",
+        "\\x", "\\u", "\\U",
+    ]
+    
+    # Blocked device paths
+    BLOCKED_PATH_PREFIXES = [
+        "/dev/", "/proc/", "/sys/", "/run/", "/tmp/",
     ]
     
     # Maximum file size for reading (in bytes)
@@ -192,6 +219,7 @@ class LLMConstants:
     MAX_RETRIES = 3
     RETRY_DELAY = 1.0  # seconds
     RETRY_BACKOFF = 2.0  # exponential backoff multiplier
+    MAX_RATE_LIMIT_DELAY = 60.0  # maximum delay for rate limit backoff (seconds)
     
     # Temperature settings
     DEFAULT_TEMPERATURE = 0.7

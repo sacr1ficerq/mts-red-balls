@@ -1,6 +1,7 @@
 import yaml
 import logging
 from pathlib import Path
+from typing import Optional
 from kaggle_solver import get_project_root
 from kaggle_solver.constants import AgentType, AgentConstants
 
@@ -39,7 +40,7 @@ def load_tool_definitions(tools: list) -> dict:
     return definitions
 
 
-def load_prompt(filename: str, default: str, tools: list | None = None) -> str:
+def load_prompt(filename: str, default: str, tools: Optional[list] = None) -> str:
     try:
         path = PROMPTS_DIR / filename
         if path.exists():

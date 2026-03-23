@@ -612,7 +612,8 @@ class TestAgentEdgeCases:
     
     def test_special_characters_in_response(self, agent, mock_llm):
         """Agent should handle special chars in LLM response."""
-        mock_llm.chat = AsyncMock(return_value='{"action": "done", "result": "Test with \"quotes\" and \\ backslash"}')
+        # Use raw string with proper JSON escaping: \" for quotes, \\ for backslash
+        mock_llm.chat = AsyncMock(return_value=r'{"action": "done", "result": "Test with \"quotes\" and \\ backslash"}')
         
         result = asyncio.run(agent.run("test"))
         

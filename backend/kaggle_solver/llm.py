@@ -88,6 +88,7 @@ class LLM:
         self.max_retries = LLMConstants.MAX_RETRIES
         self.retry_base_delay = LLMConstants.RETRY_DELAY
         self.retry_backoff = LLMConstants.RETRY_BACKOFF
+        self.max_rate_limit_delay = LLMConstants.MAX_RATE_LIMIT_DELAY
         self.mock_mode = self.client is None
 
         # Initialize rate limiter
@@ -240,8 +241,8 @@ class LLM:
                 return content
             except RateLimitError:
                 # For rate limit errors, use exponential backoff with longer delays
-                # Start with 10 seconds and increase exponentially
-                delay = 10 * (2**attempt)
+                # Start with 10 seconds and increase exponentially, capped at max
+                delay = min(10 * (2**attempt), self.max_rate_limit_delay)
                 logger.warning(f"Rate limit hit, retrying in {delay}s...")
                 await asyncio.sleep(delay)
                 continue
