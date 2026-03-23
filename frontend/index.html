@@ -37,12 +37,6 @@
                 <span class="font-bold text-gray-800 text-sm">МТС Агент</span>
             </div>
             <div class="flex items-center gap-1">
-                <button @click="createNewSession()" class="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-gray-100" title="Новая сессия">
-                    <i class="fas fa-plus text-xs"></i>
-                </button>
-                <button @click="clearHistory()" x-show="sortedHistoricalSessions.length > 0" class="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-gray-100" title="Очистить историю">
-                    <i class="fas fa-trash-alt text-xs"></i>
-                </button>
                 <button @click="sidebarOpen = false" class="text-gray-400 hover:text-gray-600 p-1.5 rounded hover:bg-gray-100">
                     <i class="fas fa-times text-xs"></i>
                 </button>
@@ -71,7 +65,12 @@
             <!-- History -->
             <div x-show="sidebarOpen" class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 px-2 mt-4 flex items-center justify-between">
                 <span>История</span>
-                <span x-show="sortedHistoricalSessions.length > 0" class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full" x-text="sortedHistoricalSessions.length"></span>
+                <div class="flex items-center gap-2">
+                    <span x-show="sortedHistoricalSessions.length > 0" class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full" x-text="sortedHistoricalSessions.length"></span>
+                    <button @click.stop="clearHistory()" x-show="sortedHistoricalSessions.length > 0" class="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-gray-100" title="Очистить историю">
+                        <i class="fas fa-trash-alt text-xs"></i>
+                    </button>
+                </div>
             </div>
             <template x-for="session in sortedHistoricalSessions" :key="session.id">
                 <div @click="selectSession(session.id)"
