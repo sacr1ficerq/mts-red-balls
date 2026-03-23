@@ -75,13 +75,13 @@ class Orchestrator:
                 agent_tools = kwargs.get("tools", ["tool"])
                 return self.create_agent(agent_name, agent_role, agent_tools, event_callback, agent_factory_fn, sandbox, session)
             agent_factory = agent_factory_fn
-        
+
         current_sandbox = sandbox or self.sandbox
-        
+
         max_iterations = 10
         if name in self.config.agents:
             max_iterations = self.config.agents[name].max_iterations
-        
+
         if name in AgentRegistry.list_agents():
             agent_config = AgentConfig(
                 name=name,
@@ -107,12 +107,12 @@ class Orchestrator:
             max_iterations=max_iterations,
             temperature=self.config.llm.temperature
         )
-        
+
         return DynamicAgent(agent_config, self.llm, current_sandbox, self.tool_registry, event_callback, agent_factory, session)
 
     def _create_session_callback(self, session: Session) -> Callable:
         session_log_file = LOG_DIR / f"session_{session.id}.log"
-        
+
         def log_event(event: Dict[str, Any]):
             # Log to file
             try:
@@ -120,12 +120,12 @@ class Orchestrator:
                     f.write(json.dumps(event, ensure_ascii=False) + "\n")
             except Exception as e:
                 logger.warning(f"Failed to write event to log file: {e}")
-            
+
             # Log to stdout for docker logs
             event_type = event.get("type", "unknown")
             agent_name = event.get("agent", "System")
             data = event.get("data", {})
-            
+
             if event_type == "thought":
                 logger.info(f"[{agent_name}] THOUGHT: {str(data.get('content', ''))[:200]}...")
             elif event_type == "tool":
@@ -140,13 +140,13 @@ class Orchestrator:
                 logger.info(f"[{agent_name}] RESULT: {str(data.get('content', ''))[:200]}...")
             else:
                 logger.info(f"[{agent_name}] {event_type.upper()}: {str(data)[:100]}")
-            
+
             # Emit to SSE
             try:
                 self._emit_event(session.id, event)
             except Exception as e:
                 logger.warning(f"Failed to emit event to SSE: {e}")
-            
+
             session.add_event(event)
             session.add_step(
                 agent=event.get("agent", "System"),
@@ -154,7 +154,7 @@ class Orchestrator:
                 input=str(event.get("data", {}).get("input", "")),
                 output=str(event.get("data", {}))
             )
-        
+
         return log_event
 
     def _setup_session_environment(self, session: Session, role: str) -> BaseAgent:
@@ -185,15 +185,15 @@ class Orchestrator:
         logger.info(f"  Query: {query[:100]}...")
         logger.info(f"  Session ID: {session_id or 'new'}")
         logger.info("=" * 60)
-        
+
         session = self.state.create_session(query, session_id)
         logger.info(f"Session created: {session.id}")
-        
+
         coordinator = self._setup_session_environment(session, role="Plan and delegate tasks")
         logger.info(f"Coordinator agent created, starting execution...")
 
         start_time = time.time()
-        
+
         try:
             logger.info("-" * 40)
             logger.info("Calling coordinator.run()...")
@@ -204,7 +204,7 @@ class Orchestrator:
             logger.info(f"  Duration: {result.duration:.2f}s")
             logger.info(f"  Steps: {result.steps}")
             logger.info(f"  Output preview: {result.output[:200] if result.output else 'None'}...")
-            
+
             session.status = "completed" if result.success else "error"
             session.artifacts["result"] = result.output
             session.artifacts["duration"] = result.duration
@@ -215,14 +215,14 @@ class Orchestrator:
             logger.error("=" * 60)
             session.status = "error"
             session.artifacts["error"] = str(e)
-        
+
         session.artifacts["total_time"] = time.time() - start_time
         logger.info(f"Session {session.id} finished with status: {session.status}")
         logger.info(f"Total time: {session.artifacts['total_time']:.2f}s")
-        
+
         self.state.sessions[session.id] = session
         self.state.save()
-        
+
         return session
 
     def get_session(self, session_id: str) -> Optional[Session]:

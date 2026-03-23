@@ -125,7 +125,7 @@ def should_use_powerful_model(query: str) -> bool:
     config = ConfigHolder().get_config()
     complex_tasks = config.complex_tasks
     simple_tasks = config.simple_tasks
-    
+
     query_lower = query.lower()
     for simple in simple_tasks:
         if simple in query_lower:

@@ -1,5 +1,5 @@
 llm:
-  model: "openai/gpt-oss-20b:free"
+  model: "openai/gpt-4o-mini"
   temperature: 0.7
   max_tokens: 4096
   max_retries: 5
@@ -65,7 +65,7 @@ agents:
     max_iterations: 3
 
 search:
-  model: "z-ai/glm-4.5-air:free"
+  model: "z-ai/glm-4.5-air"
   max_results: 8
   relevance_filter: true
 
