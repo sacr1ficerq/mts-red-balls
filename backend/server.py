@@ -20,7 +20,20 @@ from kaggle_solver.core.config import ConfigHolder, Config
 from kaggle_solver.core.orchestrator import Orchestrator
 import kaggle_solver.tools  # noqa: F401 - triggers tool registration
 
-BASE_DIR = Path(__file__).parent.parent.resolve()
+
+def _resolve_base_dir() -> Path:
+    server_dir = Path(__file__).resolve().parent
+    candidates = [
+        server_dir.parent,
+        server_dir,
+    ]
+    for candidate in candidates:
+        if (candidate / "frontend").exists():
+            return candidate
+    return candidates[-1]
+
+
+BASE_DIR = _resolve_base_dir()
 FRONTEND_DIR = BASE_DIR / "frontend"
 CONFIG_PATH = Path(__file__).parent / "config.yaml"
 

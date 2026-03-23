@@ -12,6 +12,8 @@ services:
                 - no_proxy=${no_proxy:-}
         ports:
             - "8000:8000"
+        volumes:
+            - ./frontend:/app/frontend:ro
         env_file:
             - .env
         environment:

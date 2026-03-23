@@ -1,7 +1,23 @@
 from pathlib import Path
-import os
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+def _detect_project_root() -> Path:
+    pkg_dir = Path(__file__).resolve().parent
+    candidates = [
+        pkg_dir.parent.parent,
+        pkg_dir.parent,
+    ]
+
+    for candidate in candidates:
+        if (candidate / "backend" / "kaggle_solver").exists():
+            return candidate
+        if (candidate / "kaggle_solver").exists():
+            return candidate
+
+    return pkg_dir.parent
+
+
+PROJECT_ROOT = _detect_project_root()
 ENV_FILE = PROJECT_ROOT / ".env"
 
 
@@ -10,6 +26,7 @@ def init_env():
     if ENV_FILE.exists():
         try:
             from dotenv import load_dotenv
+
             load_dotenv(ENV_FILE)
         except ImportError:
             pass

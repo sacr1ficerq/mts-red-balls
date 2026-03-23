@@ -6,7 +6,20 @@ from kaggle_solver.constants import AgentType, AgentConstants
 
 logger = logging.getLogger(__name__)
 
-PROMPTS_DIR = get_project_root() / "backend" / "kaggle_solver" / "prompts"
+
+def _resolve_prompts_dir() -> Path:
+    root = get_project_root()
+    candidates = [
+        root / "backend" / "kaggle_solver" / "prompts",
+        root / "kaggle_solver" / "prompts",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+PROMPTS_DIR = _resolve_prompts_dir()
 TOOLS_DIR = PROMPTS_DIR / "tools"
 
 
@@ -26,7 +39,7 @@ def load_tool_definitions(tools: list) -> dict:
     return definitions
 
 
-def load_prompt(filename: str, default: str, tools: list = None) -> str:
+def load_prompt(filename: str, default: str, tools: list | None = None) -> str:
     try:
         path = PROMPTS_DIR / filename
         if path.exists():
@@ -47,7 +60,9 @@ def load_prompt(filename: str, default: str, tools: list = None) -> str:
 class CoordinatorAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("coordinator.yaml", "", tools=["plan", "update_plan", "delegate", "result"])
+        return load_prompt(
+            "coordinator.yaml", "", tools=["plan", "update_plan", "delegate", "result"]
+        )
 
 
 class CodeAgentPrompts:
@@ -71,25 +86,33 @@ class CriticAgentPrompts:
 class HypothesisGeneratorPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("hypothesis.yaml", "", tools=["console", "files", "search", "result"])
+        return load_prompt(
+            "hypothesis.yaml", "", tools=["console", "files", "search", "result"]
+        )
 
 
 class DataPreprocessorPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("data_preprocessor.yaml", "", tools=["console", "files", "result"])
+        return load_prompt(
+            "data_preprocessor.yaml", "", tools=["console", "files", "result"]
+        )
 
 
 class FeatureEngineerPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("feature_engineer.yaml", "", tools=["console", "files", "result"])
+        return load_prompt(
+            "feature_engineer.yaml", "", tools=["console", "files", "result"]
+        )
 
 
 class ModelTrainerPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("model_trainer.yaml", "", tools=["console", "files", "result"])
+        return load_prompt(
+            "model_trainer.yaml", "", tools=["console", "files", "result"]
+        )
 
 
 class DataParserPrompts:
@@ -101,7 +124,9 @@ class DataParserPrompts:
 class KaggleSubmitterPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("kaggle_submitter.yaml", "", tools=["console", "files", "result"])
+        return load_prompt(
+            "kaggle_submitter.yaml", "", tools=["console", "files", "result"]
+        )
 
 
 def get_agent_prompts(agent_name: str) -> str:
@@ -122,6 +147,7 @@ def get_agent_prompts(agent_name: str) -> str:
 
 def should_use_powerful_model(query: str) -> bool:
     from kaggle_solver.core.config import ConfigHolder
+
     config = ConfigHolder().get_config()
     complex_tasks = config.complex_tasks
     simple_tasks = config.simple_tasks
