@@ -8,6 +8,11 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 BACKEND_DIR = PROJECT_ROOT / "backend"
+IGNORED_BACKEND_PARTS = {"__pycache__", "venv", ".venv", "site-packages"}
+
+
+def _is_project_source(path: Path) -> bool:
+    return not any(part in IGNORED_BACKEND_PARTS for part in path.parts)
 
 
 class TestJavaScriptSyntax:
@@ -34,30 +39,29 @@ class TestJavaScriptSyntax:
             depth = 0
             in_string = False
             string_char = None
-            for i, line in enumerate(content.split('\n'), 1):
+            for i, line in enumerate(content.split("\n"), 1):
                 for char in line:
-                    if char in ('"', "'", '`') and not in_string:
+                    if char in ('"', "'", "`") and not in_string:
                         in_string = True
                         string_char = char
                     elif char == string_char and in_string:
                         in_string = False
                         string_char = None
                     elif not in_string:
-                        if char == '{':
+                        if char == "{":
                             depth += 1
-                        elif char == '}':
+                        elif char == "}":
                             depth -= 1
                             if depth < 0:
                                 pytest.fail(
                                     f"{js_file.name}:{i} - Extra closing brace at depth {depth}"
                                 )
-            assert depth == 0, (
-                f"{js_file.name}: Unclosed braces at end - depth {depth}"
-            )
+            assert depth == 0, f"{js_file.name}: Unclosed braces at end - depth {depth}"
 
     def test_javascript_parse_with_node(self):
         """Parse JavaScript using Node.js for syntax validation"""
         import shutil
+
         if not shutil.which("node"):
             pytest.skip("Node.js not installed")
 
@@ -66,10 +70,14 @@ class TestJavaScriptSyntax:
                 continue
             content = js_file.read_text()
             import re
-            js_match = re.search(r'<script>(.*?)</script>', content, re.DOTALL)
+
+            js_match = re.search(r"<script>(.*?)</script>", content, re.DOTALL)
             if js_match:
                 import tempfile
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as tmp:
+
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".js", delete=False
+                ) as tmp:
                     tmp.write(js_match.group(1))
                     tmp_path = tmp.name
                 try:
@@ -77,7 +85,7 @@ class TestJavaScriptSyntax:
                         ["node", "--check", tmp_path],
                         capture_output=True,
                         text=True,
-                        timeout=10
+                        timeout=10,
                     )
                     if result.returncode != 0:
                         pytest.fail(
@@ -85,6 +93,7 @@ class TestJavaScriptSyntax:
                         )
                 finally:
                     import os
+
                     os.unlink(tmp_path)
 
     def test_javascript_parentheses_balanced(self):
@@ -93,8 +102,8 @@ class TestJavaScriptSyntax:
             if not js_file.exists():
                 continue
             content = js_file.read_text()
-            open_parens = content.count('(')
-            close_parens = content.count(')')
+            open_parens = content.count("(")
+            close_parens = content.count(")")
             assert open_parens == close_parens, (
                 f"{js_file.name}: Unbalanced parentheses - "
                 f"( = {open_parens}, ) = {close_parens}"
@@ -112,7 +121,7 @@ class TestPythonSyntax:
     def test_python_files_syntax(self):
         """Python files should have valid syntax"""
         for py_file in Path(BACKEND_DIR).rglob("*.py"):
-            if "__pycache__" in str(py_file):
+            if not _is_project_source(py_file):
                 continue
             try:
                 content = py_file.read_text()
@@ -181,8 +190,8 @@ class TestHTMLStructure:
         index_path = FRONTEND_DIR / "index.html"
         content = index_path.read_text()
 
-        app_js_pos = content.find('src/app.js')
-        alpine_pos = content.find('alpinejs')
+        app_js_pos = content.find("src/app.js")
+        alpine_pos = content.find("alpinejs")
 
         assert app_js_pos > 0, "app.js script tag not found"
         assert alpine_pos > app_js_pos, (
@@ -218,9 +227,7 @@ class TestCodeQuality:
         for i, line in enumerate(lines, 1):
             for pattern in debug_patterns:
                 if re.search(pattern, line, re.IGNORECASE):
-                    pytest.fail(
-                        f"{app_js.name}:{i} - Debug code found: {line.strip()}"
-                    )
+                    pytest.fail(f"{app_js.name}:{i} - Debug code found: {line.strip()}")
 
     def test_no_hardcoded_secrets(self):
         """No hardcoded secrets in source files"""
@@ -231,7 +238,7 @@ class TestCodeQuality:
         ]
 
         for py_file in Path(BACKEND_DIR).rglob("*.py"):
-            if "__pycache__" in str(py_file) or "test_" in py_file.name:
+            if not _is_project_source(py_file) or "test_" in py_file.name:
                 continue
 
             content = py_file.read_text()
@@ -286,6 +293,4 @@ class TestCSSFiles:
             content = css_file.read_text()
             open_braces = content.count("{")
             close_braces = content.count("}")
-            assert open_braces == close_braces, (
-                f"{css_file.name}: Unbalanced braces"
-            )
+            assert open_braces == close_braces, f"{css_file.name}: Unbalanced braces"
