@@ -120,9 +120,6 @@
             </div>
             <div x-show="fileTreeOpen" class="overflow-y-auto px-2 pb-2 text-xs custom-scrollbar"
                  :style="'height: calc(100% - 36px); max-height: 200px;'">
-                <div x-data="{ test: 'Alpine.js работает!' }" class="text-xs px-2 py-1 text-green-600">
-                    Тест: <span x-text="test"></span>
-                </div>
                 <template x-if="fileTree && fileTree.length > 0">
                     <div class="space-y-0.5">
                         <template x-for="item in fileTree" :key="item.path">
@@ -561,41 +558,6 @@
                     <p class="text-xs text-gray-500">Получите ключ на <a href="https://openrouter.ai/keys" target="_blank" class="text-blue-500 hover:underline">openrouter.ai/keys</a></p>
                 </div>
 
-                <!-- Agent Models Section -->
-                <div class="space-y-3">
-                    <h4 class="text-sm font-medium text-gray-700">Модели для агентов</h4>
-                    <p class="text-xs text-gray-500">Выберите модель для каждого агента. По умолчанию: <code class="bg-gray-100 px-1 rounded">openai/gpt-4o-mini</code></p>
-                    
-                    <div class="space-y-2">
-                        <template x-for="agentName in getAllAgentNames()" :key="agentName">
-                            <div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
-                                <span class="text-sm text-gray-700 capitalize" x-text="agentName.replace(/_/g, ' ')"></span>
-                                <select
-                                    :value="settings.agent_models[agentName]?.model || settings.default_model"
-                                    @change="updateAgentModel(agentName, $event.target.value)"
-                                    class="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 bg-white">
-                                    <optgroup label="Бесплатные модели">
-                                        <template x-for="model in availableModels.free_models" :key="model.id">
-                                            <option :value="model.id" x-text="model.name || model.id"></option>
-                                        </template>
-                                    </optgroup>
-                                    <optgroup label="Платные модели">
-                                        <template x-for="model in availableModels.all_models?.slice(0, 20)" :key="model.id">
-                                            <option :value="model.id" x-text="model.name || model.id"></option>
-                                        </template>
-                                    </optgroup>
-                                </select>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal Footer -->
-            <div class="px-4 py-3 border-t border-gray-100 flex justify-end gap-2 bg-gray-50">
-                <button @click="closeSettings()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors">
-                    Закрыть
-                </button>
             </div>
         </div>
     </div>
