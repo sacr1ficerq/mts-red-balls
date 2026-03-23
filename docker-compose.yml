@@ -3,11 +3,26 @@ services:
         build:
             context: ./backend
             dockerfile: Dockerfile
+            args:
+                - HTTP_PROXY=${HTTP_PROXY:-}
+                - HTTPS_PROXY=${HTTPS_PROXY:-}
+                - NO_PROXY=${NO_PROXY:-}
+                - http_proxy=${http_proxy:-}
+                - https_proxy=${https_proxy:-}
+                - no_proxy=${no_proxy:-}
         ports:
             - "8000:8000"
         env_file:
             - .env
-        command: uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+        environment:
+            - LOG_LEVEL=${LOG_LEVEL:-info}
+            - HTTP_PROXY=${HTTP_PROXY:-}
+            - HTTPS_PROXY=${HTTPS_PROXY:-}
+            - NO_PROXY=${NO_PROXY:-}
+            - http_proxy=${http_proxy:-}
+            - https_proxy=${https_proxy:-}
+            - no_proxy=${no_proxy:-}
+        command: uvicorn server:app --host 0.0.0.0 --port 8000 --reload --log-level ${LOG_LEVEL:-info}
         # Configure logging to stdout
         logging:
             driver: "json-file"
@@ -22,6 +37,13 @@ services:
         build:
             context: ./frontend
             dockerfile: Dockerfile
+            args:
+                - HTTP_PROXY=${HTTP_PROXY:-}
+                - HTTPS_PROXY=${HTTPS_PROXY:-}
+                - NO_PROXY=${NO_PROXY:-}
+                - http_proxy=${http_proxy:-}
+                - https_proxy=${https_proxy:-}
+                - no_proxy=${no_proxy:-}
         ports:
             - "5173:5173"
         volumes:
@@ -29,6 +51,12 @@ services:
             - /app/node_modules
         environment:
             - DOCKER_ENV=true
+            - HTTP_PROXY=${HTTP_PROXY:-}
+            - HTTPS_PROXY=${HTTPS_PROXY:-}
+            - NO_PROXY=${NO_PROXY:-}
+            - http_proxy=${http_proxy:-}
+            - https_proxy=${https_proxy:-}
+            - no_proxy=${no_proxy:-}
         command: bun run dev --host
         # Configure logging to stdout
         logging:
