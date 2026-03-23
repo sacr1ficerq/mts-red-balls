@@ -12,6 +12,18 @@ function shouldAutoExpand(type) {
     return AUTO_EXPANDED_TYPES.has(type);
 }
 
+function buildErrorEvent(message, agent = 'Coordinator', code = 'error') {
+    return {
+        type: 'error',
+        agent,
+        timestamp: new Date().toISOString(),
+        data: {
+            code,
+            content: message
+        }
+    };
+}
+
 function cloneSteps(steps = []) {
     return steps.map((step) => ({ ...step }));
 }
@@ -334,6 +346,17 @@ window.dashboard = function() {
             });
         },
 
+        buildFailedSession(task, sessionId, message, code = 'error') {
+            return this.normalizeSession({
+                id: sessionId,
+                query: task,
+                task,
+                status: 'error',
+                events: [buildErrorEvent(message, 'Coordinator', code)],
+                created_at: new Date().toISOString()
+            });
+        },
+
         async startTask() {
             const task = this.newTaskInput.trim();
             if (!task) {
@@ -379,13 +402,19 @@ window.dashboard = function() {
                 }
             } catch (error) {
                 console.error('Error starting task:', error);
+                const isRateLimit = error?.status === 429;
+                const message = isRateLimit
+                    ? (error.message || 'Rate limit exceeded. Please try again later.')
+                    : (error?.message || 'Failed to start task. Please try again.');
 
-                if (this.activeSessions[tempId]) {
-                    this.activeSessions[tempId] = {
-                        ...this.activeSessions[tempId],
-                        status: 'error'
-                    };
-                }
+                this.activeSessions[tempId] = this.buildFailedSession(
+                    task,
+                    tempId,
+                    message,
+                    isRateLimit ? 'rate_limit' : 'error'
+                );
+                this.syncMetrics(this.activeSessions[tempId]);
+                this.syncCurrentPlan();
             }
         },
 
@@ -560,6 +589,10 @@ window.dashboard = function() {
 
         getDelegateStyle() {
             return Styles.getDelegateStyle();
+        },
+
+        getErrorStyle() {
+            return Styles.getErrorStyle();
         },
 
         escapeHtml(text) {

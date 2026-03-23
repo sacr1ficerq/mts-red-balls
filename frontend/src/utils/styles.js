@@ -35,5 +35,9 @@ window.Styles = {
 
     getDelegateStyle() {
         return { icon: 'fa-share-alt', bg: 'bg-purple-50', border: 'border-purple-200', headerBg: 'bg-purple-50', text: 'text-purple-700', iconColor: 'text-purple-600' };
+    },
+
+    getErrorStyle() {
+        return { icon: 'fa-triangle-exclamation', bg: 'bg-red-50', border: 'border-red-200', headerBg: 'bg-red-50', text: 'text-red-700', iconColor: 'text-red-600', bodyText: 'text-red-700' };
     }
 };

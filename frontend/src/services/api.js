@@ -8,8 +8,11 @@ async function request(url, options = {}) {
     if (!response.ok) {
         const message = typeof payload === 'string'
             ? payload
-            : payload?.error || payload?.message || `Request failed: ${response.status}`;
-        throw new Error(message);
+            : payload?.error || payload?.message || payload?.detail || `Request failed: ${response.status}`;
+        const error = new Error(message);
+        error.status = response.status;
+        error.payload = payload;
+        throw error;
     }
 
     return payload;
