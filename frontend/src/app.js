@@ -1,4 +1,4 @@
-const AUTO_EXPANDED_TYPES = new Set(['result', 'error', 'tool', 'delegate', 'system']);
+const AUTO_EXPANDED_TYPES = new Set(['thought', 'result', 'error', 'delegate', 'system']);
 
 function createMetrics() {
     return { total_tokens: 0, total_cost: 0 };
@@ -113,6 +113,8 @@ window.dashboard = function() {
         fileTree: [],
         fileTreeOpen: true,
         fileTreeOpenPaths: {},
+        sessionMetricsLoading: {},
+        sessionMetricsPending: {},
         expandedEvents: {},
         currentPlan: null,
         error: null,
@@ -210,6 +212,55 @@ window.dashboard = function() {
 
         syncCurrentPlan() {
             this.currentPlan = buildPlanFromEvents(this.currentSessionEvents);
+        },
+
+        async refreshSessionMetrics(sessionId) {
+            try {
+                const latest = await API.fetchSessionData(sessionId);
+                const activeSession = this.activeSessions[sessionId];
+
+                if (!activeSession) {
+                    return;
+                }
+
+                this.activeSessions = {
+                    ...this.activeSessions,
+                    [sessionId]: {
+                        ...activeSession,
+                        status: latest.status || activeSession.status,
+                        total_tokens: latest.total_tokens || 0,
+                        total_cost: latest.total_cost || 0
+                    }
+                };
+
+                if (this.currentSessionId === sessionId) {
+                    this.syncMetrics(this.activeSessions[sessionId]);
+                }
+            } catch (error) {
+                console.error('Error refreshing session metrics:', error);
+            }
+        },
+
+        scheduleMetricsRefresh(sessionId) {
+            if (!sessionId) {
+                return;
+            }
+
+            if (this.sessionMetricsLoading[sessionId]) {
+                this.sessionMetricsPending[sessionId] = true;
+                return;
+            }
+
+            this.sessionMetricsLoading[sessionId] = true;
+            this.refreshSessionMetrics(sessionId)
+                .finally(() => {
+                    this.sessionMetricsLoading[sessionId] = false;
+
+                    if (this.sessionMetricsPending[sessionId]) {
+                        this.sessionMetricsPending[sessionId] = false;
+                        this.scheduleMetricsRefresh(sessionId);
+                    }
+                });
         },
 
         closeEventSource() {
@@ -467,6 +518,7 @@ window.dashboard = function() {
             if (this.currentSessionId === sessionId) {
                 this.syncCurrentPlan();
                 this.$nextTick(() => this.scrollToBottom());
+                this.scheduleMetricsRefresh(sessionId);
                 
                 // Refresh file tree when file-related events occur
                 if (event.type === 'tool' && event.data?.tool_name === 'files') {
@@ -493,6 +545,7 @@ window.dashboard = function() {
                                 status: event.status || 'completed'
                             };
                         }
+                        this.scheduleMetricsRefresh(sessionId);
                         return;
                     }
 
