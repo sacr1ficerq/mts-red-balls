@@ -8,3 +8,5 @@ logs/
 backend/logs/
 backend/workspace/
 TODO.md
+.DS_Store
+backend/data/sessions.json

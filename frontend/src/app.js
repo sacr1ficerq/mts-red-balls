@@ -117,8 +117,26 @@ window.dashboard = function() {
         currentPlan: null,
         error: null,
 
+        // Settings state
+        settingsOpen: false,
+        settings: {
+            api_key_masked: '',
+            has_api_key: false,
+            agent_models: {},
+            default_model: 'openai/gpt-4o-mini'
+        },
+        availableModels: {
+            free_models: [],
+            all_models: []
+        },
+        newApiKey: '',
+        settingsSaving: false,
+        settingsError: null,
+        settingsSuccess: null,
+
         init() {
             this.fetchSessions();
+            this.loadSettings();
         },
 
         get currentSession() {
@@ -617,6 +635,101 @@ window.dashboard = function() {
 
         formatContent(content) {
             return Formatters.formatContent(content);
+        },
+
+        // Settings methods
+        async loadSettings() {
+            try {
+                const [settingsData, modelsData] = await Promise.all([
+                    window.API.getSettings(),
+                    window.API.getAvailableModels()
+                ]);
+                this.settings = settingsData;
+                this.availableModels = modelsData;
+            } catch (err) {
+                console.error('Failed to load settings:', err);
+            }
+        },
+
+        openSettings() {
+            this.settingsOpen = true;
+            this.newApiKey = '';
+            this.settingsError = null;
+            this.settingsSuccess = null;
+        },
+
+        closeSettings() {
+            this.settingsOpen = false;
+            this.newApiKey = '';
+            this.settingsError = null;
+            this.settingsSuccess = null;
+        },
+
+        async saveApiKey() {
+            if (!this.newApiKey.trim()) {
+                this.settingsError = 'API key cannot be empty';
+                return;
+            }
+
+            this.settingsSaving = true;
+            this.settingsError = null;
+
+            try {
+                const result = await window.API.updateSettings({ api_key: this.newApiKey });
+                this.settings = result;
+                this.newApiKey = '';
+                this.settingsSuccess = 'API key saved successfully';
+                setTimeout(() => { this.settingsSuccess = null; }, 3000);
+            } catch (err) {
+                this.settingsError = err.message || 'Failed to save API key';
+            } finally {
+                this.settingsSaving = false;
+            }
+        },
+
+        async updateAgentModel(agentName, model) {
+            this.settingsSaving = true;
+            this.settingsError = null;
+
+            try {
+                const result = await window.API.updateAgentSettings(agentName, { model });
+                if (result.success) {
+                    this.settings.agent_models[agentName] = {
+                        model: result.model,
+                        temperature: result.temperature,
+                        max_tokens: result.max_tokens
+                    };
+                    this.settingsSuccess = `Model for ${agentName} updated`;
+                    setTimeout(() => { this.settingsSuccess = null; }, 2000);
+                }
+            } catch (err) {
+                this.settingsError = err.message || 'Failed to update model';
+            } finally {
+                this.settingsSaving = false;
+            }
+        },
+
+        getAgentModel(agentName) {
+            return this.settings.agent_models[agentName]?.model || this.settings.default_model;
+        },
+
+        getAllAgentNames() {
+            return [
+                'coordinator',
+                'code',
+                'search',
+                'critic',
+                'hypothesis',
+                'data_preprocessor',
+                'feature_engineer',
+                'model_trainer',
+                'data_parser',
+                'kaggle_submitter'
+            ];
+        },
+
+        formatAgentName(name) {
+            return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
     };
 };

@@ -82,14 +82,33 @@ class Orchestrator:
         if name in self.config.agents:
             max_iterations = self.config.agents[name].max_iterations
 
+        # Get per-agent model settings from SettingsManager
+        agent_model = None
+        agent_temperature = None
+        agent_max_tokens = None
+        try:
+            from kaggle_solver.core.settings import SettingsManager
+            settings = SettingsManager().get_settings()
+            agent_config_from_settings = settings.get_agent_model(name)
+            if agent_config_from_settings:
+                agent_model = agent_config_from_settings.model
+                agent_temperature = agent_config_from_settings.temperature
+                agent_max_tokens = agent_config_from_settings.max_tokens
+        except Exception as e:
+            logger.debug(f"Could not get agent model from settings: {e}")
+
+        # Use settings model if available, otherwise fall back to config
+        model = agent_model or self.config.llm.model
+        temperature = agent_temperature if agent_temperature is not None else self.config.llm.temperature
+
         if name in AgentRegistry.list_agents():
             agent_config = AgentConfig(
                 name=name,
                 role=role,
                 tools=tools,
-                model=self.config.llm.model,
+                model=model,
                 max_iterations=max_iterations,
-                temperature=self.config.llm.temperature
+                temperature=temperature
             )
             return AgentRegistry.create(
                 name, agent_config, self.llm, current_sandbox, self.tool_registry, event_callback, agent_factory, session

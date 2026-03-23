@@ -214,6 +214,10 @@
                 <button @click="createNewSession()" class="text-gray-500 hover:text-red-600 p-2 rounded-md hover:bg-gray-100" title="Новая сессия">
                     <i class="fas fa-plus"></i>
                 </button>
+                <!-- Settings Button -->
+                <button @click="openSettings()" class="text-gray-500 hover:text-blue-600 p-2 rounded-md hover:bg-gray-100" title="Настройки">
+                    <i class="fas fa-cog"></i>
+                </button>
             </div>
         </header>
 
@@ -523,6 +527,78 @@
         </div>
 
     </main>
+
+    <!-- Settings Modal -->
+    <div x-show="settingsOpen" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="closeSettings()">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] flex flex-col overflow-hidden" @click.stop>
+            <!-- Modal Header -->
+            <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-cog text-gray-500"></i>
+                    <h3 class="font-semibold text-gray-800">Настройки</h3>
+                </div>
+                <button @click="closeSettings()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Modal Content -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-6">
+                <!-- API Key Section -->
+                <div class="space-y-2">
+                    <label class="text-sm font-medium text-gray-700">OpenRouter API Key</label>
+                    <div class="flex gap-2">
+                        <input type="password"
+                               x-model="newApiKey"
+                               :placeholder="settings.has_api_key ? '••••••••••••••••' : 'Введите API ключ'"
+                               class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200">
+                        <button @click="saveApiKey()"
+                                :disabled="!newApiKey.trim()"
+                                class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            Сохранить
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500">Получите ключ на <a href="https://openrouter.ai/keys" target="_blank" class="text-blue-500 hover:underline">openrouter.ai/keys</a></p>
+                </div>
+
+                <!-- Agent Models Section -->
+                <div class="space-y-3">
+                    <h4 class="text-sm font-medium text-gray-700">Модели для агентов</h4>
+                    <p class="text-xs text-gray-500">Выберите модель для каждого агента. По умолчанию: <code class="bg-gray-100 px-1 rounded">openai/gpt-4o-mini</code></p>
+                    
+                    <div class="space-y-2">
+                        <template x-for="agentName in getAllAgentNames()" :key="agentName">
+                            <div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                                <span class="text-sm text-gray-700 capitalize" x-text="agentName.replace(/_/g, ' ')"></span>
+                                <select
+                                    :value="settings.agent_models[agentName]?.model || settings.default_model"
+                                    @change="updateAgentModel(agentName, $event.target.value)"
+                                    class="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 bg-white">
+                                    <optgroup label="Бесплатные модели">
+                                        <template x-for="model in availableModels.free_models" :key="model.id">
+                                            <option :value="model.id" x-text="model.name || model.id"></option>
+                                        </template>
+                                    </optgroup>
+                                    <optgroup label="Платные модели">
+                                        <template x-for="model in availableModels.all_models?.slice(0, 20)" :key="model.id">
+                                            <option :value="model.id" x-text="model.name || model.id"></option>
+                                        </template>
+                                    </optgroup>
+                                </select>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-4 py-3 border-t border-gray-100 flex justify-end gap-2 bg-gray-50">
+                <button @click="closeSettings()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors">
+                    Закрыть
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Scripts -->
 </body>

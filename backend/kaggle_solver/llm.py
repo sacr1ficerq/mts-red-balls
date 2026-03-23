@@ -73,6 +73,19 @@ class LLM:
     """Async LLM client with retry logic, exponential backoff, and rate limiting."""
 
     def __init__(self, api_key: str = None, requests_per_minute: int = 8):
+        # Try to get API key from multiple sources in order of priority:
+        # 1. Explicitly passed api_key parameter
+        # 2. SettingsManager (user settings)
+        # 3. Environment variables
+        if not api_key:
+            # Try to get from SettingsManager
+            try:
+                from kaggle_solver.core.settings import SettingsManager
+                settings = SettingsManager().get_settings()
+                api_key = settings.api_key
+            except Exception as e:
+                logger.debug(f"Could not get API key from settings: {e}")
+        
         self.api_key = (
             api_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
         )

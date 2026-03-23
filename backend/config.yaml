@@ -1,10 +1,17 @@
+# Note: API key and per-agent model settings are managed via SettingsManager
+# and stored in backend/data/settings.json
+# Use the Settings API endpoints to configure:
+#   - GET/PUT /api/settings - Manage API key and agent models
+#   - GET /api/settings/models - List available models
+
 llm:
+  # Default model (overridden by SettingsManager per-agent config)
   model: "openai/gpt-4o-mini"
   temperature: 0.7
   max_tokens: 4096
   max_retries: 5
   retry_delay: 5.0
-  requests_per_minute: 30  # Increased rate limit
+  requests_per_minute: 30
 
 sandbox:
   root: "./workspace"

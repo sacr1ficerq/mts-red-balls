@@ -642,6 +642,132 @@ def list_agents():
     return {"agents": AgentRegistry.list_agents()}
 
 
+# ==================== Settings API ====================
+
+from kaggle_solver.core.settings import SettingsManager, AVAILABLE_MODELS, AVAILABLE_FREE_MODELS, DEFAULT_MODEL
+
+_settings_manager = None
+
+
+def get_settings_manager() -> SettingsManager:
+    """Get or create the settings manager singleton."""
+    global _settings_manager
+    if _settings_manager is None:
+        _settings_manager = SettingsManager()
+    return _settings_manager
+
+
+class SettingsUpdate(BaseModel):
+    """Model for settings update request."""
+    api_key: Optional[str] = None
+    agent_models: Optional[Dict[str, Dict[str, Any]]] = None
+
+
+@app.get("/api/settings")
+def get_settings():
+    """Get current settings (API key is masked for security)."""
+    manager = get_settings_manager()
+    settings = manager.get_settings()
+    
+    # Mask API key for security (show only last 4 chars)
+    api_key = settings.api_key
+    masked_key = ""
+    if api_key:
+        masked_key = "*" * (len(api_key) - 4) + api_key[-4:] if len(api_key) > 4 else "****"
+    
+    return {
+        "api_key_masked": masked_key,
+        "has_api_key": bool(api_key),
+        "agent_models": settings.agent_models,
+        "default_model": DEFAULT_MODEL,
+    }
+
+
+@app.put("/api/settings")
+def update_settings(update: SettingsUpdate):
+    """Update settings (API key and/or agent models)."""
+    manager = get_settings_manager()
+    
+    try:
+        updated = manager.update_settings(
+            api_key=update.api_key,
+            agent_models=update.agent_models
+        )
+        
+        # Mask API key in response
+        api_key = updated.api_key
+        masked_key = ""
+        if api_key:
+            masked_key = "*" * (len(api_key) - 4) + api_key[-4:] if len(api_key) > 4 else "****"
+        
+        return {
+            "success": True,
+            "api_key_masked": masked_key,
+            "has_api_key": bool(api_key),
+            "agent_models": updated.agent_models,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
+
+
+@app.get("/api/settings/models")
+def list_available_models():
+    """List all available models."""
+    return {
+        "default_model": DEFAULT_MODEL,
+        "free_models": AVAILABLE_FREE_MODELS,
+        "all_models": AVAILABLE_MODELS,
+    }
+
+
+@app.get("/api/settings/agent/{agent_name}")
+def get_agent_settings(agent_name: str):
+    """Get model configuration for a specific agent."""
+    manager = get_settings_manager()
+    settings = manager.get_settings()
+    
+    config = settings.get_agent_model(agent_name)
+    return {
+        "agent_name": agent_name,
+        "model": config.model,
+        "temperature": config.temperature,
+        "max_tokens": config.max_tokens,
+    }
+
+
+@app.put("/api/settings/agent/{agent_name}")
+def update_agent_settings(
+    agent_name: str,
+    model: Optional[str] = None,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None
+):
+    """Update model configuration for a specific agent."""
+    manager = get_settings_manager()
+    
+    if model is None and temperature is None and max_tokens is None:
+        raise HTTPException(status_code=400, detail="At least one parameter must be provided")
+    
+    try:
+        updated = manager.update_agent_model(
+            agent_name=agent_name,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        
+        config = updated.get_agent_model(agent_name)
+        return {
+            "success": True,
+            "agent_name": agent_name,
+            "model": config.model,
+            "temperature": config.temperature,
+            "max_tokens": config.max_tokens,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update agent settings: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
 

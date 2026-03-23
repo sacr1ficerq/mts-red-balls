@@ -60,5 +60,36 @@ window.API = {
 
     readFile(path) {
         return request(`/api/workspace/read?path=${encodeURIComponent(path)}`);
+    },
+
+    // Settings API
+    getSettings() {
+        return request('/api/settings');
+    },
+
+    updateSettings(settings) {
+        return request('/api/settings', {
+            method: 'PUT',
+            headers: JSON_HEADERS,
+            body: JSON.stringify(settings)
+        });
+    },
+
+    getAvailableModels() {
+        return request('/api/settings/models');
+    },
+
+    getAgentSettings(agentName) {
+        return request(`/api/settings/agent/${encodeURIComponent(agentName)}`);
+    },
+
+    updateAgentSettings(agentName, config) {
+        const params = new URLSearchParams();
+        if (config.model) params.append('model', config.model);
+        if (config.temperature !== undefined) params.append('temperature', config.temperature);
+        if (config.max_tokens !== undefined) params.append('max_tokens', config.max_tokens);
+        return request(`/api/settings/agent/${encodeURIComponent(agentName)}?${params.toString()}`, {
+            method: 'PUT'
+        });
     }
 };
