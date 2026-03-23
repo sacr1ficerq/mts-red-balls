@@ -72,7 +72,9 @@ class LLMError(Exception):
 class LLM:
     """Async LLM client with retry logic, exponential backoff, and rate limiting."""
 
-    def __init__(self, api_key: str = None, requests_per_minute: int = 8):
+    MISSING_KEY_ERROR = "No LLM API key configured. Set OPENROUTER_API_KEY/OPENAI_API_KEY or save an API key in Settings."
+
+    def __init__(self, api_key: Optional[str] = None, requests_per_minute: int = 8):
         # Try to get API key from multiple sources in order of priority:
         # 1. Explicitly passed api_key parameter
         # 2. SettingsManager (user settings)
@@ -81,16 +83,17 @@ class LLM:
             # Try to get from SettingsManager
             try:
                 from kaggle_solver.core.settings import SettingsManager
+
                 settings = SettingsManager().get_settings()
                 api_key = settings.api_key
             except Exception as e:
                 logger.debug(f"Could not get API key from settings: {e}")
-        
+
         self.api_key = (
             api_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
         )
         if not self.api_key:
-            logger.warning("No API key found for LLM. Using mock mode.")
+            logger.warning("No API key found for LLM. Requests will fail.")
             self.client = None
         else:
             self.client = AsyncOpenAI(
@@ -109,6 +112,33 @@ class LLM:
         logger.info(
             f"LLM initialized with rate limit: {requests_per_minute} requests/minute"
         )
+
+    def _ensure_client(self) -> None:
+        if self.client is not None:
+            return
+
+        api_key = None
+        try:
+            from kaggle_solver.core.settings import SettingsManager
+
+            settings = SettingsManager().get_settings()
+            api_key = settings.api_key
+        except Exception as e:
+            logger.debug(f"Could not refresh API key from settings: {e}")
+
+        api_key = (
+            api_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
+        )
+        if not api_key:
+            self.mock_mode = True
+            raise LLMError(self.MISSING_KEY_ERROR)
+
+        self.api_key = api_key
+        self.client = AsyncOpenAI(
+            base_url="https://openrouter.ai/api/v1", api_key=self.api_key
+        )
+        self.mock_mode = False
+        logger.info("LLM client initialized from latest API key settings")
 
     async def chat(
         self,
@@ -140,10 +170,7 @@ class LLM:
                 content_preview,
             )
 
-        if self.mock_mode:
-            last_msg = messages[-1]["content"] if messages else ""
-            logger.debug("LLM mock-mode response for last message: %r", last_msg[:500])
-            return f'{{"action": "done", "result": "Mock response to: {last_msg[:100]}..."}}'
+        self._ensure_client()
 
         # Apply rate limiting before making API request
         await self.rate_limiter.acquire()
@@ -284,6 +311,8 @@ class LLM:
         on_token: Optional[Callable[[str], None]] = None,
     ) -> AsyncGenerator[str, None]:
         """Async streaming chat completion."""
+        self._ensure_client()
+
         # Apply rate limiting before making API request
         await self.rate_limiter.acquire()
 

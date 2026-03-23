@@ -15,6 +15,7 @@ from kaggle_solver.constants import (
     AgentType,
     ToolType,
 )
+from kaggle_solver.llm import LLMError
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,9 @@ class BaseAgent(ABC):
             system_messages = [m for m in self.messages if m.get("role") == "system"]
             other_messages = [m for m in self.messages if m.get("role") != "system"]
             # Keep most recent non-system messages
-            kept_other = other_messages[-(self.MAX_CONTEXT_MESSAGES - len(system_messages)):]
+            kept_other = other_messages[
+                -(self.MAX_CONTEXT_MESSAGES - len(system_messages)) :
+            ]
             self.messages = system_messages + kept_other
             logger.debug(f"Trimmed message history to {len(self.messages)} messages")
 
@@ -295,6 +298,13 @@ class BaseAgent(ABC):
                             error="LLM call timeout",
                             duration=time.time() - start,
                         )
+                except LLMError as e:
+                    logger.error(f"LLM configuration/runtime error: {e}")
+                    return AgentResult(
+                        success=False,
+                        error=str(e),
+                        duration=time.time() - start,
+                    )
                 except Exception as e:
                     logger.warning(
                         f"LLM error on attempt {attempt + 1}/{max_retries}: {e}"

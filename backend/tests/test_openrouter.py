@@ -13,11 +13,13 @@ import os
 import pytest
 import asyncio
 import requests
-from unittest.mock import patch, MagicMock, AsyncMock
+from typing import Any, cast
+from unittest.mock import AsyncMock
 
 # Try to load .env file
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -60,11 +62,11 @@ class TestOpenRouterConnection:
         response = requests.get(
             "https://openrouter.ai/api/v1/models",
             headers=openrouter_headers,
-            timeout=30
+            timeout=30,
         )
-        
+
         assert response.status_code == 200, f"Failed to get models: {response.text}"
-        
+
         data = response.json()
         assert "data" in data, "No 'data' field in response"
         assert len(data["data"]) > 0, "No models returned"
@@ -74,14 +76,16 @@ class TestOpenRouterConnection:
         response = requests.get(
             "https://openrouter.ai/api/v1/models",
             headers=openrouter_headers,
-            timeout=30
+            timeout=30,
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         model_ids = [m["id"] for m in data["data"]]
-        assert "minimax/minimax-m2.7" in model_ids, "minimax/minimax-m2.7 not in available models"
+        assert "minimax/minimax-m2.7" in model_ids, (
+            "minimax/minimax-m2.7 not in available models"
+        )
 
 
 class TestOpenRouterChat:
@@ -91,25 +95,23 @@ class TestOpenRouterChat:
         """Test basic chat completion without reasoning."""
         payload = {
             "model": "minimax/minimax-m2.7",
-            "messages": [
-                {"role": "user", "content": "Say 'hello' and nothing else."}
-            ],
-            "max_tokens": 50
+            "messages": [{"role": "user", "content": "Say 'hello' and nothing else."}],
+            "max_tokens": 50,
         }
-        
+
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=openrouter_headers,
             json=payload,
-            timeout=60
+            timeout=60,
         )
-        
+
         assert response.status_code == 200, f"Chat completion failed: {response.text}"
-        
+
         data = response.json()
         assert "choices" in data, "No 'choices' in response"
         assert len(data["choices"]) > 0, "No choices returned"
-        
+
         message = data["choices"][0]["message"]
         assert "content" in message, "No 'content' in message"
         # Content can be None for some models, so check if it exists
@@ -118,38 +120,44 @@ class TestOpenRouterChat:
             assert len(content) >= 0, "Empty response content"
         else:
             # If content is None, check for reasoning_details
-            assert "reasoning_details" in message or "reasoning" in message, \
+            assert "reasoning_details" in message or "reasoning" in message, (
                 "Both content and reasoning are None"
+            )
 
     def test_chat_with_reasoning(self, openrouter_headers):
         """Test chat completion with reasoning enabled."""
         payload = {
             "model": "minimax/minimax-m2.7",
             "messages": [
-                {"role": "user", "content": "How many r's are in the word 'strawberry'?"}
+                {
+                    "role": "user",
+                    "content": "How many r's are in the word 'strawberry'?",
+                }
             ],
             "reasoning": {"enabled": True},
-            "max_tokens": 500
+            "max_tokens": 500,
         }
-        
+
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=openrouter_headers,
             json=payload,
-            timeout=120
+            timeout=120,
         )
-        
-        assert response.status_code == 200, f"Chat with reasoning failed: {response.text}"
-        
+
+        assert response.status_code == 200, (
+            f"Chat with reasoning failed: {response.text}"
+        )
+
         data = response.json()
         message = data["choices"][0]["message"]
-        
+
         # Check for reasoning_details in response
         has_reasoning = "reasoning_details" in message or "reasoning" in message
-        
+
         # The response should have content
         assert "content" in message, "No 'content' in message"
-        
+
         # Log whether reasoning was returned
         print(f"\nResponse has reasoning_details: {has_reasoning}")
         print(f"Content: {message['content'][:200]}...")
@@ -159,49 +167,47 @@ class TestOpenRouterChat:
         # First message
         payload1 = {
             "model": "minimax/minimax-m2.7",
-            "messages": [
-                {"role": "user", "content": "What is 2 + 2?"}
-            ],
+            "messages": [{"role": "user", "content": "What is 2 + 2?"}],
             "reasoning": {"enabled": True},
-            "max_tokens": 100
+            "max_tokens": 100,
         }
-        
+
         response1 = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=openrouter_headers,
             json=payload1,
-            timeout=60
+            timeout=60,
         )
-        
+
         assert response1.status_code == 200
         data1 = response1.json()
         msg1 = data1["choices"][0]["message"]
-        
+
         # Second message with reasoning preservation
         messages = [
             {"role": "user", "content": "What is 2 + 2?"},
             {
                 "role": "assistant",
                 "content": msg1.get("content"),
-                "reasoning_details": msg1.get("reasoning_details")
+                "reasoning_details": msg1.get("reasoning_details"),
             },
-            {"role": "user", "content": "Add 3 to that result."}
+            {"role": "user", "content": "Add 3 to that result."},
         ]
-        
+
         payload2 = {
             "model": "minimax/minimax-m2.7",
             "messages": messages,
             "reasoning": {"enabled": True},
-            "max_tokens": 100
+            "max_tokens": 100,
         }
-        
+
         response2 = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=openrouter_headers,
             json=payload2,
-            timeout=60
+            timeout=60,
         )
-        
+
         assert response2.status_code == 200, f"Multi-turn failed: {response2.text}"
         data2 = response2.json()
         assert "choices" in data2
@@ -213,47 +219,68 @@ class TestLLMClass:
     def test_llm_initialization_with_key(self, api_key):
         """Test LLM class initialization with API key."""
         from kaggle_solver.llm import LLM
-        
+
         llm = LLM(api_key=api_key)
         assert llm.client is not None
         assert not llm.mock_mode
 
-    def test_llm_initialization_without_key(self):
-        """Test LLM class initialization without API key (mock mode)."""
+    def test_llm_initialization_without_key(self, monkeypatch):
+        """Test LLM class initialization without API key."""
         from kaggle_solver.llm import LLM
-        
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "", "OPENAI_API_KEY": ""}, clear=True):
-            llm = LLM()
-            assert llm.mock_mode
-            assert llm.client is None
+        from kaggle_solver.core.settings import SettingsManager, Settings
 
-    def test_llm_chat_mock_mode(self):
-        """Test LLM chat in mock mode."""
-        from kaggle_solver.llm import LLM
-        
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "", "OPENAI_API_KEY": ""}, clear=True):
-            llm = LLM()
-            response = asyncio.run(llm.chat(
-                model="test-model",
-                messages=[{"role": "user", "content": "Hello"}]
-            ))
-            
-            assert "done" in response
-            assert "Mock response" in response
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setattr(
+            SettingsManager,
+            "get_settings",
+            lambda self: Settings(api_key=""),
+        )
+
+        llm = LLM()
+        assert llm.mock_mode
+        assert llm.client is None
+
+    def test_llm_chat_without_key_raises_error(self, monkeypatch):
+        """Test LLM chat fails when API key is missing."""
+        from kaggle_solver.llm import LLM, LLMError
+        from kaggle_solver.core.settings import SettingsManager, Settings
+
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setattr(
+            SettingsManager,
+            "get_settings",
+            lambda self: Settings(api_key=""),
+        )
+
+        llm = LLM()
+        with pytest.raises(LLMError, match="No LLM API key configured"):
+            asyncio.run(
+                llm.chat(
+                    model="test-model",
+                    messages=[{"role": "user", "content": "Hello"}],
+                )
+            )
 
     def test_llm_chat_real(self, api_key):
         """Test LLM chat with real API."""
         from kaggle_solver.llm import LLM, LLMError
-        
+
         llm = LLM(api_key=api_key)
-        
+        assert llm.client is not None
+
         try:
-            response = asyncio.run(llm.chat(
-                model="minimax/minimax-m2.7",
-                messages=[{"role": "user", "content": "Say 'test ok' and nothing else."}],
-                max_tokens=20
-            ))
-            
+            response = asyncio.run(
+                llm.chat(
+                    model="minimax/minimax-m2.7",
+                    messages=[
+                        {"role": "user", "content": "Say 'test ok' and nothing else."}
+                    ],
+                    max_tokens=20,
+                )
+            )
+
             assert response is not None
             if len(response) == 0:
                 pytest.skip("LLM returned empty response (model may be unavailable)")
@@ -265,20 +292,25 @@ class TestLLMClass:
         """Test that LLM properly handles empty responses from API."""
         from kaggle_solver.llm import LLM, LLMError
         from unittest.mock import Mock, patch
-        
+
         llm = LLM(api_key=api_key)
-        
+
         # Mock the API response to return empty choices
         mock_response = Mock()
         mock_response.choices = []
-        
-        with patch.object(llm.client.chat.completions, 'create', AsyncMock(return_value=mock_response)):
+        client = cast(Any, llm.client)
+
+        with patch.object(
+            client.chat.completions, "create", AsyncMock(return_value=mock_response)
+        ):
             try:
-                response = asyncio.run(llm.chat(
-                    model="test-model",
-                    messages=[{"role": "user", "content": "test"}],
-                    max_tokens=20
-                ))
+                response = asyncio.run(
+                    llm.chat(
+                        model="test-model",
+                        messages=[{"role": "user", "content": "test"}],
+                        max_tokens=20,
+                    )
+                )
                 # Should raise LLMError after max retries
                 assert False, "Expected LLMError to be raised for empty choices"
             except LLMError as e:
@@ -293,10 +325,10 @@ class TestModelAccess:
         """Test that the model in config.yaml is accessible."""
         from kaggle_solver.core.config import Config
         from kaggle_solver.llm import LLM
-        
+
         config = Config.load()
         model = config.llm.model
-        
+
         assert model is not None, "No model configured"
         # Accept any valid model (we changed to free model to avoid rate limits)
         assert model in [
@@ -304,25 +336,27 @@ class TestModelAccess:
             "openai/gpt-oss-20b:free",
             "openrouter/free",
             "google/gemma-3n-e5b-it",
-            "meta-llama/llama-3.2-3b-instruct"
+            "meta-llama/llama-3.2-3b-instruct",
         ], f"Unexpected model: {model}"
 
     def test_model_responds(self, api_key):
         """Test that the configured model responds correctly."""
         from kaggle_solver.llm import LLM, LLMError
         from kaggle_solver.core.config import Config
-        
+
         config = Config.load()
         llm = LLM(api_key=api_key)
-        
+
         try:
-            response = asyncio.run(llm.chat(
-                model=config.llm.model,
-                messages=[{"role": "user", "content": "Respond with just 'OK'"}],
-                max_tokens=10,
-                temperature=0.1
-            ))
-            
+            response = asyncio.run(
+                llm.chat(
+                    model=config.llm.model,
+                    messages=[{"role": "user", "content": "Respond with just 'OK'"}],
+                    max_tokens=10,
+                    temperature=0.1,
+                )
+            )
+
             assert response is not None
             if len(response) == 0:
                 pytest.skip("LLM returned empty response (model may be unavailable)")
