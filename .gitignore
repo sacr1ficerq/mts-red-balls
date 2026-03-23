@@ -7,6 +7,6 @@ node_modules
 logs/
 backend/logs/
 backend/workspace/
+backend/data/
 TODO.md
 .DS_Store
-backend/data/sessions.json
