@@ -124,6 +124,8 @@ window.dashboard = function() {
         settings: {
             api_key_masked: '',
             has_api_key: false,
+            kaggle_key_masked: '',
+            has_kaggle_key: false,
             agent_models: {},
             default_model: 'openai/gpt-4o-mini'
         },
@@ -132,6 +134,7 @@ window.dashboard = function() {
             all_models: []
         },
         newApiKey: '',
+        newKaggleKey: '',
         settingsSaving: false,
         settingsError: null,
         settingsSuccess: null,
@@ -707,6 +710,7 @@ window.dashboard = function() {
         openSettings() {
             this.settingsOpen = true;
             this.newApiKey = '';
+            this.newKaggleKey = '';
             this.settingsError = null;
             this.settingsSuccess = null;
         },
@@ -714,6 +718,7 @@ window.dashboard = function() {
         closeSettings() {
             this.settingsOpen = false;
             this.newApiKey = '';
+            this.newKaggleKey = '';
             this.settingsError = null;
             this.settingsSuccess = null;
         },
@@ -735,6 +740,28 @@ window.dashboard = function() {
                 setTimeout(() => { this.settingsSuccess = null; }, 3000);
             } catch (err) {
                 this.settingsError = err.message || 'Failed to save API key';
+            } finally {
+                this.settingsSaving = false;
+            }
+        },
+
+        async saveKaggleKey() {
+            if (!this.newKaggleKey.trim()) {
+                this.settingsError = 'Kaggle key cannot be empty';
+                return;
+            }
+
+            this.settingsSaving = true;
+            this.settingsError = null;
+
+            try {
+                const result = await window.API.updateSettings({ kaggle_key: this.newKaggleKey });
+                this.settings = result;
+                this.newKaggleKey = '';
+                this.settingsSuccess = 'Kaggle key saved successfully';
+                setTimeout(() => { this.settingsSuccess = null; }, 3000);
+            } catch (err) {
+                this.settingsError = err.message || 'Failed to save Kaggle key';
             } finally {
                 this.settingsSaving = false;
             }

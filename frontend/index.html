@@ -19,7 +19,7 @@
     <script type="module" src="src/services/api.js?v=40"></script>
     <script type="module" src="src/utils/formatters.js?v=40"></script>
     <script type="module" src="src/utils/styles.js?v=40"></script>
-    <script type="module" src="src/app.js?v=44"></script>
+    <script type="module" src="src/app.js?v=45"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-50 h-screen flex overflow-hidden text-sm" x-data="dashboard()" x-init="init()" x-cloak>
@@ -81,30 +81,6 @@
                 </div>
             </template>
         </div>
-
-        <!-- Plan Display -->
-        <template x-if="currentPlan && currentPlan.steps && currentPlan.steps.length > 0">
-            <div class="border-t border-gray-100 bg-blue-50 flex-shrink-0">
-                <div class="px-3 py-2 border-b border-blue-100">
-                    <span class="text-xs font-bold text-blue-600 uppercase flex items-center gap-2">
-                        <i class="fas fa-tasks"></i> План
-                    </span>
-                </div>
-                <div class="px-3 py-2 text-xs max-h-32 overflow-y-auto custom-scrollbar">
-                    <template x-for="step in currentPlan.steps" :key="step.id">
-                        <div class="flex items-center gap-2 py-1">
-                            <div class="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
-                                 :class="step.status === 'completed' ? 'bg-emerald-500' : (step.status === 'active' ? 'bg-blue-500' : 'bg-gray-300')">
-                                <i class="fas text-[8px]"
-                                   :class="step.status === 'completed' ? 'fa-check text-white' : (step.status === 'active' ? 'fa-spinner text-white fa-spin' : 'fa-minus text-white')"></i>
-                            </div>
-                            <span class="truncate" :class="step.status === 'completed' ? 'text-gray-400 line-through' : (step.status === 'active' ? 'text-blue-700 font-medium' : 'text-gray-500')"
-                                  x-text="step.task"></span>
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </template>
 
         <!-- Files Tree - 1/3 height when open, collapsed at bottom when closed -->
         <div class="border-t border-gray-100 bg-gray-50 flex-shrink-0 transition-all duration-300" 
@@ -524,6 +500,37 @@
 
     </main>
 
+    <!-- Plan Panel (right side) -->
+    <template x-if="currentPlan && currentPlan.steps && currentPlan.steps.length > 0">
+        <aside class="hidden md:flex flex-col h-full bg-white border-l border-gray-200 w-72 flex-shrink-0">
+            <div class="px-4 py-3 border-b border-gray-100">
+                <span class="text-xs font-bold text-blue-600 uppercase flex items-center gap-2 tracking-wider">
+                    <i class="fas fa-tasks"></i> План
+                </span>
+            </div>
+            <div class="flex-1 overflow-y-auto px-3 py-3 custom-scrollbar space-y-1.5">
+                <template x-for="step in currentPlan.steps" :key="step.id">
+                    <div class="flex items-start gap-2.5 px-2 py-2 rounded-md border"
+                         :class="step.status === 'completed' ? 'bg-emerald-50 border-emerald-100' : (step.status === 'active' ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100')">
+                        <div class="w-5 h-5 mt-0.5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px]"
+                             :class="step.status === 'completed' ? 'bg-emerald-500' : (step.status === 'active' ? 'bg-blue-500' : 'bg-gray-300')">
+                            <i class="fas text-white"
+                               :class="step.status === 'completed' ? 'fa-check' : (step.status === 'active' ? 'fa-spinner fa-spin' : 'fa-minus')"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-[10px] uppercase tracking-wide font-semibold"
+                                 :class="step.status === 'completed' ? 'text-emerald-600' : (step.status === 'active' ? 'text-blue-700' : 'text-gray-500')"
+                                 x-text="`Step ${step.id}`"></div>
+                            <div class="text-xs leading-5"
+                                 :class="step.status === 'completed' ? 'text-gray-500 line-through' : (step.status === 'active' ? 'text-gray-800 font-medium' : 'text-gray-600')"
+                                 x-text="step.task"></div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </aside>
+    </template>
+
     <!-- Settings Modal -->
     <div x-show="settingsOpen" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="closeSettings()">
         <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] flex flex-col overflow-hidden" @click.stop>
@@ -554,7 +561,24 @@
                             Сохранить
                         </button>
                     </div>
-                    <p class="text-xs text-gray-500">Получите ключ на <a href="https://openrouter.ai/keys" target="_blank" class="text-blue-500 hover:underline">openrouter.ai/keys</a></p>
+                    <p class="text-xs text-gray-500">Получите API токен на <a href="https://openrouter.ai/keys" target="_blank" class="text-blue-500 hover:underline">openrouter.ai/keys</a></p>
+                </div>
+
+                <!-- Kaggle Key Section -->
+                <div class="space-y-2">
+                    <label class="text-sm font-medium text-gray-700">Kaggle API Token</label>
+                    <div class="flex gap-2">
+                        <input type="password"
+                               x-model="newKaggleKey"
+                               :placeholder="settings.has_kaggle_key ? '••••••••••••••••' : 'Введите Kaggle API токен'"
+                               class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200">
+                        <button @click="saveKaggleKey()"
+                                :disabled="!newKaggleKey.trim()"
+                                class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            Сохранить
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500">Получите ключ на <a href="https://www.kaggle.com/settings" target="_blank" class="text-blue-500 hover:underline">kaggle.com/settings</a></p>
                 </div>
 
             </div>
