@@ -28,18 +28,17 @@ class TestRobustness:
         
     def test_tool_crash_handling(self, agent):
         # Tool raises exception
+        from kaggle_solver.exceptions import StopExecutionError
         agent.llm.chat = AsyncMock(side_effect=[
             '{"action": "tool", "tool": "crashy", "query": "run"}',
             '{"action": "done", "result": "Tool failed, but I am done"}'
         ])
         agent.tools.execute.return_value = Mock(success=False, error="Tool crashed")
         
-        # We need the agent to see the error and try again or finish
-        # Mock LLM to return done after seeing error
-        
-        result = asyncio.run(agent.run("test"))
-        assert result.success
-        assert "Tool failed" in result.output
+        # Now the agent should raise StopExecutionError immediately
+        with pytest.raises(StopExecutionError) as excinfo:
+            asyncio.run(agent.run("test"))
+        assert "Tool crashed" in str(excinfo.value)
 
     def test_llm_complete_failure(self, agent):
         # LLM fails completely

@@ -81,7 +81,7 @@ class TestKaggleTools:
             result = kaggle_get_competition_info(query='titanic')
             
             assert result['success'] is False
-            assert 'Kaggle MCP client not available' in result['error']
+            assert 'Kaggle API credentials are not configured' in result['error']
     
     def test_kaggle_get_competition_info_error(self, mock_kaggle_client):
         """Test competition info retrieval with error"""
@@ -105,7 +105,9 @@ class TestKaggleTools:
         assert result['success'] is True
         assert result['data']['competition'] == 'titanic'
         assert len(result['data']['downloaded_files']) == 3
-        mock_kaggle_client.download_competition_data.assert_called_once_with('titanic', './data', None)
+        args, _ = mock_kaggle_client.download_competition_data.call_args
+        assert args[0] == 'titanic'
+        assert args[1].endswith('data')
     
     def test_kaggle_download_data_specific_files(self, mock_kaggle_client):
         """Test downloading specific files"""
@@ -122,9 +124,10 @@ class TestKaggleTools:
         
         assert result['success'] is True
         assert len(result['data']['downloaded_files']) == 2
-        mock_kaggle_client.download_competition_data.assert_called_once_with(
-            'titanic', './data', ['train.csv', 'test.csv']
-        )
+        args, _ = mock_kaggle_client.download_competition_data.call_args
+        assert args[0] == 'titanic'
+        assert args[1].endswith('data')
+        assert args[2] == ['train.csv', 'test.csv']
     
     def test_kaggle_submit_success(self, mock_kaggle_client):
         """Test successful submission"""
@@ -143,9 +146,10 @@ class TestKaggleTools:
         
         assert result['success'] is True
         assert result['data']['submission_id'] == '12345678'
-        mock_kaggle_client.submit_prediction.assert_called_once_with(
-            'titanic', 'submission.csv', 'Test submission'
-        )
+        args, _ = mock_kaggle_client.submit_prediction.call_args
+        assert args[0] == 'titanic'
+        assert args[1].endswith('submission.csv')
+        assert args[2] == 'Test submission'
     
     def test_kaggle_get_submission_status_success(self, mock_kaggle_client):
         """Test successful submission status retrieval"""

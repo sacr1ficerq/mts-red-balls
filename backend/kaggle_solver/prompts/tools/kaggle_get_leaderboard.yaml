@@ -1,34 +1,8 @@
-name: kaggle_get_leaderboard
+# kaggle_get_leaderboard
 description: |
-  Get the competition leaderboard showing team rankings and scores. Use this to understand 
-  competition performance and track your position relative to other participants.
+  Get the current leaderboard for a Kaggle competition.
+  Input: query (competition name)
+  Output: list of top teams and scores
 
-parameters:
-  query:
-    type: string
-    required: true
-    description: Competition name (e.g., 'titanic', 'house-prices-advanced-regression-techniques')
-
-examples:
-  - query: "Get leaderboard for Titanic competition"
-    parameters:
-      query: "titanic"
-
-output_format: |
-  Returns a JSON object with leaderboard data:
-  [
-    {
-      "team_name": "Team Alpha",
-      "team_id": "12345",
-      "rank": 1,
-      "score": 0.85,
-      "last_submission": "2024-01-15 14:30:00"
-    },
-    {
-      "team_name": "Team Beta",
-      "team_id": "67890",
-      "rank": 2,
-      "score": 0.84,
-      "last_submission": "2024-01-15 13:45:00"
-    }
-  ]
+usage: |
+  {"action": "tool", "tool": "kaggle_get_leaderboard", "query": "titanic"}

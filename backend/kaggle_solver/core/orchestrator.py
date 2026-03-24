@@ -11,6 +11,7 @@ from kaggle_solver.constants import (
     StateConstants,
     LoggingConstants,
 )
+from kaggle_solver.exceptions import StopExecutionError
 from kaggle_solver.core.state import StateManager, Session
 from kaggle_solver.core.config import Config
 from kaggle_solver.llm import LLM
@@ -66,6 +67,9 @@ class Orchestrator:
         for callback in self._event_callbacks:
             try:
                 callback(event)
+            except StopExecutionError:
+                # Special exception to stop execution
+                raise
             except Exception as e:
                 logger.error(f"Event callback error: {e}")
 
@@ -78,6 +82,7 @@ class Orchestrator:
         agent_factory: Optional[Callable] = None,
         sandbox: Optional[Sandbox] = None,
         session: Optional[Any] = None,
+        max_iterations: int = 20,
     ) -> BaseAgent:
         if agent_factory is None:
 
@@ -133,7 +138,7 @@ class Orchestrator:
                 role=role,
                 tools=tools,
                 model=model,
-                max_iterations=max_iterations,
+                max_iterations=max_iterations or self.config.agents.get(name, AgentSettings()).max_iterations,
                 temperature=temperature,
             )
             return AgentRegistry.create(
@@ -208,6 +213,8 @@ class Orchestrator:
             # Emit to SSE
             try:
                 self._emit_event(session.id, event)
+            except StopExecutionError:
+                raise
             except Exception as e:
                 logger.warning(f"Failed to emit event to SSE: {e}")
 
@@ -256,6 +263,7 @@ class Orchestrator:
             "data": {
                 "code": code,
                 "content": content,
+                "message": content,  # Ensure message is also present for UI compatibility
             },
         }
         session.add_event(event)

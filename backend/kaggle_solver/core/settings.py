@@ -12,7 +12,7 @@ from threading import Lock
 logger = logging.getLogger(__name__)
 
 # Default model for all agents
-DEFAULT_MODEL = "openai/gpt-4o-mini"
+DEFAULT_MODEL = "xiaomi/mimo-v2-flash"
 
 # Default models for each agent type (can be customized per agent)
 DEFAULT_AGENT_MODELS = {
@@ -69,6 +69,8 @@ class AgentModelConfig:
 class Settings:
     """Application settings stored persistently."""
     api_key: str = ""
+    kaggle_api_key: str = ""
+    kaggle_username: str = ""
     agent_models: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     
     def __post_init__(self):
@@ -141,6 +143,8 @@ class SettingsManager:
                     data = json.load(f)
                 return Settings(
                     api_key=data.get("api_key", ""),
+                    kaggle_api_key=data.get("kaggle_api_key", ""),
+                    kaggle_username=data.get("kaggle_username", ""),
                     agent_models=data.get("agent_models", {})
                 )
         except Exception as e:
@@ -162,7 +166,13 @@ class SettingsManager:
                 self._settings = self._load()
             return self._settings
     
-    def update_settings(self, api_key: str = None, agent_models: Dict[str, Dict[str, Any]] = None) -> Settings:
+    def update_settings(
+        self,
+        api_key: str = None,
+        kaggle_key: str = None,
+        kaggle_username: str = None,
+        agent_models: Dict[str, Dict[str, Any]] = None
+    ) -> Settings:
         """Update settings (thread-safe)."""
         with self._settings_lock:
             if self._settings is None:
@@ -170,6 +180,12 @@ class SettingsManager:
             
             if api_key is not None:
                 self._settings.api_key = api_key
+            
+            if kaggle_key is not None:
+                self._settings.kaggle_api_key = kaggle_key
+            
+            if kaggle_username is not None:
+                self._settings.kaggle_username = kaggle_username
             
             if agent_models is not None:
                 for agent_name, config in agent_models.items():
@@ -221,6 +237,20 @@ class SettingsManager:
     def has_api_key(self) -> bool:
         """Check if an API key is configured."""
         return bool(self.get_api_key())
+    
+    def get_kaggle_credentials(self) -> tuple:
+        """Get Kaggle API credentials (api_key, username)."""
+        settings = self.get_settings()
+        return (settings.kaggle_api_key, settings.kaggle_username)
+    
+    def set_kaggle_credentials(self, api_key: str, username: str = None):
+        """Set Kaggle API credentials."""
+        self.update_settings(kaggle_key=api_key, kaggle_username=username)
+    
+    def has_kaggle_credentials(self) -> bool:
+        """Check if Kaggle API credentials are configured."""
+        api_key, username = self.get_kaggle_credentials()
+        return bool(api_key)
 
 
 # Global instance

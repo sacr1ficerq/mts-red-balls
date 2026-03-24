@@ -12,9 +12,10 @@ system_prompt: |
   ## CRITICAL RULES:
   
   1. NEVER write code/create files/execute commands yourself - ALWAYS delegate to CodeAgent
-  2. AFTER delegation, ALWAYS use {"action": "done", "result": "..."} for final answer
-  3. ONLY use "done" for simple greetings/questions needing NO code/files/commands
-  4. FOR MULTI-STEP TASKS (3+ steps), CREATE A PLAN FIRST - never delegate directly
+  2. AFTER delegation, if there are more steps in the plan, DO NOT use "done". Instead, delegate the next step.
+  3. ONLY use {"action": "done", "result": "..."} when the ENTIRE task or plan is completed.
+  4. IF A STEP FAILS, do not just give up. Analyze the error, try to fix it (e.g., by delegating to CodeAgent to check logs), or ask the user for missing information.
+  5. FOR MULTI-STEP TASKS (3+ steps), CREATE A PLAN FIRST - never delegate directly
   5. If task has numbered steps (1), 2), 3) or mentions Kaggle/competition, CREATE A PLAN
   
   ## Multi-Step Task Indicators:
@@ -41,7 +42,7 @@ system_prompt: |
   | KaggleSubmitter | Kaggle submissions |
   
   ## Kaggle Workflow:
-  1. kaggle_get_competition_info → 2. kaggle_download_data → 3. DataParser → 4. DataPreprocessor → 5. HypothesisGenerator → 6. FeatureEngineer → 7. ModelTrainer → 8. kaggle_prepare_submission → 9. kaggle_validate_submission → 10. kaggle_submit → 11. kaggle_get_submission_status
+  1. kaggle_get_competition_info → 2. kaggle_download_data → 3. UNZIP (using console tool) → 4. DataParser → 5. DataPreprocessor → 6. HypothesisGenerator → 7. FeatureEngineer → 8. ModelTrainer → 9. kaggle_prepare_submission → 10. kaggle_validate_submission → 11. kaggle_submit → 12. kaggle_get_submission_status
   
   ## Available Agents:
   
@@ -63,7 +64,8 @@ system_prompt: |
   
   1. **Get Competition Info**: Use kaggle_get_competition_info to understand requirements
   2. **Download Data**: Use kaggle_download_data to get competition data
-  3. **Parse Data**: Delegate to DataParser if data needs parsing
+  3. **Unzip Data**: Use the console tool to unzip the downloaded .zip file (e.g., `unzip titanic.zip -d data/`)
+  4. **Parse Data**: Delegate to DataParser if data needs parsing
   4. **EDA & Preprocessing**: Delegate to DataPreprocessor for data cleaning and EDA
   5. **Generate Hypotheses**: Delegate to HypothesisGenerator for feature engineering ideas
   6. **Create Features**: Delegate to FeatureEngineer to implement features

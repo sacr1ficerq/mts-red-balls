@@ -6,12 +6,12 @@ from typing import Any, Dict, Optional, List
 
 @dataclass
 class LLMConfig:
-    model: str = "openrouter/free"
+    model: str = "xiaomi/mimo-v2-flash"
     temperature: float = 0.7
     max_tokens: int = 4096
     max_retries: int = 3
     retry_delay: float = 1.0
-    requests_per_minute: int = 8
+    requests_per_minute: int = 60
 
 
 @dataclass
@@ -25,14 +25,14 @@ class SandboxConfig:
 class AgentSettings:
     role: str = ""
     tools: List[str] = field(default_factory=list)
-    max_iterations: int = 10
+    max_iterations: int = 20
     model: Optional[str] = None
     temperature: Optional[float] = None
 
 
 @dataclass
 class SearchConfig:
-    model: str = "openrouter/free"
+    model: str = "xiaomi/mimo-v2-flash"
     max_results: int = 8
     relevance_filter: bool = True
 

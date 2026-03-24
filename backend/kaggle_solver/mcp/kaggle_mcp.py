@@ -11,10 +11,17 @@ import os
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 import pandas as pd
+import logging
 
+logger = logging.getLogger(__name__)
+
+KAGGLE_AVAILABLE = True
 try:
     import kaggle
-    KAGGLE_AVAILABLE = True
+    # Immediately remove from sys.modules to prevent cached config
+    import sys
+    if 'kaggle' in sys.modules:
+        del sys.modules['kaggle']
 except ImportError:
     KAGGLE_AVAILABLE = False
 
@@ -42,24 +49,63 @@ class KaggleMCPClient:
         if not self.api_key or not self.username:
             raise ValueError("Kaggle API credentials not provided. Set KAGGLE_API_KEY and KAGGLE_USERNAME environment variables.")
         
-        # Create kaggle.json file for authentication
+        # Log masked credentials for debugging
+        masked_key = self.api_key[:4] + "..." + self.api_key[-4:] if len(self.api_key) > 8 else "****"
+        logger.info(f"Authenticating Kaggle API for user: {self.username} with key: {masked_key}")
+
+        # Set environment variables explicitly - this is the most reliable way
+        os.environ['KAGGLE_USERNAME'] = self.username
+        os.environ['KAGGLE_KEY'] = self.api_key
+        
+        # Create kaggle.json file for authentication as a backup
         kaggle_dir = Path.home() / '.kaggle'
         kaggle_dir.mkdir(exist_ok=True)
         
         kaggle_json = kaggle_dir / 'kaggle.json'
-        with open(kaggle_json, 'w') as f:
-            json.dump({
-                'username': self.username,
-                'key': self.api_key
-            }, f)
-        
-        # Set permissions
-        os.chmod(kaggle_json, 0o600)
+        try:
+            with open(kaggle_json, 'w') as f:
+                json.dump({
+                    'username': self.username,
+                    'key': self.api_key
+                }, f)
+            
+            # Set permissions
+            if os.name != 'nt':
+                os.chmod(kaggle_json, 0o600)
+        except Exception as e:
+            logger.warning(f"Failed to write kaggle.json: {e}. Continuing with environment variables.")
         
         # Initialize API
-        self.api = kaggle.KaggleApi()
-        self.api.authenticate()
+        try:
+            import kaggle
+            # Create a fresh API instance
+            self.api = kaggle.KaggleApi()
+            
+            # Manually set configuration to bypass any cached/file settings
+            self.api.config_values['username'] = self.username
+            self.api.config_values['key'] = self.api_key
+            
+            self.api.authenticate()
+        except Exception as e:
+            logger.error(f"Kaggle API authentication failed: {e}")
+            raise
     
+    def _request(self, endpoint: str, method: str = "GET", **kwargs) -> requests.Response:
+        """Make a request to Kaggle API, handling Bearer or Basic auth"""
+        import requests
+        url = f"https://www.kaggle.com/api/v1/{endpoint}"
+        
+        if self.api_key.startswith("KGAT_"):
+            headers = kwargs.get("headers", {})
+            headers["Authorization"] = f"Bearer {self.api_key}"
+            kwargs["headers"] = headers
+        else:
+            kwargs["auth"] = (self.username, self.api_key)
+            
+        response = requests.request(method, url, **kwargs)
+        response.raise_for_status()
+        return response
+
     def get_competition_info(self, competition_name: str) -> Dict[str, Any]:
         """
         Get information about a Kaggle competition
@@ -70,24 +116,34 @@ class KaggleMCPClient:
         Returns:
             Dictionary with competition information
         """
-        if not self.api:
-            raise RuntimeError("Kaggle API not initialized")
-        
         try:
-            competition = self.api.competition_view(competition_name)
+            # Use direct request to handle Bearer tokens correctly
+            response = self._request(f"competitions/list?search={competition_name}")
+            competitions = response.json()
             
+            target = None
+            for comp in competitions:
+                ref = comp.get('ref', '')
+                # Handle both slug and full URL
+                if ref == competition_name or ref.endswith(f"/{competition_name}"):
+                    target = comp
+                    break
+            
+            if not target:
+                raise ValueError(f"Competition '{competition_name}' not found")
+
             info = {
-                'name': competition.ref,
-                'title': competition.title,
-                'description': competition.description,
-                'evaluation_metric': competition.evaluationMetric,
-                'max_daily_submissions': competition.maxDailySubmissions,
-                'max_team_size': competition.maxTeamSize,
-                'reward': competition.reward,
-                'deadline': competition.deadline,
-                'enabled_date': competition.enabledDate,
-                'total_teams': competition.totalTeams,
-                'total_submissions': competition.totalSubmissions
+                'name': target.get('ref', ''),
+                'title': target.get('title', ''),
+                'description': target.get('description', ''),
+                'evaluation_metric': target.get('evaluationMetric', ''),
+                'max_daily_submissions': target.get('maxDailySubmissions', 0),
+                'max_team_size': target.get('maxTeamSize', 0),
+                'reward': target.get('reward', ''),
+                'deadline': str(target.get('deadline', '')),
+                'enabled_date': str(target.get('enabledDate', '')),
+                'total_teams': target.get('totalTeams', 0),
+                'total_submissions': target.get('totalSubmissions', 0)
             }
             
             return info
@@ -106,34 +162,44 @@ class KaggleMCPClient:
         Returns:
             List of downloaded file paths
         """
-        if not self.api:
-            raise RuntimeError("Kaggle API not initialized")
-        
         try:
             path = Path(path)
             path.mkdir(parents=True, exist_ok=True)
             
-            if files:
-                downloaded = []
-                for file in files:
-                    self.api.competition_download_file(
-                        competition_name,
-                        file,
-                        path=str(path)
-                    )
-                    downloaded.append(str(path / file))
-                
-                return downloaded
+            if self.api_key.startswith("KGAT_"):
+                # Use direct request for Bearer tokens
+                if files:
+                    downloaded = []
+                    for file in files:
+                        url = f"competitions/data/download/{competition_name}/{file}"
+                        response = self._request(url, stream=True)
+                        target = path / file
+                        with open(target, 'wb') as f:
+                            for chunk in response.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                        downloaded.append(str(target))
+                    return downloaded
+                else:
+                    # Download all as zip
+                    url = f"competitions/data/download-all/{competition_name}"
+                    response = self._request(url, stream=True)
+                    target = path / f"{competition_name}.zip"
+                    with open(target, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    return [str(target)]
             else:
-                # Download all competition files
-                self.api.competition_download_files(
-                    competition_name,
-                    path=str(path)
-                )
-                
-                # List downloaded files
-                downloaded = [str(f) for f in path.glob('*') if f.is_file()]
-                return downloaded
+                # Use library for legacy keys
+                if not self.api: self._authenticate()
+                if files:
+                    downloaded = []
+                    for file in files:
+                        self.api.competition_download_file(competition_name, file, path=str(path))
+                        downloaded.append(str(path / file))
+                    return downloaded
+                else:
+                    self.api.competition_download_files(competition_name, path=str(path))
+                    return [str(f) for f in path.glob('*') if f.is_file()]
         
         except Exception as e:
             raise RuntimeError(f"Failed to download competition data: {str(e)}")
@@ -150,25 +216,30 @@ class KaggleMCPClient:
         Returns:
             Dictionary with submission information
         """
-        if not self.api:
-            raise RuntimeError("Kaggle API not initialized")
-        
         try:
-            result = self.api.competition_submit(
-                submission_file,
-                message,
-                competition_name
-            )
-            
-            submission_info = {
-                'status': result.status,
-                'message': message,
-                'submitted_at': result.date,
-                'submission_id': result.ref
-            }
-            
-            return submission_info
-        
+            if self.api_key.startswith("KGAT_"):
+                # Use direct request for Bearer tokens
+                url = f"competitions/submit/{competition_name}"
+                with open(submission_file, 'rb') as f:
+                    files = {'file': f}
+                    data = {'message': message}
+                    response = self._request(url, method="POST", files=files, data=data)
+                result = response.json()
+                return {
+                    'status': 'submitted',
+                    'message': message,
+                    'competition': competition_name,
+                    'ref': result.get('ref', str(result))
+                }
+            else:
+                if not self.api: self._authenticate()
+                result = self.api.competition_submit(submission_file, message, competition_name)
+                return {
+                    'status': 'submitted',
+                    'message': message,
+                    'competition': competition_name,
+                    'ref': getattr(result, 'ref', str(result))
+                }
         except Exception as e:
             raise RuntimeError(f"Failed to submit prediction: {str(e)}")
     
@@ -183,24 +254,34 @@ class KaggleMCPClient:
         Returns:
             Dictionary with submission status
         """
-        if not self.api:
-            raise RuntimeError("Kaggle API not initialized")
-        
         try:
-            result = self.api.competition_submissions(competition_name)
-            
-            for submission in result:
-                if submission.ref == submission_id:
-                    return {
-                        'status': submission.status,
-                        'public_score': submission.publicScore,
-                        'private_score': submission.privateScore,
-                        'submitted_at': submission.date,
-                        'message': submission.description
-                    }
+            if self.api_key.startswith("KGAT_"):
+                # Use direct request for Bearer tokens
+                response = self._request(f"competitions/submissions/list/{competition_name}")
+                submissions = response.json()
+                for sub in submissions:
+                    if str(sub.get('ref', '')) == str(submission_id):
+                        return {
+                            'status': sub.get('status', ''),
+                            'public_score': sub.get('publicScore'),
+                            'private_score': sub.get('privateScore'),
+                            'submitted_at': str(sub.get('date', '')),
+                            'message': sub.get('description', '')
+                        }
+            else:
+                if not self.api: self._authenticate()
+                result = self.api.competition_submissions(competition_name)
+                for submission in result:
+                    if str(submission.ref) == str(submission_id):
+                        return {
+                            'status': submission.status,
+                            'public_score': submission.publicScore,
+                            'private_score': submission.privateScore,
+                            'submitted_at': str(submission.date),
+                            'message': submission.description
+                        }
             
             raise ValueError(f"Submission {submission_id} not found")
-        
         except Exception as e:
             raise RuntimeError(f"Failed to get submission status: {str(e)}")
     
@@ -215,25 +296,34 @@ class KaggleMCPClient:
         Returns:
             List of leaderboard entries
         """
-        if not self.api:
-            raise RuntimeError("Kaggle API not initialized")
-        
         try:
-            leaderboard = self.api.competition_leaderboard(competition_name)
-            
-            entries = []
-            for team in leaderboard:
-                entry = {
-                    'team_name': team.teamName,
-                    'team_id': team.teamId,
-                    'rank': team.rank,
-                    'score': team.score,
-                    'last_submission': team.lastSubmission
-                }
-                entries.append(entry)
-            
-            return entries
-        
+            if self.api_key.startswith("KGAT_"):
+                # Use direct request for Bearer tokens
+                response = self._request(f"competitions/leaderboard/view/{competition_name}")
+                leaderboard = response.json()
+                # Handle both list and response object
+                entries = leaderboard.get('submissions', []) if isinstance(leaderboard, dict) else leaderboard
+                result = []
+                for entry in entries:
+                    result.append({
+                        'team_name': entry.get('teamName', ''),
+                        'team_id': entry.get('teamId', ''),
+                        'rank': entry.get('rank', 0),
+                        'score': entry.get('score', 0)
+                    })
+                return result
+            else:
+                if not self.api: self._authenticate()
+                leaderboard = self.api.competition_leaderboard(competition_name)
+                result = []
+                for team in leaderboard:
+                    result.append({
+                        'team_name': team.teamName,
+                        'team_id': team.teamId,
+                        'rank': team.rank,
+                        'score': team.score
+                    })
+                return result
         except Exception as e:
             raise RuntimeError(f"Failed to get leaderboard: {str(e)}")
     
@@ -395,7 +485,11 @@ def kaggle_list_competitions(query: str, mcp_client: KaggleMCPClient, category: 
 # Initialize Kaggle MCP client
 def get_kaggle_mcp_client() -> Optional[KaggleMCPClient]:
     """
-    Get or create Kaggle MCP client instance
+    Get or create Kaggle MCP client instance.
+    
+    Credentials are loaded from (in order of priority):
+    1. SettingsManager (stored via UI)
+    2. Environment variables (KAGGLE_API_KEY, KAGGLE_USERNAME)
     
     Returns:
         KaggleMCPClient instance or None if not available
@@ -404,7 +498,12 @@ def get_kaggle_mcp_client() -> Optional[KaggleMCPClient]:
         return None
     
     try:
-        return KaggleMCPClient()
+        from kaggle_solver.core.settings import get_settings_manager
+        
+        settings_manager = get_settings_manager()
+        api_key, username = settings_manager.get_kaggle_credentials()
+        
+        return KaggleMCPClient(api_key=api_key, username=username)
     except Exception as e:
         logger.error(f"Failed to initialize Kaggle MCP client: {str(e)}")
         return None

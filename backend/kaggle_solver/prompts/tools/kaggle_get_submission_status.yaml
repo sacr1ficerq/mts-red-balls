@@ -1,30 +1,8 @@
-name: kaggle_get_submission_status
+# kaggle_get_submission_status
 description: |
-  Get the status and score of a submitted prediction. Use this to check if a submission has been 
-  scored and to retrieve the public score. The private score is only available after the competition ends.
+  Check the status of a Kaggle submission.
+  Input: query (competition name), submission_id
+  Output: status (pending, complete, error) and score
 
-parameters:
-  query:
-    type: string
-    required: true
-    description: Competition name (e.g., 'titanic', 'house-prices-advanced-regression-techniques')
-  submission_id:
-    type: string
-    required: true
-    description: Submission ID returned by kaggle_submit
-
-examples:
-  - query: "Check status of submission 12345678"
-    parameters:
-      query: "titanic"
-      submission_id: "12345678"
-
-output_format: |
-  Returns a JSON object with submission status:
-  {
-    "status": "complete",
-    "public_score": 0.78947,
-    "private_score": null,
-    "submitted_at": "2024-01-15 14:30:00",
-    "message": "XGBoost with 350 trees, tuned hyperparameters"
-  }
+usage: |
+  {"action": "tool", "tool": "kaggle_get_submission_status", "query": "titanic", "submission_id": "12345"}

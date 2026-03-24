@@ -21,7 +21,7 @@ class Result:
 class Sandbox:
     # ==================== PREINSTALL CONFIGURATION ====================
     # Set to False to disable all package preinstallation
-    ENABLE_PREINSTALL = False
+    ENABLE_PREINSTALL = True
     
     # Packages to preinstall when ENABLE_PREINSTALL is True
     PREINSTALL_PACKAGES = [
@@ -59,9 +59,9 @@ class Sandbox:
         logger.info(f"Preinstalling {len(self.PREINSTALL_PACKAGES)} packages...")
         for pkg in self.PREINSTALL_PACKAGES:
             try:
-                # Install to system Python (works because we're using system python3)
+                # Install to current Python environment
                 result = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "-q", "--user", pkg],
+                    [sys.executable, "-m", "pip", "install", "-q", pkg],
                     capture_output=True,
                     timeout=SandboxConstants.PREINSTALL_TIMEOUT
                 )
@@ -323,9 +323,14 @@ class Sandbox:
             if len(output) > SandboxConstants.MAX_OUTPUT_SIZE:
                 output = output[:SandboxConstants.MAX_OUTPUT_SIZE] + "\n... (output truncated)"
             
+            error_msg = r.stderr if r.stderr else ""
+            if r.returncode != 0 and not error_msg:
+                error_msg = f"Command failed with return code {r.returncode}"
+
             return Result(
                 success=r.returncode == 0,
                 output=output,
+                error=error_msg,
                 return_code=r.returncode
             )
         except TimeoutExpired:

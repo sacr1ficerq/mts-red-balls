@@ -13,44 +13,12 @@ from kaggle_solver.constants import (
     AgentAction,
     AgentConstants,
     AgentType,
-    ToolType,
 )
 from kaggle_solver.llm import LLMError
+from kaggle_solver.exceptions import StopExecutionError
+from kaggle_solver.utils.json_parser import parse_json_output, extract_json_objects, repair_json
 
 logger = logging.getLogger(__name__)
-
-
-def parse_json_output(text: str) -> Dict[str, Any]:
-    """Parse JSON from LLM output, handling extra text"""
-    if not text:
-        return {}
-
-    text = text.strip()
-
-    # Try direct parse
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        logger.debug(f"Direct JSON parse failed: {e}")
-
-    # Find JSON in text
-    start = text.find("{")
-    if start >= 0:
-        # Find matching closing brace
-        depth = 0
-        for i, char in enumerate(text[start:], start):
-            if char == "{":
-                depth += 1
-            elif char == "}":
-                depth -= 1
-                if depth == 0:
-                    try:
-                        return json.loads(text[start : i + 1])
-                    except json.JSONDecodeError as e:
-                        logger.debug(f"JSON extraction failed: {e}")
-
-    logger.warning(f"Failed to parse JSON from text: {text[:100]}...")
-    return {}
 
 
 class AgentState(Enum):
@@ -68,7 +36,7 @@ class AgentConfig:
     role: str
     tools: List[str]
     model: str = "anthropic/claude-3.5-sonnet"
-    max_iterations: int = 10
+    max_iterations: int = 20
     temperature: float = 0.7
 
 
@@ -171,23 +139,7 @@ class BaseAgent(ABC):
         is_sub_call: bool = False,
         timeout: int = 300,
     ) -> AgentResult:
-        """Execute the agent loop to accomplish the user's task.
-
-        The agent follows a think-act-observe loop:
-        1. Receive user input and context
-        2. Query LLM for next action
-        3. Execute action (tool use, delegation, or completion)
-        4. Observe results and repeat
-
-        Args:
-            user_input: User's request or task description
-            context: Optional context including session, event IDs, etc.
-            is_sub_call: Whether this is a delegated sub-call
-            timeout: Maximum execution time in seconds (default: 300)
-
-        Returns:
-            AgentResult with success status, output, and execution duration
-        """
+        """Execute the agent loop to accomplish the user's task."""
         start = time.time()
         execution_timeout = start + timeout
 
@@ -241,7 +193,6 @@ class BaseAgent(ABC):
                     self.messages.insert(0, {"role": "system", "content": context_msg})
 
         system = self.system_prompt()
-
         full = [{"role": "system", "content": system}] + self.messages
 
         # Track consecutive plans to prevent infinite loop
@@ -252,175 +203,196 @@ class BaseAgent(ABC):
             self._emit("system", {"message": f"Starting: {user_input}"})
 
         for self._iteration in range(1, self.config.max_iterations + 1):
-            # Check timeout
-            if time.time() > execution_timeout:
-                logger.error(f"Agent execution timeout after {timeout}s")
-                return AgentResult(
-                    success=False,
-                    error=f"Execution timeout after {timeout}s",
-                    duration=time.time() - start,
-                )
-
-            # Retry logic for LLM calls using centralized constants
-            max_retries = AgentConstants.LLM_MAX_RETRIES
-            retry_delay = AgentConstants.LLM_RETRY_DELAY
-            llm_timeout = AgentConstants.LLM_CALL_TIMEOUT
-            resp = None
-
-            for attempt in range(max_retries):
-                try:
-                    max_output_tokens = AgentConstants.MAX_OUTPUT_TOKENS
-                    resp = await asyncio.wait_for(
-                        self.llm.chat(
-                            model=self.config.model,
-                            messages=full,
-                            temperature=self.config.temperature,
-                            max_tokens=max_output_tokens,
-                        ),
-                        timeout=llm_timeout,
-                    )
-                    input_tokens = sum(len(m.get("content", "")) // 4 for m in full)
-                    output_tokens = len(resp) // 4
-                    if hasattr(self, "session") and self.session:
-                        self.session.add_tokens(input_tokens + output_tokens)
-                    break  # Success, exit retry loop
-                except asyncio.TimeoutError:
-                    logger.warning(
-                        f"LLM call timeout on attempt {attempt + 1}/{max_retries}"
-                    )
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
-                    else:
-                        logger.error(f"LLM call failed after {max_retries} attempts")
-                        return AgentResult(
-                            success=False,
-                            error="LLM call timeout",
-                            duration=time.time() - start,
-                        )
-                except LLMError as e:
-                    logger.error(f"LLM configuration/runtime error: {e}")
+            try:
+                # Check timeout
+                if time.time() > execution_timeout:
+                    logger.error(f"Agent execution timeout after {timeout}s")
                     return AgentResult(
                         success=False,
-                        error=str(e),
+                        error=f"Execution timeout after {timeout}s",
                         duration=time.time() - start,
                     )
-                except Exception as e:
-                    logger.warning(
-                        f"LLM error on attempt {attempt + 1}/{max_retries}: {e}"
-                    )
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
-                    else:
-                        logger.error(
-                            f"LLM call failed after {max_retries} attempts: {e}"
+
+                # Retry logic for LLM calls using centralized constants
+                max_retries = AgentConstants.LLM_MAX_RETRIES
+                retry_delay = AgentConstants.LLM_RETRY_DELAY
+                llm_timeout = AgentConstants.LLM_CALL_TIMEOUT
+                resp = None
+
+                for attempt in range(max_retries):
+                    try:
+                        max_output_tokens = AgentConstants.MAX_OUTPUT_TOKENS
+                        resp = await asyncio.wait_for(
+                            self.llm.chat(
+                                model=self.config.model,
+                                messages=full,
+                                temperature=self.config.temperature,
+                                max_tokens=max_output_tokens,
+                            ),
+                            timeout=llm_timeout,
                         )
+                        input_tokens = sum(len(m.get("content", "")) // 4 for m in full)
+                        output_tokens = len(resp) // 4
+                        if hasattr(self, "session") and self.session:
+                            self.session.add_tokens(input_tokens + output_tokens)
+                        break  # Success, exit retry loop
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            f"LLM call timeout on attempt {attempt + 1}/{max_retries}"
+                        )
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                        else:
+                            logger.error(f"LLM call failed after {max_retries} attempts")
+                            return AgentResult(
+                                success=False,
+                                error="LLM call timeout",
+                                duration=time.time() - start,
+                            )
+                    except LLMError as e:
+                        logger.error(f"LLM configuration/runtime error: {e}")
                         return AgentResult(
-                            success=False, error=str(e), duration=time.time() - start
+                            success=False,
+                            error=str(e),
+                            duration=time.time() - start,
                         )
+                    except StopExecutionError:
+                        raise
+                    except Exception as e:
+                        # Check if this is a StopExecutionError wrapped in another exception
+                        if isinstance(e, StopExecutionError) or (hasattr(e, '__cause__') and isinstance(e.__cause__, StopExecutionError)):
+                            raise
+                        logger.warning(
+                            f"LLM error on attempt {attempt + 1}/{max_retries}: {e}"
+                        )
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                        else:
+                            logger.error(
+                                f"LLM call failed after {max_retries} attempts: {e}"
+                            )
+                            return AgentResult(
+                                success=False, error=str(e), duration=time.time() - start
+                            )
 
-            if resp is None:
-                logger.error("LLM returned None response")
-                return AgentResult(
-                    success=False,
-                    error="LLM returned None response",
-                    duration=time.time() - start,
-                )
-
-            self.add_message("assistant", resp)
-            self._emit(
-                "thought", {"content": resp, "raw_response": resp, "expanded": True}
-            )
-
-            action = self._parse(resp)
-
-            # Track consecutive plans
-            if action.get("action") == "plan":
-                consecutive_plans += 1
-            else:
-                consecutive_plans = 0
-
-            # Force delegate after 2 consecutive plans (prevent infinite loop)
-            if consecutive_plans >= self.MAX_CONSECUTIVE_PLANS and self.agent_factory:
-                logger.warning("Consecutive plans detected, forcing delegation")
-                steps = action.get("steps", [])
-                if steps:
-                    first_step = steps[0]
-                    target_agent = first_step.get("agent", "SearchAgent")
-                    task = first_step.get("task", "search")
-                    self._emit(
-                        "delegate",
-                        {"target_agent": target_agent, "task": task, "expanded": True},
-                    )
-                    agent_tools = self.get_tools_for_agent(target_agent)
-                    sub = self.agent_factory(
-                        name=target_agent,
-                        role=f"Execute {target_agent}",
-                        tools=agent_tools,
-                    )
-                    sub_context = {"event_ids": []}
-                    if self.session:
-                        sub_context["session"] = self.session
-                    sub_result = await sub.run(
-                        task, context=sub_context, is_sub_call=True
-                    )
-                    self._emit("result", {"content": sub_result.output})
+                if resp is None:
+                    logger.error("LLM returned None response")
                     return AgentResult(
-                        success=True,
-                        output=sub_result.output,
+                        success=False,
+                        error="LLM returned None response",
                         duration=time.time() - start,
                     )
 
-            # Check for infinite loops or repeated failures
-            if (
-                self._iteration > 1
-                and self.messages[-2].get("role") == "assistant"
-                and self.messages[-2].get("content") == resp
-            ):
-                logger.warning("Agent is repeating itself. Forcing a stop.")
-                return AgentResult(
-                    success=False,
-                    error="Agent stuck in a loop",
-                    duration=time.time() - start,
+                self.add_message("assistant", resp)
+                self._emit(
+                    "thought", {"content": resp, "raw_response": resp, "expanded": True}
                 )
 
-            if action.get("action") == "tool":
-                self._handle_tool_action(action, full)
-                continue
+                action = self._parse(resp)
 
-            elif action.get("action") == "delegate" and self.agent_factory:
-                # Execute delegation and add result to conversation, then continue loop
-                # This allows the agent to process the result and decide next action (e.g., respond with "done")
-                await self._handle_delegate_action(action, full, start)
-                continue
+                # Track consecutive plans
+                if action.get("action") == "plan":
+                    consecutive_plans += 1
+                else:
+                    consecutive_plans = 0
 
-            elif action.get("action") == "done":
-                result_output = self._extract_artifacts(action.get("result", ""))
-                self._emit("result", {"content": result_output})
-                return AgentResult(
-                    success=True, output=result_output, duration=time.time() - start
-                )
+                # Force delegate after 2 consecutive plans (prevent infinite loop)
+                if consecutive_plans >= self.MAX_CONSECUTIVE_PLANS and self.agent_factory:
+                    logger.warning("Consecutive plans detected, forcing delegation")
+                    steps = action.get("steps", [])
+                    if steps:
+                        first_step = steps[0]
+                        target_agent = first_step.get("agent", "SearchAgent")
+                        task = first_step.get("task", "search")
+                        self._emit(
+                            "delegate",
+                            {"target_agent": target_agent, "task": task, "expanded": True},
+                        )
+                        agent_tools = self.get_tools_for_agent(target_agent)
+                        sub = self.agent_factory(
+                            name=target_agent,
+                            role=f"Execute {target_agent}",
+                            tools=agent_tools,
+                        )
+                        sub_context = {"event_ids": []}
+                        if self.session:
+                            sub_context["session"] = self.session
+                        sub_result = await sub.run(
+                            task, context=sub_context, is_sub_call=True
+                        )
+                        self._emit("result", {"content": sub_result.output})
+                        return AgentResult(
+                            success=True,
+                            output=sub_result.output,
+                            duration=time.time() - start,
+                        )
 
-            elif action.get("action") == "error":
-                error_msg = action.get("error", "Unknown error")
-                logger.error(f"Agent encountered error: {error_msg}")
-                return AgentResult(
-                    success=False, error=error_msg, duration=time.time() - start
-                )
+                # Check for infinite loops or repeated failures
+                if (
+                    self._iteration > 1
+                    and self.messages[-2].get("role") == "assistant"
+                    and self.messages[-2].get("content") == resp
+                ):
+                    logger.warning("Agent is repeating itself. Forcing a stop.")
+                    return AgentResult(
+                        success=False,
+                        error="Agent stuck in a loop",
+                        duration=time.time() - start,
+                    )
 
-            elif action.get("action") == "options":
-                self._handle_options_action(action, full)
+                if action.get("action") == "tool":
+                    self._handle_tool_action(action, full)
+                    continue
 
-            elif action.get("action") == "plan":
-                await self._handle_plan_action(action, full)
-                continue
+                elif action.get("action") == "delegate" and self.agent_factory:
+                    # Execute delegation and add result to conversation, then continue loop
+                    await self._handle_delegate_action(action, full, start)
+                    continue
 
-            elif action.get("action") == "update_plan":
-                self._handle_update_plan_action(action, full)
+                elif action.get("action") == "done":
+                    result_output = self._extract_artifacts(action.get("result", ""))
+                    self._emit("result", {"content": result_output})
+                    return AgentResult(
+                        success=True, output=result_output, duration=time.time() - start
+                    )
 
+                elif action.get("action") == "error":
+                    error_msg = action.get("error", "Unknown error")
+                    logger.error(f"Agent encountered error: {error_msg}")
+                    return AgentResult(
+                        success=False, error=error_msg, duration=time.time() - start
+                    )
+
+                elif action.get("action") == "options":
+                    self._handle_options_action(action, full)
+
+                elif action.get("action") == "plan":
+                    await self._handle_plan_action(action, full)
+                    continue
+
+                elif action.get("action") == "update_plan":
+                    self._handle_update_plan_action(action, full)
+
+            except StopExecutionError:
+                raise
+            except Exception as e:
+                # Check if this is a StopExecutionError wrapped in another exception
+                if isinstance(e, StopExecutionError) or (hasattr(e, '__cause__') and isinstance(e.__cause__, StopExecutionError)):
+                    raise
+                logger.error(f"Error in agent loop: {e}")
+                self._emit("error", {"message": str(e)})
+                return AgentResult(False, error=str(e))
+
+        # If we reached max iterations, return a summary of what was done
+        summary = f"Agent reached maximum iterations ({self.config.max_iterations}). Last thought: {self.messages[-1].get('content', '') if self.messages else 'None'}"
+        self._emit("result", {"content": summary})
         return AgentResult(
-            success=False, error="Max iterations", duration=time.time() - start
+            success=False,
+            error="Max iterations reached",
+            output=summary,
+            duration=time.time() - start
         )
 
     def _handle_tool_action(
@@ -461,6 +433,10 @@ class BaseAgent(ABC):
         # Add the tool action and observation back into the conversation using
         # standard chat roles supported by plain chat-completions APIs.
         self.add_message("assistant", json.dumps(action))
+
+        if not result.success:
+            from kaggle_solver.exceptions import StopExecutionError
+            raise StopExecutionError(f"Tool {tool_name} failed: {result.error}")
 
         # Update full list to include new messages
         system = full[0] if full and full[0].get("role") == "system" else None
@@ -541,7 +517,10 @@ class BaseAgent(ABC):
 
         agent_tools = self.get_tools_for_agent(target)
         sub = self.agent_factory(
-            name=target, role=f"Execute {target}", tools=agent_tools
+            name=target,
+            role=f"Execute {target}",
+            tools=agent_tools,
+            max_iterations=self.config.max_iterations
         )
 
         sub_context = {"event_ids": context_ids}
@@ -560,7 +539,7 @@ class BaseAgent(ABC):
             {
                 "tool_name": "delegate",
                 "input": f"delegate to {target}: {task}",
-                "output": sub_result.output[:2000],
+                "output": sub_result.output[:2000] if sub_result.success else f"Error: {sub_result.error}\nOutput: {sub_result.output[:1000]}",
                 "success": sub_result.success,
                 "expanded": True,
             },
@@ -568,23 +547,37 @@ class BaseAgent(ABC):
 
         # Add delegation result as user message (not tool message to avoid tool_call_id issues)
         # This allows the agent to process the result and decide next action
+        feedback = f"Delegation to {target} completed. Result: {sub_result.output}\n\n"
+        if plan_id and step_id:
+            feedback += f"Step {step_id} of plan '{plan_id}' is complete. Continue with the next step of the plan or provide a final result if done."
+        else:
+            feedback += "Now provide your final answer to the user using the 'done' action."
+
         delegate_msg = {
             "role": "user",
-            "content": f"Delegation to {target} completed. Result: {sub_result.output}\n\nNow provide your final answer to the user using the 'done' action.",
+            "content": feedback,
         }
-        self.add_message(
-            "user",
-            f"Delegation to {target} completed. Result: {sub_result.output}\n\nNow provide your final answer to the user using the 'done' action.",
-        )
+        self.add_message("user", feedback)
         full.append(delegate_msg)
-
-        # Emit result event immediately to ensure it's displayed
-        # This ensures the final answer is shown even if coordinator doesn't use "done" action
-        self._emit("result", {"content": sub_result.output})
 
         logger.info(
             f">>> DELEGATION COMPLETED: {target}, output: {sub_result.output[:100]}"
         )
+
+        if not sub_result.success:
+            from kaggle_solver.exceptions import StopExecutionError
+            raise StopExecutionError(f"Delegation to {target} failed: {sub_result.error}")
+
+        # Mark step as completed in UI if it was part of a plan
+        if plan_id and step_id:
+            self._emit(
+                "update_plan",
+                {
+                    "plan_id": plan_id,
+                    "update": {"step_id": step_id, "status": "completed"},
+                },
+            )
+
         logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
 
     def _handle_options_action(
@@ -607,66 +600,13 @@ class BaseAgent(ABC):
         self._emit("plan", {"plan_id": plan_id, "steps": steps, "expanded": True})
 
         logger.info(
-            f">>> PLAN CREATED: {len(steps)} steps, agent_factory={self.agent_factory}"
+            f">>> PLAN CREATED: {len(steps)} steps"
         )
-
-        if steps and self.agent_factory:
-            first_step = steps[0]
-            target_agent = first_step.get("agent", "CodeAgent")
-            task = first_step.get("task", "")
-
-            logger.info(f">>> DELEGATING first step: {target_agent}: {task[:50]}...")
-
-            self._emit(
-                "delegate",
-                {
-                    "target_agent": target_agent,
-                    "task": task,
-                    "plan_id": plan_id,
-                    "expanded": True,
-                },
-            )
-
-            agent_tools = self.get_tools_for_agent(target_agent)
-            sub = self.agent_factory(
-                name=target_agent, role=f"Execute {target_agent}", tools=agent_tools
-            )
-            sub_context = {"event_ids": []}
-            if self.session:
-                sub_context["session"] = self.session
-
-            sub_result = await sub.run(task, context=sub_context, is_sub_call=True)
-
-            # Add delegation result as user message (not tool message to avoid tool_call_id issues)
-            # This allows the agent to process the result and decide next action
-            remaining_steps = len(steps) - 1
-            if remaining_steps > 0:
-                next_step = steps[1]
-                next_agent = next_step.get("agent", "CodeAgent")
-                next_task = next_step.get("task", "")
-                delegate_msg = {
-                    "role": "user",
-                    "content": f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nNext step ({steps[1].get('id')}): Delegate to {next_agent} with task: {next_task}",
-                }
-                self.add_message(
-                    "user",
-                    f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nNext step ({steps[1].get('id')}): Delegate to {next_agent} with task: {next_task}",
-                )
-            else:
-                delegate_msg = {
-                    "role": "user",
-                    "content": f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nAll plan steps completed. Now provide your final answer to the user using the 'done' action.",
-                }
-                self.add_message(
-                    "user",
-                    f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nAll plan steps completed. Now provide your final answer to the user using the 'done' action.",
-                )
-            full.append(delegate_msg)
-
-            logger.info(
-                f">>> PLAN STEP COMPLETED: {target_agent}, output: {sub_result.output[:100]}"
-            )
-            return
+        
+        # Add plan to conversation so the agent knows it has a plan to follow
+        plan_msg = f"Plan '{plan_id}' created with {len(steps)} steps. Now start by delegating the first step."
+        self.add_message("user", plan_msg)
+        full.append({"role": "user", "content": plan_msg})
 
         plan_text = f"Plan created with {len(steps)} steps."
         self.add_message("user", plan_text)
@@ -685,55 +625,6 @@ class BaseAgent(ABC):
         full.append({"role": "user", "content": f"plan updated: {update_type}"})
 
     def _parse(self, response: str) -> Dict[str, Any]:
-        import re
-        import json
-
-        def repair_json(json_str: str) -> str:
-            """Attempt to repair common JSON errors from LLM output."""
-            # Fix missing colon between key and value (e.g., "query{"action" -> "query":{"action")
-            repaired = re.sub(r'"(\w+)"\s*\{', r'"\1":{', json_str)
-            # Fix missing colon before string value (e.g., "query"python" -> "query":"python")
-            repaired = re.sub(r'"(\w+)"\s*"([^"]*)"', r'"\1":"\2"', repaired)
-            # Fix missing comma between key-value pairs
-            repaired = re.sub(r'"\s*"', ',"', repaired)
-            # Fix missing quotes around values
-            repaired = re.sub(
-                r":\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*([,}])", r':"\1"\2', repaired
-            )
-            return repaired
-
-        # Try to find JSON block using a stack-based approach for nested braces
-        def extract_json_objects(text):
-            objects = []
-            stack = []
-            start_index = -1
-
-            for i, char in enumerate(text):
-                if char == "{":
-                    if not stack:
-                        start_index = i
-                    stack.append(char)
-                elif char == "}":
-                    if stack:
-                        stack.pop()
-                        if not stack:
-                            json_str = text[start_index : i + 1]
-                            try:
-                                obj = json.loads(json_str)
-                                objects.append(obj)
-                            except json.JSONDecodeError:
-                                # Try to repair the JSON
-                                try:
-                                    repaired = repair_json(json_str)
-                                    obj = json.loads(repaired)
-                                    logger.warning(
-                                        f"Repaired malformed JSON: {json_str[:100]}..."
-                                    )
-                                    objects.append(obj)
-                                except json.JSONDecodeError as e:
-                                    logger.debug(f"Failed to repair JSON: {e}")
-            return objects
-
         json_objects = extract_json_objects(response)
 
         # If simple extraction failed, try regex for markdown code blocks

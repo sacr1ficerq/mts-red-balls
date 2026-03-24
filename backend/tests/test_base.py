@@ -109,7 +109,7 @@ class TestAgentConfig:
         assert config.role == "test role"
         assert config.tools == []
         assert config.model == "anthropic/claude-3.5-sonnet"
-        assert config.max_iterations == 10
+        assert config.max_iterations == 20
         assert config.temperature == 0.7
     
     def test_custom_values(self):
@@ -336,19 +336,6 @@ class TestBaseAgentRun:
         assert result.success is True
         mock_tool_registry.execute.assert_called_once()
     
-    def test_run_tool_action_failure(self, agent, mock_llm, mock_tool_registry):
-        """Agent should handle tool failure and continue loop - LLM decides outcome."""
-        # Tool fails, but LLM can still return done with error message
-        mock_llm.chat = AsyncMock(side_effect=[
-            '{"action": "tool", "tool": "console", "query": "bad"}',
-            '{"action": "done", "result": "Error: command failed"}'
-        ])
-        mock_tool_registry.execute.return_value = Mock(success=False, error="command failed")
-        
-        result = asyncio.run(agent.run("run command"))
-        
-        # Tool failure is reported in output, but LLM decides final result
-        assert "Error: command failed" in result.output
     
     def test_run_delegate_action(self, agent, mock_llm, mock_event_callback):
         """Agent should handle delegation and continue loop."""
@@ -609,6 +596,37 @@ class TestAgentEdgeCases:
         result = asyncio.run(agent.run("Привет мир! 🌍"))
         
         assert result.success is True
+
+    def test_run_stops_on_tool_error(self, agent, mock_llm, mock_tool_registry):
+        """Agent should stop immediately when a tool returns an error."""
+        from kaggle_solver.exceptions import StopExecutionError
+        
+        # Tool returns error
+        mock_llm.chat = AsyncMock(return_value='{"action": "tool", "tool": "console", "query": "fail"}')
+        mock_tool_registry.execute.return_value = Mock(success=False, error="Critical tool failure")
+        
+        with pytest.raises(StopExecutionError) as excinfo:
+            asyncio.run(agent.run("test"))
+            
+        assert "Critical tool failure" in str(excinfo.value)
+        # Verify it only ran 1 iteration
+        assert agent._iteration == 1
+
+    def test_run_stops_on_delegate_error(self, agent, mock_llm):
+        """Agent should stop immediately when a delegated agent returns an error."""
+        from kaggle_solver.exceptions import StopExecutionError
+        
+        mock_llm.chat = AsyncMock(return_value='{"action": "delegate", "agent": "Worker", "task": "fail"}')
+        
+        sub_agent = Mock()
+        sub_agent.run = AsyncMock(return_value=AgentResult(success=False, error="Sub-agent failed"))
+        agent.agent_factory = Mock(return_value=sub_agent)
+        
+        with pytest.raises(StopExecutionError) as excinfo:
+            asyncio.run(agent.run("test"))
+            
+        assert "Sub-agent failed" in str(excinfo.value)
+        assert agent._iteration == 1
     
     def test_special_characters_in_response(self, agent, mock_llm):
         """Agent should handle special chars in LLM response."""

@@ -1,35 +1,8 @@
-name: kaggle_validate_submission
+# kaggle_validate_submission
 description: |
-  Validate a submission file against the sample submission format. Checks for column names, 
-  row counts, ID values, missing values, and data types. Always validate before submitting 
-  to avoid submission errors.
+  Validate a submission file against a sample submission.
+  Input: query (competition name), submission_file (path), sample_file (path)
+  Output: validation results (success/failure and reasons)
 
-parameters:
-  query:
-    type: string
-    required: true
-    description: Competition name (for context)
-  submission_file:
-    type: string
-    required: true
-    description: Path to submission file to validate
-  sample_file:
-    type: string
-    required: true
-    description: Path to sample submission file for format reference
-
-examples:
-  - query: "Validate submission.csv against sample_submission.csv"
-    parameters:
-      query: "titanic"
-      submission_file: "submission.csv"
-      sample_file: "sample_submission.csv"
-
-output_format: |
-  Returns a JSON object with validation results:
-  {
-    "valid": true,
-    "issues": [],
-    "submission_rows": 418,
-    "submission_columns": ["PassengerId", "Survived"]
-  }
+usage: |
+  {"action": "tool", "tool": "kaggle_validate_submission", "query": "titanic", "submission_file": "submission.csv", "sample_file": "gender_submission.csv"}

@@ -145,7 +145,7 @@ class SandboxConstants:
     ONE_GB = 1024 * 1024 * 1024
     
     # Allowed commands for execution
-    ALLOWED_COMMANDS = {"python", "python3", "pip", "ls", "cat", "head", "mkdir", "rm", "cp", "mv", "echo", "date"}
+    ALLOWED_COMMANDS = {"python", "python3", "pip", "ls", "cat", "head", "mkdir", "rm", "cp", "mv", "echo", "date", "kaggle", "unzip"}
     
     # Blocked shell patterns
     BLOCKED_PATTERNS = [
@@ -244,7 +244,14 @@ class ToolConstants:
     TOOLS_REQUIRING_LLM = {TOOL_SEARCH, TOOL_RAG}
     
     # Tools requiring sandbox
-    TOOLS_REQUIRING_SANDBOX = {TOOL_CONSOLE, TOOL_FILES}
+    TOOLS_REQUIRING_SANDBOX = {
+        TOOL_CONSOLE,
+        TOOL_FILES,
+        "kaggle_download_data",
+        "kaggle_submit",
+        "kaggle_validate_submission",
+        "kaggle_prepare_submission",
+    }
     
     # Maximum tool execution time (in seconds)
     MAX_TOOL_EXECUTION_TIME = 120

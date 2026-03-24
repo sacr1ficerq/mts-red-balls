@@ -564,21 +564,27 @@
                     <p class="text-xs text-gray-500">Получите API токен на <a href="https://openrouter.ai/keys" target="_blank" class="text-blue-500 hover:underline">openrouter.ai/keys</a></p>
                 </div>
 
-                <!-- Kaggle Key Section -->
+                <!-- Kaggle Credentials Section -->
                 <div class="space-y-2">
-                    <label class="text-sm font-medium text-gray-700">Kaggle API Token</label>
-                    <div class="flex gap-2">
-                        <input type="password"
-                               x-model="newKaggleKey"
-                               :placeholder="settings.has_kaggle_key ? '••••••••••••••••' : 'Введите Kaggle API токен'"
-                               class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200">
-                        <button @click="saveKaggleKey()"
-                                :disabled="!newKaggleKey.trim()"
-                                class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                            Сохранить
-                        </button>
+                    <label class="text-sm font-medium text-gray-700">Kaggle API Credentials</label>
+                    <div class="space-y-2">
+                        <input type="text"
+                               x-model="newKaggleUsername"
+                               :placeholder="settings.kaggle_username || 'Kaggle username'"
+                               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200">
+                        <div class="flex gap-2">
+                            <input type="password"
+                                   x-model="newKaggleKey"
+                                   :placeholder="settings.has_kaggle_key ? '••••••••••••••••' : 'Kaggle API Key'"
+                                   class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200">
+                            <button @click="saveKaggleKey()"
+                                    :disabled="!newKaggleKey.trim() || !newKaggleUsername.trim()"
+                                    class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                Сохранить
+                            </button>
+                        </div>
                     </div>
-                    <p class="text-xs text-gray-500">Получите ключ на <a href="https://www.kaggle.com/settings" target="_blank" class="text-blue-500 hover:underline">kaggle.com/settings</a></p>
+                    <p class="text-xs text-gray-500">Получите ключ на <a href="https://www.kaggle.com/settings" target="_blank" class="text-blue-500 hover:underline">kaggle.com/settings</a> → Create New API Token</p>
                 </div>
 
             </div>

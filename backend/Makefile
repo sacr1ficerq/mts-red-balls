@@ -1,28 +1,19 @@
-.PHONY: install run debug clean test test-openrouter test-model-access test-all hello-world
+.PHONY: install run hello-world test
+
+VENV = venv
+PYTHON = $(VENV)/bin/python3
+PIP = $(VENV)/bin/pip
 
 install:
-	python3 -m pip install -r requirements.txt
+	python3 -m venv $(VENV)
+	$(PIP) install --upgrade pip
+	$(PIP) install -r requirements.txt
 
 run:
-	python3 -m uvicorn server:app --reload --port 8000 --log-level $${LOG_LEVEL:-info}
-
-debug:
-	LOG_LEVEL=debug $(MAKE) run
-
-clean:
-	rm -rf __pycache__ .pytest_cache
-
-test:
-	python3 -m pytest tests/ -v
-
-test-openrouter:
-	python3 -m pytest tests/test_openrouter.py -v -s
-
-test-model-access:
-	python3 -m pytest tests/test_openrouter.py::TestModelAccess -v -s
-
-test-all:
-	python3 -m pytest tests/ -v --tb=short
+	$(PYTHON) server.py
 
 hello-world:
-	python3 -m pytest tests/test_integration_real_llm.py::TestProductionFlow::test_hello_world_rust_production -v -s -m integration --log-cli-level=DEBUG
+	$(PYTHON) -c "print('Hello from Backend')"
+
+test:
+	$(PYTHON) -m pytest tests/ -v

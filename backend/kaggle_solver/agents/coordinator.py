@@ -31,10 +31,9 @@ def load_tool_definitions(tools: list) -> dict:
         if tool_path.exists():
             try:
                 with open(tool_path, "r") as f:
-                    data = yaml.safe_load(f)
-                    if data:
-                        for key, value in data.items():
-                            definitions[key] = value
+                    content = f.read()
+                    # We want to keep the raw content as the definition for the placeholder
+                    definitions[tool] = content
             except Exception as e:
                 logger.warning(f"Failed to load tool definitions for {tool}: {e}")
     return definitions
@@ -69,13 +68,33 @@ class CoordinatorAgentPrompts:
 class CodeAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("code.yaml", "", tools=["console", "files", "result"])
+        return load_prompt(
+            "code.yaml",
+            "",
+            tools=[
+                "console",
+                "files",
+                "result",
+                "kaggle_get_competition_info",
+                "kaggle_download_data",
+                "kaggle_submit",
+                "kaggle_get_submission_status",
+                "kaggle_get_leaderboard",
+                "kaggle_list_competitions",
+                "kaggle_validate_submission",
+                "kaggle_prepare_submission",
+            ],
+        )
 
 
 class SearchAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("search.yaml", "", tools=["search", "result"])
+        return load_prompt(
+            "search.yaml",
+            "",
+            tools=["search", "result", "kaggle_list_competitions", "kaggle_get_competition_info"],
+        )
 
 
 class CriticAgentPrompts:
@@ -126,7 +145,17 @@ class KaggleSubmitterPrompts:
     @staticmethod
     def system_prompt() -> str:
         return load_prompt(
-            "kaggle_submitter.yaml", "", tools=["console", "files", "result"]
+            "kaggle_submitter.yaml",
+            "",
+            tools=[
+                "console",
+                "files",
+                "result",
+                "kaggle_submit",
+                "kaggle_get_submission_status",
+                "kaggle_validate_submission",
+                "kaggle_prepare_submission",
+            ],
         )
 
 

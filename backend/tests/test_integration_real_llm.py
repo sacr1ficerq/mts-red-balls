@@ -552,6 +552,7 @@ class TestProductionFlow:
         config.sandbox.root = str(tmp_path / "workspace")
         config.llm.requests_per_minute = 8
         config.llm.model = "openai/gpt-4o-mini"
+        config.max_iterations = 20  # Increase iterations for complex tasks
 
         orch = Orchestrator(config)
         return orch
@@ -594,6 +595,7 @@ class TestProductionFlow:
             tools=["delegate", "message", "tool"],
             event_callback=event_callback,
             sandbox=session_sandbox,
+            session=session,
         )
 
         result = await coordinator.run(
