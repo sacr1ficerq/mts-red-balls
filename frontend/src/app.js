@@ -89,6 +89,21 @@ function buildPlanFromEvents(events = []) {
             }
         }
 
+        if (event.type === 'tool' && plan && event.data?.tool_name === 'delegate' && event.data?.success === true) {
+            for (let i = events.indexOf(event) - 1; i >= 0; i -= 1) {
+                const prevEvent = events[i];
+                if (prevEvent.type !== 'delegate' || !prevEvent.data?.step_id) {
+                    continue;
+                }
+
+                const step = plan.steps.find((item) => item.id === Number(prevEvent.data.step_id));
+                if (step) {
+                    step.status = 'completed';
+                }
+                break;
+            }
+        }
+
         if (event.type === 'delegate' && plan && event.data?.step_id) {
             const step = plan.steps.find((item) => item.id === Number(event.data.step_id));
             if (step && step.status !== 'completed') {
@@ -98,6 +113,18 @@ function buildPlanFromEvents(events = []) {
     }
 
     return plan;
+}
+
+function buildPlanFromSession(session) {
+    const currentPlan = session?.artifacts?.current_plan;
+    if (currentPlan && Array.isArray(currentPlan.steps)) {
+        return {
+            plan_id: currentPlan.plan_id || '',
+            steps: cloneSteps(currentPlan.steps)
+        };
+    }
+
+    return buildPlanFromEvents(session?.events || []);
 }
 
 window.dashboard = function() {
@@ -220,7 +247,7 @@ window.dashboard = function() {
         },
 
         syncCurrentPlan() {
-            this.currentPlan = buildPlanFromEvents(this.currentSessionEvents);
+            this.currentPlan = buildPlanFromSession(this.currentSession);
         },
 
         async refreshSessionMetrics(sessionId) {
@@ -234,16 +261,16 @@ window.dashboard = function() {
 
                 this.activeSessions = {
                     ...this.activeSessions,
-                    [sessionId]: {
+                    [sessionId]: this.normalizeSession({
                         ...activeSession,
-                        status: latest.status || activeSession.status,
-                        total_tokens: latest.total_tokens || 0,
-                        total_cost: latest.total_cost || 0
-                    }
+                        ...latest,
+                        events: latest.events || activeSession.events || []
+                    })
                 };
 
                 if (this.currentSessionId === sessionId) {
                     this.syncMetrics(this.activeSessions[sessionId]);
+                    this.syncCurrentPlan();
                 }
             } catch (error) {
                 console.error('Error refreshing session metrics:', error);
@@ -697,6 +724,37 @@ window.dashboard = function() {
 
         formatContent(content) {
             return Formatters.formatContent(content);
+        },
+
+        getThoughtContent(event) {
+            const rawContent = event?.data?.content;
+            const formatted = this.formatContent(rawContent || '');
+            if (formatted) {
+                return formatted;
+            }
+
+            if (typeof rawContent === 'string') {
+                return this.escapeHtml(rawContent);
+            }
+
+            if (rawContent !== undefined && rawContent !== null) {
+                return this.escapeHtml(JSON.stringify(rawContent, null, 2));
+            }
+
+            return this.escapeHtml(JSON.stringify(event?.data || event || {}, null, 2));
+        },
+
+        getErrorContent(event) {
+            const direct = event?.data?.content || event?.message;
+            if (direct) {
+                return direct;
+            }
+
+            if (event?.data && Object.keys(event.data).length > 0) {
+                return JSON.stringify(event.data, null, 2);
+            }
+
+            return JSON.stringify(event || {}, null, 2);
         },
 
         // Settings methods

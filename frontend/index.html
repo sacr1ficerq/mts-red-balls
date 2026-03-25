@@ -19,7 +19,7 @@
     <script type="module" src="src/services/api.js?v=41"></script>
     <script type="module" src="src/utils/formatters.js?v=40"></script>
     <script type="module" src="src/utils/styles.js?v=40"></script>
-    <script type="module" src="src/app.js?v=48"></script>
+    <script type="module" src="src/app.js?v=52"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-50 h-screen flex overflow-hidden text-sm" x-data="dashboard()" x-init="init()" x-cloak>
@@ -257,7 +257,7 @@
                                         <i class="fas text-xs" :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                                     </div>
                                     <div x-show="event.expanded && event.data.content" class="p-4 text-sm text-gray-700 border-t border-gray-100">
-                                        <div x-html="DOMPurify.sanitize(marked.parse(formatContent(event.data.content || '')))"></div>
+                                        <div x-html="DOMPurify.sanitize(marked.parse(getThoughtContent(event)))"></div>
                                     </div>
                                 </div>
                             </div>
@@ -417,7 +417,7 @@
                         </template>
 
                         <!-- Error -->
-                        <template x-if="event.type === 'error' && (event.data?.content || event.message)">
+                        <template x-if="event.type === 'error' && (event.data || event.message)">
                             <div class="flex gap-4 mt-4">
                                 <div class="flex-shrink-0 mt-1">
                                     <div class="w-8 h-8 rounded-full flex items-center justify-center border"
@@ -433,12 +433,12 @@
                                               x-text="getAgentDisplayName(event.agent || 'Coordinator')"></span>
                                         <span class="text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-700">Ошибка</span>
                                     </div>
-                                    <div class="p-4 text-sm font-medium"
-                                         :class="getErrorStyle().bodyText"
-                                         x-text="event.data?.content || event.message"></div>
-                                </div>
-                            </div>
-                        </template>
+                                     <div class="p-4 text-sm font-medium"
+                                          :class="getErrorStyle().bodyText"
+                                          x-text="getErrorContent(event)"></div>
+                                 </div>
+                             </div>
+                         </template>
 
                     </div>
                 </template>
@@ -512,15 +512,16 @@
                 <template x-for="step in currentPlan.steps" :key="step.id">
                     <div class="flex items-start gap-2.5 px-2 py-2 rounded-md border"
                          :class="step.status === 'completed' ? 'bg-emerald-50 border-emerald-100' : (step.status === 'active' ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100')">
-                        <div class="w-5 h-5 mt-0.5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px]"
-                             :class="step.status === 'completed' ? 'bg-emerald-500' : (step.status === 'active' ? 'bg-blue-500' : 'bg-gray-300')">
-                            <i class="fas text-white"
-                               :class="step.status === 'completed' ? 'fa-check' : (step.status === 'active' ? 'fa-spinner fa-spin' : 'fa-minus')"></i>
-                        </div>
+                        <div class="w-7 flex-shrink-0 pt-0.5 text-sm font-semibold text-right"
+                             :class="step.status === 'completed' ? 'text-emerald-600' : (step.status === 'active' ? 'text-blue-700' : 'text-gray-500')"
+                             x-text="`${step.id}.`"></div>
                         <div class="min-w-0 flex-1">
-                            <div class="text-[10px] uppercase tracking-wide font-semibold"
-                                 :class="step.status === 'completed' ? 'text-emerald-600' : (step.status === 'active' ? 'text-blue-700' : 'text-gray-500')"
-                                 x-text="`Step ${step.id}`"></div>
+                            <div class="text-[10px] uppercase tracking-wide font-semibold flex items-center gap-2"
+                                 :class="step.status === 'completed' ? 'text-emerald-600' : (step.status === 'active' ? 'text-blue-700' : 'text-gray-500')">
+                                <span x-text="step.status === 'completed' ? 'Completed' : (step.status === 'active' ? 'In Progress' : 'Pending')"></span>
+                                <i x-show="step.status === 'active'" class="fas fa-spinner fa-spin text-[10px]"></i>
+                                <i x-show="step.status === 'completed'" class="fas fa-check text-[10px]"></i>
+                            </div>
                             <div class="text-xs leading-5"
                                  :class="step.status === 'completed' ? 'text-gray-500 line-through' : (step.status === 'active' ? 'text-gray-800 font-medium' : 'text-gray-600')"
                                  x-text="step.task"></div>

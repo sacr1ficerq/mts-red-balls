@@ -152,6 +152,51 @@ class BaseAgent(ABC):
             normalized.append(step_copy)
         return normalized
 
+    def _sync_session_plan_artifact(self) -> None:
+        if not self.session:
+            return
+
+        if not self._active_plan:
+            self.session.delete_artifact("current_plan")
+            return
+
+        self.session.set_artifact(
+            "current_plan",
+            {
+                "plan_id": self._active_plan.get("plan_id", ""),
+                "steps": [dict(step) for step in self._active_plan.get("steps", [])],
+            },
+        )
+
+    def _restore_active_plan_from_session(self) -> None:
+        if not self.session:
+            return
+
+        current_plan = self.session.get_artifact("current_plan")
+        if not isinstance(current_plan, dict):
+            return
+
+        steps = current_plan.get("steps", [])
+        if not isinstance(steps, list):
+            return
+
+        self._active_plan = {
+            "plan_id": current_plan.get("plan_id", ""),
+            "steps": self._normalize_plan_steps(steps),
+        }
+
+    def _set_active_plan_step_status(self, step_id: Any, status: str) -> None:
+        if not self._active_plan or not step_id:
+            return
+
+        for index, step in enumerate(self._active_plan.get("steps", [])):
+            if step.get("id") == step_id:
+                next_step = dict(step)
+                next_step["status"] = status
+                self._active_plan["steps"][index] = next_step
+                self._sync_session_plan_artifact()
+                return
+
     def _plan_has_unresolved_steps(self) -> bool:
         if not self._active_plan:
             return False
@@ -319,6 +364,8 @@ class BaseAgent(ABC):
         if context:
             if "session" in context:
                 self.session = context["session"]
+
+            self._restore_active_plan_from_session()
 
             # Handle shared artifacts from previous agents
             if "artifacts" in context and self.session:
@@ -704,6 +751,8 @@ class BaseAgent(ABC):
         plan_id = action.get("plan_id", "")
         step_id = action.get("step_id", 0)
 
+        self._set_active_plan_step_status(step_id, "active")
+
         self._emit(
             "delegate",
             {
@@ -820,6 +869,7 @@ class BaseAgent(ABC):
             "plan_id": plan_id,
             "steps": self._normalize_plan_steps(steps),
         }
+        self._sync_session_plan_artifact()
         self._emit("plan", {"plan_id": plan_id, "steps": steps, "expanded": True})
 
         logger.info(
@@ -830,6 +880,9 @@ class BaseAgent(ABC):
             first_step = steps[0]
             target_agent = first_step.get("agent", "CodeAgent")
             task = first_step.get("task", "")
+            step_id = first_step.get("id", 0)
+
+            self._set_active_plan_step_status(step_id, "active")
 
             logger.info(f">>> DELEGATING first step: {target_agent}: {task[:50]}...")
 
@@ -839,6 +892,7 @@ class BaseAgent(ABC):
                     "target_agent": target_agent,
                     "task": task,
                     "plan_id": plan_id,
+                    "step_id": step_id,
                     "expanded": True,
                 },
             )
@@ -935,6 +989,7 @@ class BaseAgent(ABC):
         self, action: Dict[str, Any], full: List[Dict[str, Any]]
     ) -> None:
         plan_update = self._apply_plan_updates(action)
+        self._sync_session_plan_artifact()
         self._emit("update_plan", {**plan_update, "expanded": True})
 
         if self._plan_has_unresolved_steps():
