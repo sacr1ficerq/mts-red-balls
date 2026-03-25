@@ -16,10 +16,10 @@
     <style>[x-cloak] { display: none !important; }</style>
     
     <!-- Local Scripts -->
-    <script type="module" src="src/services/api.js?v=40"></script>
+    <script type="module" src="src/services/api.js?v=41"></script>
     <script type="module" src="src/utils/formatters.js?v=40"></script>
     <script type="module" src="src/utils/styles.js?v=40"></script>
-    <script type="module" src="src/app.js?v=45"></script>
+    <script type="module" src="src/app.js?v=48"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-50 h-screen flex overflow-hidden text-sm" x-data="dashboard()" x-init="init()" x-cloak>
@@ -553,6 +553,7 @@
                     <div class="flex gap-2">
                         <input type="password"
                                x-model="newApiKey"
+                               @input="onApiKeyInput()"
                                :placeholder="settings.has_api_key ? '••••••••••••••••' : 'Введите API ключ'"
                                class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200">
                         <button @click="saveApiKey()"
@@ -560,6 +561,14 @@
                                 class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                             Сохранить
                         </button>
+                    </div>
+                    <div class="text-xs flex items-center gap-2 text-gray-500" x-show="openrouterChecking">
+                        <i class="fas fa-circle-notch fa-spin"></i>
+                        <span>Checking OpenRouter token...</span>
+                    </div>
+                    <div class="text-xs flex items-center gap-2" x-show="!openrouterChecking && settings.openrouter_health" :class="getHealthClass(settings.openrouter_health)">
+                        <span class="font-semibold" x-text="settings.openrouter_health?.ok ? '●' : '●'"></span>
+                        <span x-text="formatHealthMessage(settings.openrouter_health)"></span>
                     </div>
                     <p class="text-xs text-gray-500">Получите API токен на <a href="https://openrouter.ai/keys" target="_blank" class="text-blue-500 hover:underline">openrouter.ai/keys</a></p>
                 </div>
@@ -570,6 +579,7 @@
                     <div class="flex gap-2">
                         <input type="password"
                                x-model="newKaggleKey"
+                               @input="onKaggleKeyInput()"
                                :placeholder="settings.has_kaggle_key ? '••••••••••••••••' : 'Введите Kaggle API токен'"
                                class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200">
                         <button @click="saveKaggleKey()"
@@ -577,6 +587,14 @@
                                 class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                             Сохранить
                         </button>
+                    </div>
+                    <div class="text-xs flex items-center gap-2 text-gray-500" x-show="kaggleChecking">
+                        <i class="fas fa-circle-notch fa-spin"></i>
+                        <span>Checking Kaggle token...</span>
+                    </div>
+                    <div class="text-xs flex items-center gap-2" x-show="!kaggleChecking && settings.kaggle_health" :class="getHealthClass(settings.kaggle_health)">
+                        <span class="font-semibold" x-text="settings.kaggle_health?.ok ? '●' : '●'"></span>
+                        <span x-text="formatHealthMessage(settings.kaggle_health)"></span>
                     </div>
                     <p class="text-xs text-gray-500">Получите ключ на <a href="https://www.kaggle.com/settings" target="_blank" class="text-blue-500 hover:underline">kaggle.com/settings</a></p>
                 </div>

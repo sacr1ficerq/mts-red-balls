@@ -12,6 +12,8 @@ import json
 import threading
 import time
 import os
+import urllib.request
+import urllib.error
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -644,7 +646,13 @@ def list_agents():
 
 # ==================== Settings API ====================
 
-from kaggle_solver.core.settings import SettingsManager, AVAILABLE_MODELS, AVAILABLE_FREE_MODELS, DEFAULT_MODEL
+from kaggle_solver.core.settings import (
+    SettingsManager,
+    AVAILABLE_MODELS,
+    AVAILABLE_FREE_MODELS,
+    DEFAULT_MODEL,
+)
+from kaggle_solver.mcp.kaggle_mcp import _parse_kaggle_token, KaggleMCPClient
 
 _settings_manager = None
 
@@ -659,8 +667,98 @@ def get_settings_manager() -> SettingsManager:
 
 class SettingsUpdate(BaseModel):
     """Model for settings update request."""
+
     api_key: Optional[str] = None
+    kaggle_key: Optional[str] = None
     agent_models: Optional[Dict[str, Dict[str, Any]]] = None
+
+
+class SettingsTokenCheckRequest(BaseModel):
+    """Model for validating unsaved tokens from settings UI."""
+
+    api_key: Optional[str] = None
+    kaggle_key: Optional[str] = None
+
+
+def _mask_secret(secret: str) -> str:
+    """Mask a secret value for API responses."""
+    if not secret:
+        return ""
+    return "*" * (len(secret) - 4) + secret[-4:] if len(secret) > 4 else "****"
+
+
+def check_openrouter_token_health(api_key: str) -> Dict[str, Any]:
+    """Validate OpenRouter token by calling auth-protected endpoint."""
+    token = (api_key or "").strip()
+    if not token:
+        return {
+            "ok": False,
+            "message": "OpenRouter token is empty",
+            "status_code": None,
+        }
+
+    req = urllib.request.Request(
+        "https://openrouter.ai/api/v1/auth/key",
+        headers={"Authorization": f"Bearer {token}"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            status_code = response.getcode()
+            payload = response.read().decode("utf-8", errors="ignore")
+            ok = status_code == 200 and ('"data"' in payload or '"key"' in payload)
+            return {
+                "ok": ok,
+                "message": "OpenRouter token is valid"
+                if ok
+                else "OpenRouter returned unexpected response",
+                "status_code": status_code,
+            }
+    except urllib.error.HTTPError as e:
+        details = e.read().decode("utf-8", errors="ignore")
+        return {
+            "ok": False,
+            "message": f"OpenRouter auth failed: {details[:300] or str(e)}",
+            "status_code": e.code,
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "message": f"OpenRouter health check failed: {str(e)}",
+            "status_code": None,
+        }
+
+
+def check_kaggle_token_health(kaggle_key: str) -> Dict[str, Any]:
+    """Validate Kaggle token by listing competitions via Kaggle CLI."""
+    token = (kaggle_key or "").strip()
+    if not token:
+        return {
+            "ok": False,
+            "message": "Kaggle token is empty",
+        }
+
+    username, api_key = _parse_kaggle_token(token)
+    if not api_key:
+        return {
+            "ok": False,
+            "message": "Kaggle token format is invalid",
+        }
+
+    try:
+        client = KaggleMCPClient(api_key=api_key, username=username)
+        competitions = client.list_competitions(search="titanic")
+        return {
+            "ok": isinstance(competitions, list),
+            "message": "Kaggle token is valid"
+            if isinstance(competitions, list)
+            else "Kaggle returned unexpected response",
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "message": f"Kaggle auth failed: {str(e)}",
+        }
 
 
 @app.get("/api/settings")
@@ -668,16 +766,19 @@ def get_settings():
     """Get current settings (API key is masked for security)."""
     manager = get_settings_manager()
     settings = manager.get_settings()
-    
-    # Mask API key for security (show only last 4 chars)
+
     api_key = settings.api_key
-    masked_key = ""
-    if api_key:
-        masked_key = "*" * (len(api_key) - 4) + api_key[-4:] if len(api_key) > 4 else "****"
-    
+    kaggle_key = settings.kaggle_key
+    openrouter_health = check_openrouter_token_health(api_key) if api_key else None
+    kaggle_health = check_kaggle_token_health(kaggle_key) if kaggle_key else None
+
     return {
-        "api_key_masked": masked_key,
+        "api_key_masked": _mask_secret(api_key),
         "has_api_key": bool(api_key),
+        "openrouter_health": openrouter_health,
+        "kaggle_key_masked": _mask_secret(kaggle_key),
+        "has_kaggle_key": bool(kaggle_key),
+        "kaggle_health": kaggle_health,
         "agent_models": settings.agent_models,
         "default_model": DEFAULT_MODEL,
     }
@@ -687,27 +788,52 @@ def get_settings():
 def update_settings(update: SettingsUpdate):
     """Update settings (API key and/or agent models)."""
     manager = get_settings_manager()
-    
+
     try:
         updated = manager.update_settings(
             api_key=update.api_key,
-            agent_models=update.agent_models
+            kaggle_key=update.kaggle_key,
+            agent_models=update.agent_models,
         )
-        
-        # Mask API key in response
+
         api_key = updated.api_key
-        masked_key = ""
-        if api_key:
-            masked_key = "*" * (len(api_key) - 4) + api_key[-4:] if len(api_key) > 4 else "****"
-        
+        kaggle_key = updated.kaggle_key
+        openrouter_health = None
+        kaggle_health = None
+
+        if update.api_key is not None:
+            openrouter_health = check_openrouter_token_health(api_key)
+        if update.kaggle_key is not None:
+            kaggle_health = check_kaggle_token_health(kaggle_key)
+
         return {
             "success": True,
-            "api_key_masked": masked_key,
+            "api_key_masked": _mask_secret(api_key),
             "has_api_key": bool(api_key),
+            "openrouter_health": openrouter_health,
+            "kaggle_key_masked": _mask_secret(kaggle_key),
+            "has_kaggle_key": bool(kaggle_key),
+            "kaggle_health": kaggle_health,
             "agent_models": updated.agent_models,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update settings: {str(e)}"
+        )
+
+
+@app.post("/api/settings/check")
+def check_settings_tokens(payload: SettingsTokenCheckRequest):
+    """Validate provided tokens without saving them."""
+    response: Dict[str, Any] = {"success": True}
+
+    if payload.api_key is not None:
+        response["openrouter_health"] = check_openrouter_token_health(payload.api_key)
+
+    if payload.kaggle_key is not None:
+        response["kaggle_health"] = check_kaggle_token_health(payload.kaggle_key)
+
+    return response
 
 
 @app.get("/api/settings/models")
@@ -725,7 +851,7 @@ def get_agent_settings(agent_name: str):
     """Get model configuration for a specific agent."""
     manager = get_settings_manager()
     settings = manager.get_settings()
-    
+
     config = settings.get_agent_model(agent_name)
     return {
         "agent_name": agent_name,
@@ -740,22 +866,24 @@ def update_agent_settings(
     agent_name: str,
     model: Optional[str] = None,
     temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None
+    max_tokens: Optional[int] = None,
 ):
     """Update model configuration for a specific agent."""
     manager = get_settings_manager()
-    
+
     if model is None and temperature is None and max_tokens is None:
-        raise HTTPException(status_code=400, detail="At least one parameter must be provided")
-    
+        raise HTTPException(
+            status_code=400, detail="At least one parameter must be provided"
+        )
+
     try:
         updated = manager.update_agent_model(
             agent_name=agent_name,
             model=model,
             temperature=temperature,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
         )
-        
+
         config = updated.get_agent_model(agent_name)
         return {
             "success": True,
@@ -765,7 +893,9 @@ def update_agent_settings(
             "max_tokens": config.max_tokens,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update agent settings: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update agent settings: {str(e)}"
+        )
 
 
 if __name__ == "__main__":

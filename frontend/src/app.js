@@ -124,8 +124,10 @@ window.dashboard = function() {
         settings: {
             api_key_masked: '',
             has_api_key: false,
+            openrouter_health: null,
             kaggle_key_masked: '',
             has_kaggle_key: false,
+            kaggle_health: null,
             agent_models: {},
             default_model: 'openai/gpt-4o-mini'
         },
@@ -136,6 +138,10 @@ window.dashboard = function() {
         newApiKey: '',
         newKaggleKey: '',
         settingsSaving: false,
+        openrouterChecking: false,
+        kaggleChecking: false,
+        openrouterCheckTimer: null,
+        kaggleCheckTimer: null,
         settingsError: null,
         settingsSuccess: null,
 
@@ -711,6 +717,8 @@ window.dashboard = function() {
             this.settingsOpen = true;
             this.newApiKey = '';
             this.newKaggleKey = '';
+            this.openrouterChecking = false;
+            this.kaggleChecking = false;
             this.settingsError = null;
             this.settingsSuccess = null;
         },
@@ -719,12 +727,73 @@ window.dashboard = function() {
             this.settingsOpen = false;
             this.newApiKey = '';
             this.newKaggleKey = '';
+            this.openrouterChecking = false;
+            this.kaggleChecking = false;
             this.settingsError = null;
             this.settingsSuccess = null;
         },
 
+        onApiKeyInput() {
+            if (this.openrouterCheckTimer) {
+                clearTimeout(this.openrouterCheckTimer);
+            }
+
+            const token = this.newApiKey.trim();
+            if (!token) {
+                this.settings.openrouter_health = null;
+                this.openrouterChecking = false;
+                return;
+            }
+
+            this.settings.openrouter_health = null;
+            this.openrouterChecking = true;
+            this.openrouterCheckTimer = setTimeout(async () => {
+                try {
+                    const result = await window.API.checkSettingsTokens({ api_key: token });
+                    this.settings.openrouter_health = result.openrouter_health || null;
+                } catch (err) {
+                    this.settings.openrouter_health = {
+                        ok: false,
+                        message: err.message || 'OpenRouter check failed'
+                    };
+                } finally {
+                    this.openrouterChecking = false;
+                }
+            }, 450);
+        },
+
+        onKaggleKeyInput() {
+            if (this.kaggleCheckTimer) {
+                clearTimeout(this.kaggleCheckTimer);
+            }
+
+            const token = this.newKaggleKey.trim();
+            if (!token) {
+                this.settings.kaggle_health = null;
+                this.kaggleChecking = false;
+                return;
+            }
+
+            this.settings.kaggle_health = null;
+            this.kaggleChecking = true;
+            this.kaggleCheckTimer = setTimeout(async () => {
+                try {
+                    const result = await window.API.checkSettingsTokens({ kaggle_key: token });
+                    this.settings.kaggle_health = result.kaggle_health || null;
+                } catch (err) {
+                    this.settings.kaggle_health = {
+                        ok: false,
+                        message: err.message || 'Kaggle check failed'
+                    };
+                } finally {
+                    this.kaggleChecking = false;
+                }
+            }, 450);
+        },
+
         async saveApiKey() {
-            if (!this.newApiKey.trim()) {
+            const token = this.newApiKey.trim();
+            if (!token) {
                 this.settingsError = 'API key cannot be empty';
                 return;
             }
@@ -733,8 +802,14 @@ window.dashboard = function() {
             this.settingsError = null;
 
             try {
-                const result = await window.API.updateSettings({ api_key: this.newApiKey });
-                this.settings = result;
+                const result = await window.API.updateSettings({ api_key: token });
+                this.settings = {
+                    ...this.settings,
+                    ...result,
+                    has_api_key: result.has_api_key ?? true,
+                    api_key_masked: result.api_key_masked ?? this.settings.api_key_masked,
+                    openrouter_health: result.openrouter_health ?? this.settings.openrouter_health
+                };
                 this.newApiKey = '';
                 this.settingsSuccess = 'API key saved successfully';
                 setTimeout(() => { this.settingsSuccess = null; }, 3000);
@@ -746,7 +821,8 @@ window.dashboard = function() {
         },
 
         async saveKaggleKey() {
-            if (!this.newKaggleKey.trim()) {
+            const token = this.newKaggleKey.trim();
+            if (!token) {
                 this.settingsError = 'Kaggle key cannot be empty';
                 return;
             }
@@ -755,8 +831,14 @@ window.dashboard = function() {
             this.settingsError = null;
 
             try {
-                const result = await window.API.updateSettings({ kaggle_key: this.newKaggleKey });
-                this.settings = result;
+                const result = await window.API.updateSettings({ kaggle_key: token });
+                this.settings = {
+                    ...this.settings,
+                    ...result,
+                    has_kaggle_key: result.has_kaggle_key ?? true,
+                    kaggle_key_masked: result.kaggle_key_masked ?? this.settings.kaggle_key_masked,
+                    kaggle_health: result.kaggle_health ?? this.settings.kaggle_health
+                };
                 this.newKaggleKey = '';
                 this.settingsSuccess = 'Kaggle key saved successfully';
                 setTimeout(() => { this.settingsSuccess = null; }, 3000);
@@ -810,6 +892,20 @@ window.dashboard = function() {
 
         formatAgentName(name) {
             return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        },
+
+        formatHealthMessage(health) {
+            if (!health) {
+                return 'Health check not run yet';
+            }
+            return health.message || (health.ok ? 'Token is valid' : 'Token is invalid');
+        },
+
+        getHealthClass(health) {
+            if (!health) {
+                return 'text-gray-500';
+            }
+            return health.ok ? 'text-emerald-600' : 'text-red-600';
         }
     };
 };
