@@ -249,6 +249,36 @@ class BaseAgent(ABC):
 
         return pattern.sub("", output).strip()
 
+    def _should_defer_subagent_failure(self) -> bool:
+        return self.config.name == AgentType.COORDINATOR.value
+
+    def _build_subagent_failure_feedback(
+        self,
+        target: str,
+        task: str,
+        error_output: str,
+        plan_id: str = "",
+        step_id: int = 0,
+    ) -> str:
+        base_feedback = (
+            f"Delegation to {target} failed while executing task: {task}\n\n"
+            f"Sub-agent error: {error_output}"
+        )
+
+        if plan_id or step_id:
+            return (
+                f"{base_feedback}\n\n"
+                "Decide the next step yourself. Do not stop automatically. "
+                "Use update_plan to mark the step failed/blocked or add a corrective step, "
+                "then either delegate the recovery work or return an error action if the task is truly blocked."
+            )
+
+        return (
+            f"{base_feedback}\n\n"
+            "Decide the next step yourself. Either delegate a recovery attempt, create a plan, "
+            "or return an error action if the task cannot continue."
+        )
+
     @abstractmethod
     def system_prompt(self) -> str:
         """Return the system prompt for this agent."""
@@ -456,6 +486,30 @@ class BaseAgent(ABC):
                     sub_result = await sub.run(
                         task, context=sub_context, is_sub_call=True
                     )
+
+                    if not sub_result.success:
+                        error_output = (
+                            sub_result.error
+                            or sub_result.output
+                            or "Delegated agent failed"
+                        )
+                        if self._should_defer_subagent_failure():
+                            feedback = self._build_subagent_failure_feedback(
+                                target_agent,
+                                task,
+                                error_output,
+                            )
+                            self.add_message("user", feedback)
+                            full.append({"role": "user", "content": feedback})
+                            continue
+
+                        return AgentResult(
+                            success=False,
+                            error=error_output,
+                            output=error_output,
+                            duration=time.time() - start,
+                        )
+
                     self._emit("result", {"content": sub_result.output})
                     return AgentResult(
                         success=True,
@@ -699,6 +753,17 @@ class BaseAgent(ABC):
             logger.error(
                 f">>> DELEGATION FAILED: {target}, output: {error_output[:200]}"
             )
+            if self._should_defer_subagent_failure():
+                feedback = self._build_subagent_failure_feedback(
+                    target, task, error_output, plan_id=plan_id, step_id=step_id
+                )
+                self.add_message("user", feedback)
+                full.append({"role": "user", "content": feedback})
+                logger.info(
+                    f">>> DELEGATION FAILURE RETURNED TO COORDINATOR: {target}, output: {error_output[:100]}"
+                )
+                return None
+
             return AgentResult(
                 success=False,
                 error=error_output,
@@ -795,6 +860,21 @@ class BaseAgent(ABC):
                 logger.error(
                     f">>> PLAN STEP FAILED: {target_agent}, output: {error_output[:200]}"
                 )
+                if self._should_defer_subagent_failure():
+                    feedback = self._build_subagent_failure_feedback(
+                        target_agent,
+                        task,
+                        error_output,
+                        plan_id=plan_id,
+                        step_id=first_step.get("id", 0),
+                    )
+                    self.add_message("user", feedback)
+                    full.append({"role": "user", "content": feedback})
+                    logger.info(
+                        f">>> PLAN FAILURE RETURNED TO COORDINATOR: {target_agent}, output: {error_output[:100]}"
+                    )
+                    return None
+
                 return AgentResult(
                     success=False,
                     error=error_output,
@@ -996,6 +1076,7 @@ class BaseAgent(ABC):
                     AgentAction.OPTIONS.value,
                     AgentAction.PLAN.value,
                     AgentAction.UPDATE_PLAN.value,
+                    AgentAction.ERROR.value,
                     AgentAction.DONE.value,
                 ):
                     return first_obj
@@ -1029,6 +1110,7 @@ class BaseAgent(ABC):
                     AgentAction.OPTIONS.value,
                     AgentAction.PLAN.value,
                     AgentAction.UPDATE_PLAN.value,
+                    AgentAction.ERROR.value,
                     AgentAction.DONE.value,
                 ):
                     logger.warning(f"Using truncated JSON with action: {action_type}")
@@ -1046,6 +1128,7 @@ class BaseAgent(ABC):
                         AgentAction.OPTIONS.value,
                         AgentAction.PLAN.value,
                         AgentAction.UPDATE_PLAN.value,
+                        AgentAction.ERROR.value,
                         AgentAction.DONE.value,
                     ):
                         return direct_parse

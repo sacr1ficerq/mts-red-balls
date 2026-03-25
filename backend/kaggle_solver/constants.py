@@ -209,6 +209,7 @@ class SandboxConstants:
         "mv",
         "echo",
         "date",
+        "unzip",
     }
 
     # Blocked shell patterns
