@@ -23,7 +23,12 @@ KAGGLE_AVAILABLE = shutil.which("kaggle") is not None
 class KaggleMCPClient:
     """Kaggle MCP client for competition operations"""
 
-    def __init__(self, api_key: Optional[str] = None, username: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        username: Optional[str] = None,
+        working_dir: Optional[str] = None,
+    ):
         """
         Initialize Kaggle MCP client
 
@@ -34,6 +39,7 @@ class KaggleMCPClient:
         self.api_key = api_key or os.getenv("KAGGLE_API_KEY")
         self.username = username or os.getenv("KAGGLE_USERNAME")
         self.kaggle_cmd = shutil.which("kaggle") or "kaggle"
+        self.working_dir = working_dir
         self._authenticate()
 
     def _authenticate(self):
@@ -68,6 +74,7 @@ class KaggleMCPClient:
                 capture_output=True,
                 text=True,
                 env=os.environ.copy(),
+                cwd=self.working_dir,
             )
             return result.stdout.strip()
         except subprocess.CalledProcessError as exc:
@@ -463,7 +470,7 @@ def kaggle_list_competitions(
 
 
 # Initialize Kaggle MCP client
-def get_kaggle_mcp_client() -> Optional[KaggleMCPClient]:
+def get_kaggle_mcp_client(sandbox=None) -> Optional[KaggleMCPClient]:
     """
     Get or create Kaggle MCP client instance
 
@@ -496,7 +503,15 @@ def get_kaggle_mcp_client() -> Optional[KaggleMCPClient]:
         if username:
             os.environ["KAGGLE_USERNAME"] = username
 
-        return KaggleMCPClient(api_key=api_key, username=username)
+        working_dir = None
+        if sandbox is not None and hasattr(sandbox, "root"):
+            working_dir = str(sandbox.root)
+
+        return KaggleMCPClient(
+            api_key=api_key,
+            username=username,
+            working_dir=working_dir,
+        )
     except Exception as e:
         logger.error(f"Failed to initialize Kaggle MCP client: {str(e)}")
         return None

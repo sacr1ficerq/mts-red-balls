@@ -19,6 +19,7 @@ from kaggle_solver.tools.kaggle import (
     kaggle_prepare_submission,
 )
 from kaggle_solver.mcp import kaggle_mcp
+from kaggle_solver.sandbox import Sandbox
 
 
 class TestKaggleTools:
@@ -158,6 +159,39 @@ class TestKaggleTools:
         mock_kaggle_client.download_competition_data.assert_called_once_with(
             "titanic", "./data", None
         )
+
+    def test_kaggle_download_data_uses_session_sandbox(
+        self, mock_kaggle_client, tmp_path
+    ):
+        """Download path must be resolved inside the session sandbox."""
+        sandbox = Sandbox(tmp_path)
+        expected_dir = sandbox.resolve_path("./data")
+        expected_file = expected_dir / "train.csv"
+
+        mock_kaggle_client.download_competition_data.return_value = [str(expected_file)]
+
+        result = kaggle_download_data(query="titanic", path="./data", sandbox=sandbox)
+
+        assert result["success"] is True
+        assert result["data"]["path"] == "data"
+        assert result["data"]["downloaded_files"] == ["data/train.csv"]
+        mock_kaggle_client.download_competition_data.assert_called_once_with(
+            "titanic", str(expected_dir), None
+        )
+
+    def test_kaggle_download_data_blocks_path_traversal(
+        self, mock_kaggle_client, tmp_path
+    ):
+        """Path traversal attempts must be rejected by sandbox resolver."""
+        sandbox = Sandbox(tmp_path)
+
+        result = kaggle_download_data(
+            query="titanic", path="../backend", sandbox=sandbox
+        )
+
+        assert result["success"] is False
+        assert "outside sandbox" in result["error"]
+        mock_kaggle_client.download_competition_data.assert_not_called()
 
     def test_kaggle_submit_success(self, mock_kaggle_client):
         """Test successful submission"""

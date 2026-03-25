@@ -112,6 +112,7 @@ class BaseAgent(ABC):
         self.state = AgentState.IDLE
         self.messages: List[Dict[str, str]] = []
         self._iteration = 0
+        self._active_plan: Optional[Dict[str, Any]] = None
 
     def _emit(self, event_type: str, data: Dict[str, Any]) -> None:
         """Emit an event to the event callback."""
@@ -140,6 +141,95 @@ class BaseAgent(ABC):
             ]
             self.messages = system_messages + kept_other
             logger.debug(f"Trimmed message history to {len(self.messages)} messages")
+
+    def _normalize_plan_steps(
+        self, steps: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        normalized = []
+        for step in steps:
+            step_copy = dict(step)
+            step_copy.setdefault("status", "pending")
+            normalized.append(step_copy)
+        return normalized
+
+    def _plan_has_unresolved_steps(self) -> bool:
+        if not self._active_plan:
+            return False
+
+        for step in self._active_plan.get("steps", []):
+            if step.get("status", "pending") not in {"completed", "blocked", "skipped"}:
+                return True
+        return False
+
+    def _next_unfinished_plan_step(self) -> Optional[Dict[str, Any]]:
+        if not self._active_plan:
+            return None
+
+        for step in self._active_plan.get("steps", []):
+            if step.get("status", "pending") not in {"completed", "blocked", "skipped"}:
+                return step
+        return None
+
+    def _format_plan_progress_message(self) -> str:
+        next_step = self._next_unfinished_plan_step()
+        if next_step:
+            return (
+                f"Plan still has unfinished work. Next step ({next_step.get('id')}): "
+                f"delegate to {next_step.get('agent', 'CodeAgent')} with task: "
+                f"{next_step.get('task', '')}. Do not use 'done' until the full plan is resolved."
+            )
+        return "All plan steps are resolved. You may now return the final answer using the 'done' action."
+
+    def _apply_plan_updates(self, action: Dict[str, Any]) -> Dict[str, Any]:
+        plan_id = action.get("plan_id", "")
+        if not self._active_plan or (
+            plan_id and self._active_plan.get("plan_id") != plan_id
+        ):
+            return {"plan_id": plan_id, "step_updates": [], "add_steps": []}
+
+        raw_step_updates = action.get("step_updates", [])
+        add_steps = action.get("add_steps", [])
+        legacy_update = action.get("update", {})
+
+        if legacy_update:
+            legacy_step_id = legacy_update.get("step_id") or action.get("step_id")
+            if legacy_step_id is not None:
+                raw_step_updates = raw_step_updates + [
+                    {
+                        "id": legacy_step_id,
+                        "status": legacy_update.get("status", "pending"),
+                        "task": legacy_update.get("task"),
+                        "agent": legacy_update.get("agent"),
+                        "note": legacy_update.get("note", ""),
+                    }
+                ]
+
+        normalized_updates = []
+        steps = self._active_plan.get("steps", [])
+        step_index = {step.get("id"): idx for idx, step in enumerate(steps)}
+
+        for update in raw_step_updates:
+            step_id = update.get("id")
+            if step_id not in step_index:
+                continue
+
+            step = dict(steps[step_index[step_id]])
+            for key in ("status", "task", "agent", "note"):
+                value = update.get(key)
+                if value not in (None, ""):
+                    step[key] = value
+            steps[step_index[step_id]] = step
+            normalized_updates.append(step)
+
+        if add_steps:
+            steps.extend(self._normalize_plan_steps(add_steps))
+
+        self._active_plan["steps"] = steps
+        return {
+            "plan_id": self._active_plan.get("plan_id", plan_id),
+            "step_updates": normalized_updates,
+            "add_steps": add_steps,
+        }
 
     def _extract_artifacts(self, output: str) -> str:
         """Extract inline artifact directives from final output.
@@ -192,6 +282,7 @@ class BaseAgent(ABC):
         execution_timeout = start + timeout
 
         self.messages = []
+        self._active_plan = None
         self.add_message("user", user_input)
 
         # Handle context subscription (event_ids)
@@ -386,16 +477,27 @@ class BaseAgent(ABC):
                 )
 
             if action.get("action") == "tool":
-                self._handle_tool_action(action, full)
+                tool_result = self._handle_tool_action(action, full, start)
+                if tool_result is not None:
+                    return tool_result
                 continue
 
             elif action.get("action") == "delegate" and self.agent_factory:
-                # Execute delegation and add result to conversation, then continue loop
-                # This allows the agent to process the result and decide next action (e.g., respond with "done")
-                await self._handle_delegate_action(action, full, start)
+                delegate_result = await self._handle_delegate_action(
+                    action, full, start
+                )
+                if delegate_result is not None:
+                    return delegate_result
                 continue
 
             elif action.get("action") == "done":
+                if self._plan_has_unresolved_steps():
+                    unresolved_msg = self._format_plan_progress_message()
+                    self.add_message("user", unresolved_msg)
+                    full.append({"role": "user", "content": unresolved_msg})
+                    logger.warning("Blocked premature done while plan is still active")
+                    continue
+
                 result_output = self._extract_artifacts(action.get("result", ""))
                 self._emit("result", {"content": result_output})
                 return AgentResult(
@@ -413,19 +515,22 @@ class BaseAgent(ABC):
                 self._handle_options_action(action, full)
 
             elif action.get("action") == "plan":
-                await self._handle_plan_action(action, full)
+                plan_result = await self._handle_plan_action(action, full, start)
+                if plan_result is not None:
+                    return plan_result
                 continue
 
             elif action.get("action") == "update_plan":
                 self._handle_update_plan_action(action, full)
+                continue
 
         return AgentResult(
             success=False, error="Max iterations", duration=time.time() - start
         )
 
     def _handle_tool_action(
-        self, action: Dict[str, Any], full: List[Dict[str, Any]]
-    ) -> None:
+        self, action: Dict[str, Any], full: List[Dict[str, Any]], start: float
+    ) -> Optional[AgentResult]:
         tool_name = action.get("tool", "")
 
         kwargs = {}
@@ -513,6 +618,17 @@ class BaseAgent(ABC):
                     elif "feature" in file_path.lower():
                         self.session.set_artifact("feature_script_path", file_path)
 
+        if not result.success:
+            logger.error(
+                f">>> TOOL FAILED: {action.get('tool')}, output: {output[:200]}"
+            )
+            return AgentResult(
+                success=False,
+                error=output,
+                output=output,
+                duration=time.time() - start,
+            )
+
         # Add tool result as user message to guide LLM to next step
         # This prevents LLM from thinking the tool result is its own response
         tool_feedback = f"Tool {action.get('tool')} executed successfully. Output: {output}\n\nContinue with the next step of your workflow."
@@ -523,10 +639,11 @@ class BaseAgent(ABC):
 
         logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
         logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
+        return None
 
     async def _handle_delegate_action(
         self, action: Dict[str, Any], full: List[Dict[str, Any]], start: float
-    ) -> None:
+    ) -> Optional[AgentResult]:
         target = action.get("agent", "")
         task = action.get("task", "")
         context_ids = action.get("context_ids", [])[:3]
@@ -544,6 +661,9 @@ class BaseAgent(ABC):
                 "expanded": True,
             },
         )
+
+        if not self.agent_factory:
+            raise RuntimeError("agent_factory is required for delegate actions")
 
         agent_tools = self.get_tools_for_agent(target)
         sub = self.agent_factory(
@@ -566,22 +686,42 @@ class BaseAgent(ABC):
             {
                 "tool_name": "delegate",
                 "input": f"delegate to {target}: {task}",
-                "output": sub_result.output[:2000],
+                "output": (sub_result.output or sub_result.error)[:2000],
                 "success": sub_result.success,
                 "expanded": True,
             },
         )
 
+        if not sub_result.success:
+            error_output = (
+                sub_result.error or sub_result.output or "Delegated agent failed"
+            )
+            logger.error(
+                f">>> DELEGATION FAILED: {target}, output: {error_output[:200]}"
+            )
+            return AgentResult(
+                success=False,
+                error=error_output,
+                output=error_output,
+                duration=time.time() - start,
+            )
+
         # Add delegation result as user message (not tool message to avoid tool_call_id issues)
         # This allows the agent to process the result and decide next action
-        delegate_msg = {
-            "role": "user",
-            "content": f"Delegation to {target} completed. Result: {sub_result.output}\n\nNow provide your final answer to the user using the 'done' action.",
-        }
-        self.add_message(
-            "user",
-            f"Delegation to {target} completed. Result: {sub_result.output}\n\nNow provide your final answer to the user using the 'done' action.",
-        )
+        if self._plan_has_unresolved_steps():
+            feedback = (
+                f"Delegation to {target} completed. Result: {sub_result.output}\n\n"
+                f"If this completed a plan step, call update_plan for that step, then continue with the next unfinished plan step. "
+                f"{self._format_plan_progress_message()}"
+            )
+        else:
+            feedback = (
+                f"Delegation to {target} completed. Result: {sub_result.output}\n\n"
+                "Now provide your final answer to the user using the 'done' action."
+            )
+
+        delegate_msg = {"role": "user", "content": feedback}
+        self.add_message("user", feedback)
         full.append(delegate_msg)
 
         # Emit result event immediately to ensure it's displayed
@@ -592,6 +732,7 @@ class BaseAgent(ABC):
             f">>> DELEGATION COMPLETED: {target}, output: {sub_result.output[:100]}"
         )
         logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
+        return None
 
     def _handle_options_action(
         self, action: Dict[str, Any], full: List[Dict[str, Any]]
@@ -606,10 +747,14 @@ class BaseAgent(ABC):
         full.append({"role": "user", "content": f"options: {question}"})
 
     async def _handle_plan_action(
-        self, action: Dict[str, Any], full: List[Dict[str, Any]]
-    ) -> None:
+        self, action: Dict[str, Any], full: List[Dict[str, Any]], start: float
+    ) -> Optional[AgentResult]:
         plan_id = action.get("plan_id", "")
         steps = action.get("steps", [])
+        self._active_plan = {
+            "plan_id": plan_id,
+            "steps": self._normalize_plan_steps(steps),
+        }
         self._emit("plan", {"plan_id": plan_id, "steps": steps, "expanded": True})
 
         logger.info(
@@ -643,52 +788,87 @@ class BaseAgent(ABC):
 
             sub_result = await sub.run(task, context=sub_context, is_sub_call=True)
 
+            if not sub_result.success:
+                error_output = (
+                    sub_result.error or sub_result.output or "Plan step failed"
+                )
+                logger.error(
+                    f">>> PLAN STEP FAILED: {target_agent}, output: {error_output[:200]}"
+                )
+                return AgentResult(
+                    success=False,
+                    error=error_output,
+                    output=error_output,
+                    duration=time.time() - start,
+                )
+
             # Add delegation result as user message (not tool message to avoid tool_call_id issues)
             # This allows the agent to process the result and decide next action
             remaining_steps = len(steps) - 1
             if remaining_steps > 0:
-                next_step = steps[1]
-                next_agent = next_step.get("agent", "CodeAgent")
-                next_task = next_step.get("task", "")
                 delegate_msg = {
                     "role": "user",
-                    "content": f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nNext step ({steps[1].get('id')}): Delegate to {next_agent} with task: {next_task}",
+                    "content": (
+                        f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\n"
+                        f"Call update_plan to mark step {steps[0].get('id')} completed, then continue with the next unfinished plan step. "
+                        f"{self._format_plan_progress_message()}"
+                    ),
                 }
                 self.add_message(
                     "user",
-                    f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nNext step ({steps[1].get('id')}): Delegate to {next_agent} with task: {next_task}",
+                    (
+                        f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\n"
+                        f"Call update_plan to mark step {steps[0].get('id')} completed, then continue with the next unfinished plan step. "
+                        f"{self._format_plan_progress_message()}"
+                    ),
                 )
             else:
                 delegate_msg = {
                     "role": "user",
-                    "content": f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nAll plan steps completed. Now provide your final answer to the user using the 'done' action.",
+                    "content": (
+                        f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\n"
+                        f"Call update_plan to mark step {steps[0].get('id')} completed. "
+                        "After that, if no unfinished steps remain, return the final answer using the 'done' action."
+                    ),
                 }
                 self.add_message(
                     "user",
-                    f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\nAll plan steps completed. Now provide your final answer to the user using the 'done' action.",
+                    (
+                        f"Plan step {steps[0].get('id')} executed by {target_agent}. Result: {sub_result.output}\n\n"
+                        f"Call update_plan to mark step {steps[0].get('id')} completed. "
+                        "After that, if no unfinished steps remain, return the final answer using the 'done' action."
+                    ),
                 )
             full.append(delegate_msg)
 
             logger.info(
                 f">>> PLAN STEP COMPLETED: {target_agent}, output: {sub_result.output[:100]}"
             )
-            return
+            return None
 
         plan_text = f"Plan created with {len(steps)} steps."
         self.add_message("user", plan_text)
         full.append({"role": "user", "content": plan_text})
+        return None
 
     def _handle_update_plan_action(
         self, action: Dict[str, Any], full: List[Dict[str, Any]]
     ) -> None:
-        plan_id = action.get("plan_id", "")
-        update = action.get("update", {})
-        update_type = update.get("type", "")
-        self._emit(
-            "update_plan", {"plan_id": plan_id, "update": update, "expanded": True}
-        )
-        self.add_message("user", f"plan updated: {update_type}")
-        full.append({"role": "user", "content": f"plan updated: {update_type}"})
+        plan_update = self._apply_plan_updates(action)
+        self._emit("update_plan", {**plan_update, "expanded": True})
+
+        if self._plan_has_unresolved_steps():
+            update_feedback = (
+                f"Plan updated successfully. {self._format_plan_progress_message()}"
+            )
+        else:
+            update_feedback = (
+                "Plan updated successfully. All plan steps are resolved. "
+                "Return the final answer using the 'done' action."
+            )
+
+        self.add_message("user", update_feedback)
+        full.append({"role": "user", "content": update_feedback})
 
     def _parse(self, response: str) -> Dict[str, Any]:
         import re

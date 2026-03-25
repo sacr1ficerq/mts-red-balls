@@ -138,6 +138,10 @@ class Sandbox:
 
         return full
 
+    def resolve_path(self, path: str) -> Path:
+        """Resolve a user path into a secure path inside the sandbox root."""
+        return self._secure_path(path)
+
     def _is_command_safe(self, command: str) -> bool:
         """Check if a command is safe to execute.
 

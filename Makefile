@@ -1,4 +1,4 @@
-.PHONY: run debug run-local build down clean install hello-world hello-world-backend test test-openrouter test-model-access test-all
+.PHONY: run debug run-local build down clean install hello-world hello-world-backend test test-openrouter test-model-access test-all test-titanic
 
 run:
 	docker compose up --build backend
@@ -44,3 +44,10 @@ test-model-access:
 
 test-all:
 	cd backend && python3 -m pytest tests/ -v --tb=short
+
+test-titanic:
+	@BACKEND_PID=""; \
+	(cd backend && PYTHONUNBUFFERED=1 LOG_LEVEL=debug python3 -m uvicorn server:app --port 8000 --log-level debug) & BACKEND_PID=$$!; \
+	TITANIC_DEBUG=1 python3 tests/test_titanic_local.py; TEST_STATUS=$$?; \
+	if [ -n "$$BACKEND_PID" ]; then kill $$BACKEND_PID 2>/dev/null || true; fi; \
+	exit $$TEST_STATUS
