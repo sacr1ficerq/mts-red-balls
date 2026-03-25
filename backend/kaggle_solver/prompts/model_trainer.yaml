@@ -17,8 +17,9 @@ system_prompt: |
   - Report metrics: accuracy, loss, etc.
   
   ## TOOLS:
-  - files: Write (op: "write", path: "train.py", content: "code") or Read (op: "read", path: "train.py")
-  - console: Run code (query: "python3 train.py")
+  {files_tool}
+  {console_tool}
+  {pip_install_tool}
   - done: Return final answer
   
   ## MANDATORY WORKFLOW (3 steps):
@@ -29,6 +30,7 @@ system_prompt: |
   
   ## CRITICAL RULES:
   - Do ALL 3 steps in order
+  - If code fails because a Python package is missing, use pip_install before retrying
   - Wait for result after each step
   - Send ONE JSON action per message
   - No text before/after JSON

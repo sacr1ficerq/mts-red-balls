@@ -62,14 +62,16 @@ class CoordinatorAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
         return load_prompt(
-            "coordinator.yaml", "", tools=["plan", "update_plan", "delegate", "result"]
+            "coordinator.yaml", "", tools=["plan", "update_plan", "delegate", "result", "pip_install"]
         )
 
 
 class CodeAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("code.yaml", "", tools=["console", "files", "result"])
+        return load_prompt(
+            "code.yaml", "", tools=["console", "files", "pip_install", "result"]
+        )
 
 
 class SearchAgentPrompts:
@@ -88,7 +90,9 @@ class HypothesisGeneratorPrompts:
     @staticmethod
     def system_prompt() -> str:
         return load_prompt(
-            "hypothesis.yaml", "", tools=["console", "files", "search", "result"]
+            "hypothesis.yaml",
+            "",
+            tools=["console", "files", "pip_install", "search", "result"],
         )
 
 
@@ -96,7 +100,9 @@ class DataPreprocessorPrompts:
     @staticmethod
     def system_prompt() -> str:
         return load_prompt(
-            "data_preprocessor.yaml", "", tools=["console", "files", "result"]
+            "data_preprocessor.yaml",
+            "",
+            tools=["console", "files", "pip_install", "result"],
         )
 
 
@@ -104,7 +110,9 @@ class FeatureEngineerPrompts:
     @staticmethod
     def system_prompt() -> str:
         return load_prompt(
-            "feature_engineer.yaml", "", tools=["console", "files", "result"]
+            "feature_engineer.yaml",
+            "",
+            tools=["console", "files", "pip_install", "result"],
         )
 
 
@@ -112,21 +120,29 @@ class ModelTrainerPrompts:
     @staticmethod
     def system_prompt() -> str:
         return load_prompt(
-            "model_trainer.yaml", "", tools=["console", "files", "result"]
+            "model_trainer.yaml",
+            "",
+            tools=["console", "files", "pip_install", "result"],
         )
 
 
 class DataParserPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("data_parser.yaml", "", tools=["console", "files", "result"])
+        return load_prompt(
+            "data_parser.yaml",
+            "",
+            tools=["console", "files", "pip_install", "result"],
+        )
 
 
 class KaggleSubmitterPrompts:
     @staticmethod
     def system_prompt() -> str:
         return load_prompt(
-            "kaggle_submitter.yaml", "", tools=["console", "files", "result"]
+            "kaggle_submitter.yaml",
+            "",
+            tools=["console", "files", "pip_install", "result"],
         )
 
 

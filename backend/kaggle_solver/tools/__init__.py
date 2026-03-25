@@ -5,6 +5,7 @@ from kaggle_solver.tools.registry import ToolRegistry, ToolResult
 # Import modules to trigger tool registration via decorators
 import kaggle_solver.tools.console
 import kaggle_solver.tools.files
+import kaggle_solver.tools.pip_install
 import kaggle_solver.tools.search
 import kaggle_solver.tools.kaggle
 
@@ -30,5 +31,6 @@ __all__ = [
     "ToolResult",
     "console_tool",
     "files_tool",
+    "pip_install_tool",
     "search_tool",
 ]

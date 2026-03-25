@@ -1,0 +1,7 @@
+pip_install_tool: |
+  pip_install: Install Python packages in the sandbox.
+  Input: packages string (for example "pandas" or "pandas scikit-learn"), optional upgrade boolean
+  Output: structured success/error result with the executed pip command
+
+  Usage:
+  {"action": "tool", "tool": "pip_install", "packages": "pandas"}

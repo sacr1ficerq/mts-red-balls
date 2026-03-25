@@ -62,8 +62,9 @@ system_prompt: |
 
   ## Tools Available
 
-  - files: Read/write data files
-  - console: Run Python code for analysis
+  {files_tool}
+  {console_tool}
+  {pip_install_tool}
   - search: Research feature engineering techniques
   - done: Return final answer
 

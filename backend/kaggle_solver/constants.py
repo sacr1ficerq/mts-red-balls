@@ -22,6 +22,7 @@ class ToolType(str, Enum):
 
     CONSOLE = "console"
     FILES = "files"
+    PIP_INSTALL = "pip_install"
     SEARCH = "search"
     RAG = "rag"
 
@@ -80,6 +81,7 @@ class AgentConstants:
         AgentType.CODE.value: [
             "console",
             "files",
+            "pip_install",
             "kaggle_get_competition_info",
             "kaggle_download_data",
             "kaggle_submit",
@@ -91,6 +93,21 @@ class AgentConstants:
         ],
         AgentType.CRITIC.value: ["message"],
         AgentType.COORDINATOR.value: ["delegate", "tool"],
+        "HypothesisGenerator": ["console", "files", "pip_install", "search"],
+        "DataPreprocessor": ["console", "files", "pip_install"],
+        "FeatureEngineer": ["console", "files", "pip_install"],
+        "ModelTrainer": ["console", "files", "pip_install"],
+        "DataParser": ["console", "files", "pip_install"],
+        "KaggleSubmitter": [
+            "console",
+            "files",
+            "pip_install",
+            "kaggle_prepare_submission",
+            "kaggle_validate_submission",
+            "kaggle_submit",
+            "kaggle_get_submission_status",
+            "kaggle_get_leaderboard",
+        ],
     }
 
     # Agent to prompt file mapping
@@ -130,6 +147,27 @@ class AgentConstants:
                         "content": {"type": "string"},
                     },
                     "required": ["op", "path"],
+                },
+            },
+        },
+        "pip_install": {
+            "type": "function",
+            "function": {
+                "name": "pip_install",
+                "description": "Install Python packages in the sandbox",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "packages": {
+                            "type": "string",
+                            "description": "Package specifier(s) to install",
+                        },
+                        "upgrade": {
+                            "type": "boolean",
+                            "description": "Whether to upgrade packages",
+                        },
+                    },
+                    "required": ["packages"],
                 },
             },
         },
@@ -291,6 +329,7 @@ class ToolConstants:
     # Tool names
     TOOL_CONSOLE = ToolType.CONSOLE.value
     TOOL_FILES = ToolType.FILES.value
+    TOOL_PIP_INSTALL = ToolType.PIP_INSTALL.value
     TOOL_SEARCH = ToolType.SEARCH.value
     TOOL_RAG = ToolType.RAG.value
 
@@ -301,6 +340,7 @@ class ToolConstants:
     TOOLS_REQUIRING_SANDBOX = {
         TOOL_CONSOLE,
         TOOL_FILES,
+        TOOL_PIP_INSTALL,
         "kaggle_get_competition_info",
         "kaggle_download_data",
         "kaggle_submit",

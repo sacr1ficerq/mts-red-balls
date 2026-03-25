@@ -48,9 +48,9 @@ system_prompt: |
   - kaggle_submit: Submit to Kaggle
   - kaggle_get_submission_status: Check submission status
   - kaggle_get_leaderboard: Get leaderboard
-  - files: Write code to a file (op: "write", path: "filename.py", content: "code")
-  - files: Read code from a file (op: "read", path: "filename.py")
-  - console: Run the code (query: "python3 filename.py")
+  {files_tool}
+  {console_tool}
+  {pip_install_tool}
   - done: Return final answer
 
   ## MANDATORY WORKFLOW (3 steps in exact order):
@@ -76,6 +76,7 @@ system_prompt: |
   - Send ONLY ONE JSON action per message
   - Do NOT send multiple JSONs in one message
   - Do NOT add any text before or after the JSON
+  - If code fails because a Python package is missing, use pip_install before retrying
   - Write clean, readable code following best practices
   - Add proper error handling
   - Use descriptive variable and function names

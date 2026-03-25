@@ -8,6 +8,7 @@ from kaggle_solver.sandbox import Sandbox, Result
 from kaggle_solver.tools.registry import ToolRegistry
 from kaggle_solver.tools.console import console_tool
 from kaggle_solver.tools.files import files_tool
+from kaggle_solver.tools.pip_install import pip_install_tool
 from kaggle_solver.rag import RAG
 
 
@@ -162,6 +163,32 @@ class TestFilesTool:
         assert self.sandbox.read("config.json") == r'{"pattern":"\\n"}'
 
 
+class TestPipInstallTool:
+    def setup_method(self):
+        self.sandbox = Sandbox(Path("/tmp/test_sandbox_pip_install"))
+        self.sandbox.cleanup()
+
+    def teardown_method(self):
+        self.sandbox.cleanup()
+
+    def test_pip_install_tool_runs_pip_command(self):
+        self.sandbox.execute = lambda command, timeout=None: Result(
+            success=True,
+            output=f"ran: {command} timeout={timeout}",
+        )
+
+        result = pip_install_tool(packages="pandas", sandbox=self.sandbox)
+
+        assert result["success"] is True
+        assert result["command"] == "python3 -m pip install pandas"
+        assert "timeout=180" in result["output"]
+
+    def test_pip_install_tool_requires_packages(self):
+        result = pip_install_tool(packages="", sandbox=self.sandbox)
+        assert result["success"] is False
+        assert "No packages provided" in result["error"]
+
+
 class TestRAG:
     def setup_method(self):
         self.rag = RAG()
@@ -241,6 +268,23 @@ class TestToolRegistry:
         result = ToolRegistry.execute("custom", query="base", extra="value")
         assert result.success is True
         assert "base|value" in result.output
+
+    def test_execute_pip_install_passes_sandbox(self):
+        ToolRegistry.register("pip_install", pip_install_tool)
+        sandbox = Sandbox(Path("/tmp/test_registry_pip_install"))
+        sandbox.cleanup()
+        sandbox.execute = lambda command, timeout=None: Result(
+            success=True,
+            output=f"ran: {command} timeout={timeout}",
+        )
+
+        result = ToolRegistry.execute(
+            "pip_install",
+            packages="pandas",
+            sandbox=sandbox,
+        )
+        assert result.success is True
+        assert "python3 -m pip install pandas" in result.output
 
 
 if __name__ == "__main__":
