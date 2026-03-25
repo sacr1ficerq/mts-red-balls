@@ -60,7 +60,7 @@ agents:
     max_iterations: 10
   CodeAgent:
     role: "Write and execute Python code in sandbox"
-    tools: ["console", "files"]
+    tools: ["console", "files", "pip_install"]
     max_iterations: 10
   SearchAgent:
     role: "Search the web for information"
