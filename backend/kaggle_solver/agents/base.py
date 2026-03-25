@@ -92,6 +92,20 @@ class BaseAgent(ABC):
         """Get the list of tools for a given agent name."""
         return BaseAgent.AGENT_TOOLS.get(agent_name, ["tool"])
 
+    def _resolve_delegate_target(self, target: str) -> str:
+        """Restrict coordinator delegation to the active runtime pipeline."""
+        if (
+            self.config.name == AgentType.COORDINATOR.value
+            and target != AgentType.CODE.value
+        ):
+            logger.info(
+                "Coordinator requested delegate target %s; rerouting to %s",
+                target,
+                AgentType.CODE.value,
+            )
+            return AgentType.CODE.value
+        return target
+
     def __init__(
         self,
         config: AgentConfig,
@@ -515,7 +529,9 @@ class BaseAgent(ABC):
                 steps = action.get("steps", [])
                 if steps:
                     first_step = steps[0]
-                    target_agent = first_step.get("agent", "SearchAgent")
+                    target_agent = self._resolve_delegate_target(
+                        first_step.get("agent", AgentType.CODE.value)
+                    )
                     task = first_step.get("task", "search")
                     self._emit(
                         "delegate",
@@ -738,7 +754,7 @@ class BaseAgent(ABC):
     async def _handle_delegate_action(
         self, action: Dict[str, Any], full: List[Dict[str, Any]], start: float
     ) -> Optional[AgentResult]:
-        target = action.get("agent", "")
+        target = self._resolve_delegate_target(action.get("agent", ""))
         task = action.get("task", "")
         context_ids = action.get("context_ids", [])[:3]
         plan_id = action.get("plan_id", "")

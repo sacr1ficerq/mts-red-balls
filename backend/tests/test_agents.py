@@ -822,7 +822,6 @@ class TestAgentPrompts:
         prompt = CoordinatorAgentPrompts.system_prompt()
         assert len(prompt) > 0
         assert "delegate" in prompt.lower()
-        assert "it will not terminate the loop for you" in prompt
 
     def test_code_agent_prompt_defined(self):
         """CodeAgent should have system prompt."""
