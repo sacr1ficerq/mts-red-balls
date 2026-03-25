@@ -13,7 +13,7 @@ from threading import Lock
 logger = logging.getLogger(__name__)
 
 # Default model for all agents
-DEFAULT_MODEL = "openai/gpt-4o-mini"
+DEFAULT_MODEL = "openai/gpt-oss-120b"
 
 # Default models for each agent type (can be customized per agent)
 DEFAULT_AGENT_MODELS = {

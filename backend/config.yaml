@@ -57,7 +57,7 @@ agents:
   Coordinator:
     role: "Plan and delegate tasks to solve the user's request"
     tools: ["delegate", "message", "tool"]
-    max_iterations: 10
+    max_iterations: 20
   CodeAgent:
     role: "Write and execute Python code in sandbox"
     tools: ["console", "files", "pip_install"]
