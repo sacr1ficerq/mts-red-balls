@@ -50,7 +50,6 @@ delegate_tool: |
   - When you don't need planning
   
   Available agents:
-  - SearchAgent: searches web for information (task in English)
   - CodeAgent: writes and executes Python code
   
   Input: agent name, task description
@@ -58,7 +57,6 @@ delegate_tool: |
   Output: agent execution result
   
   Usage:
-  {"action": "delegate", "agent": "SearchAgent", "task": "what is Python"}
   {"action": "delegate", "agent": "CodeAgent", "task": "write hello world"}
 
 result_tool: |
@@ -66,8 +64,6 @@ result_tool: |
   
   When to use:
   - After completing all steps of a plan
-  - After receiving a delegation result
-  - For simple greetings or questions that need NO code/files/commands
   
   Input: final answer in user's language
   
