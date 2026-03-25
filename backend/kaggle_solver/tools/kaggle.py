@@ -1,20 +1,17 @@
+"""
+Kaggle Tools
+
+Tools for interacting with Kaggle competitions via MCP integration.
+"""
+
 import json
 import os
-import logging
-import sys
 from typing import Dict, Any, Optional
 from pathlib import Path
 
 from kaggle_solver.mcp.kaggle_mcp import get_kaggle_mcp_client, KaggleMCPClient
 from kaggle_solver.tools.registry import create_tool
 
-logger = logging.getLogger(__name__)
-
-"""
-Kaggle Tools
-
-Tools for interacting with Kaggle competitions via MCP integration.
-"""
 
 @create_tool(
     name="kaggle_get_competition_info",
