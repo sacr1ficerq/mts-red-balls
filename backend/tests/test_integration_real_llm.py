@@ -551,7 +551,7 @@ class TestProductionFlow:
         config = Config.load(str(Path(__file__).parent.parent / "config.yaml"))
         config.sandbox.root = str(tmp_path / "workspace")
         config.llm.requests_per_minute = 8
-        config.llm.model = "openai/gpt-4o-mini"
+        config.llm.model = "minimax/minimax-m2.7"
 
         orch = Orchestrator(config)
         return orch

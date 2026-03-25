@@ -5,7 +5,7 @@ Tests for OpenRouter API connectivity and model access.
 These tests verify:
 1. API key is configured and valid
 2. OpenRouter API is accessible
-3. Model (minimax/minimax-m2.7) is available and responding
+3. Model (openai/gpt-oss-20b) is available and responding
 4. Reasoning mode works correctly
 """
 
@@ -72,7 +72,7 @@ class TestOpenRouterConnection:
         assert len(data["data"]) > 0, "No models returned"
 
     def test_minimax_model_available(self, openrouter_headers):
-        """Test that minimax/minimax-m2.7 model is available."""
+        """Test that openai/gpt-oss-20b model is available."""
         response = requests.get(
             "https://openrouter.ai/api/v1/models",
             headers=openrouter_headers,
@@ -83,8 +83,8 @@ class TestOpenRouterConnection:
         data = response.json()
 
         model_ids = [m["id"] for m in data["data"]]
-        assert "minimax/minimax-m2.7" in model_ids, (
-            "minimax/minimax-m2.7 not in available models"
+        assert "openai/gpt-oss-20b" in model_ids, (
+            "openai/gpt-oss-20b not in available models"
         )
 
 
@@ -94,7 +94,7 @@ class TestOpenRouterChat:
     def test_simple_chat_completion(self, openrouter_headers):
         """Test basic chat completion without reasoning."""
         payload = {
-            "model": "minimax/minimax-m2.7",
+            "model": "openai/gpt-oss-20b",
             "messages": [{"role": "user", "content": "Say 'hello' and nothing else."}],
             "max_tokens": 50,
         }
@@ -127,7 +127,7 @@ class TestOpenRouterChat:
     def test_chat_with_reasoning(self, openrouter_headers):
         """Test chat completion with reasoning enabled."""
         payload = {
-            "model": "minimax/minimax-m2.7",
+            "model": "openai/gpt-oss-20b",
             "messages": [
                 {
                     "role": "user",
@@ -166,7 +166,7 @@ class TestOpenRouterChat:
         """Test multi-turn conversation with reasoning preservation."""
         # First message
         payload1 = {
-            "model": "minimax/minimax-m2.7",
+            "model": "openai/gpt-oss-20b",
             "messages": [{"role": "user", "content": "What is 2 + 2?"}],
             "reasoning": {"enabled": True},
             "max_tokens": 100,
@@ -195,7 +195,7 @@ class TestOpenRouterChat:
         ]
 
         payload2 = {
-            "model": "minimax/minimax-m2.7",
+            "model": "openai/gpt-oss-20b",
             "messages": messages,
             "reasoning": {"enabled": True},
             "max_tokens": 100,
@@ -273,7 +273,7 @@ class TestLLMClass:
         try:
             response = asyncio.run(
                 llm.chat(
-                    model="minimax/minimax-m2.7",
+                    model="openai/gpt-oss-20b",
                     messages=[
                         {"role": "user", "content": "Say 'test ok' and nothing else."}
                     ],
