@@ -75,6 +75,14 @@ window.API = {
         });
     },
 
+    checkSettingsTokens(payload) {
+        return request('/api/settings/check', {
+            method: 'POST',
+            headers: JSON_HEADERS,
+            body: JSON.stringify(payload)
+        });
+    },
+
     getAvailableModels() {
         return request('/api/settings/models');
     },

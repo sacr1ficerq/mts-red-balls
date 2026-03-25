@@ -37,13 +37,13 @@ class ToolRegistry:
         name: str,
         func: Callable,
         description: str = "",
-        parameters: Optional[Dict[str, Any]] = None
+        parameters: Optional[Dict[str, Any]] = None,
     ):
         cls._tools[name] = func
         cls._tool_metadata[name] = {
             "name": name,
             "description": description,
-            "parameters": parameters or {}
+            "parameters": parameters or {},
         }
         logger.info(f"Registered tool: {name}")
 
@@ -62,7 +62,7 @@ class ToolRegistry:
 
         try:
             func = cls._tools[name]
-            
+
             tool_kwargs = {}
             if name in TOOLS_REQUIRING_LLM:
                 if "llm" in kwargs:
@@ -70,7 +70,11 @@ class ToolRegistry:
             if name in TOOLS_REQUIRING_SANDBOX:
                 if "sandbox" in kwargs:
                     tool_kwargs["sandbox"] = kwargs["sandbox"]
-            
+
+            passthrough_kwargs = {
+                k: v for k, v in kwargs.items() if k not in {"sandbox", "llm"}
+            }
+
             if name == TOOL_FILES:
                 tool_kwargs["op"] = kwargs.get("op", "read")
                 tool_kwargs["path"] = kwargs.get("path", "")
@@ -83,11 +87,13 @@ class ToolRegistry:
                 tool_kwargs["query"] = search_query
                 result = func(**tool_kwargs)
             else:
-                result = func(query=query, **tool_kwargs)
+                if query and "query" not in passthrough_kwargs:
+                    passthrough_kwargs["query"] = query
+                result = func(**passthrough_kwargs, **tool_kwargs)
             return ToolResult(
                 True,
                 output=str(result) if result is not None else "",
-                metadata={"tool": name}
+                metadata={"tool": name},
             )
         except Exception as e:
             logger.error(f"Tool execution error: {name} - {e}")
@@ -109,8 +115,11 @@ class ToolRegistry:
             logger.info(f"Unregistered tool: {name}")
 
 
-def create_tool(name: str, description: str = "", parameters: Optional[Dict[str, Any]] = None):
+def create_tool(
+    name: str, description: str = "", parameters: Optional[Dict[str, Any]] = None
+):
     def decorator(func: Callable):
         ToolRegistry.register(name, func, description, parameters)
         return func
+
     return decorator

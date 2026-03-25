@@ -442,6 +442,12 @@ class BaseAgent(ABC):
                 if k not in ["action", "tool"]:
                     kwargs[k] = v
 
+        if tool_name.startswith("kaggle_") and "query" not in kwargs:
+            for alias in ["competition", "competition_name", "name"]:
+                if alias in kwargs and kwargs.get(alias):
+                    kwargs["query"] = kwargs[alias]
+                    break
+
         result = self.tools.execute(
             tool_name, sandbox=self.sandbox, llm=self.llm, **kwargs
         )

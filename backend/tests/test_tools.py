@@ -98,7 +98,9 @@ class TestFilesTool:
         self.sandbox.cleanup()
 
     def test_files_tool_write(self):
-        result = files_tool(op="write", path="test.txt", content="Hello", sandbox=self.sandbox)
+        result = files_tool(
+            op="write", path="test.txt", content="Hello", sandbox=self.sandbox
+        )
         assert "Written" in result
 
     def test_files_tool_read(self):
@@ -143,7 +145,9 @@ class TestRAG:
         assert "Python" in results[0]["content"]
 
     def test_rag_get_context(self):
-        self.rag.add_document("doc1", "Python is a programming language. It is widely used.")
+        self.rag.add_document(
+            "doc1", "Python is a programming language. It is widely used."
+        )
         context = self.rag.get_context("What is Python?")
         assert len(context) > 0
 
@@ -178,6 +182,15 @@ class TestToolRegistry:
         result = ToolRegistry.execute("unknown_tool", query="test")
         assert result.success is False
         assert "Unknown tool" in result.error
+
+    def test_execute_tool_passes_additional_kwargs(self):
+        def custom_tool(query: str, extra: str) -> str:
+            return f"{query}|{extra}"
+
+        ToolRegistry.register("custom", custom_tool)
+        result = ToolRegistry.execute("custom", query="base", extra="value")
+        assert result.success is True
+        assert "base|value" in result.output
 
 
 if __name__ == "__main__":
