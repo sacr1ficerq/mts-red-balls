@@ -298,7 +298,18 @@ class ToolConstants:
     TOOLS_REQUIRING_LLM = {TOOL_SEARCH, TOOL_RAG}
 
     # Tools requiring sandbox
-    TOOLS_REQUIRING_SANDBOX = {TOOL_CONSOLE, TOOL_FILES}
+    TOOLS_REQUIRING_SANDBOX = {
+        TOOL_CONSOLE,
+        TOOL_FILES,
+        "kaggle_get_competition_info",
+        "kaggle_download_data",
+        "kaggle_submit",
+        "kaggle_get_submission_status",
+        "kaggle_get_leaderboard",
+        "kaggle_list_competitions",
+        "kaggle_validate_submission",
+        "kaggle_prepare_submission",
+    }
 
     # Maximum tool execution time (in seconds)
     MAX_TOOL_EXECUTION_TIME = 120

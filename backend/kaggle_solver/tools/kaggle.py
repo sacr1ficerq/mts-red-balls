@@ -4,6 +4,7 @@ Kaggle Tools
 Tools for interacting with Kaggle competitions via MCP integration.
 """
 
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 from kaggle_solver.mcp.kaggle_mcp import get_kaggle_mcp_client, KaggleMCPClient
@@ -27,6 +28,33 @@ def _resolve_query(query: str = "", **kwargs) -> str:
     return ""
 
 
+def _resolve_path_in_sandbox(path: str, sandbox=None) -> Path:
+    """Resolve file path inside sandbox when sandbox is available."""
+    raw = (path or "").strip()
+    if not raw:
+        raw = "."
+
+    if sandbox is None:
+        return Path(raw)
+
+    if not hasattr(sandbox, "resolve_path"):
+        raise ValueError("Sandbox does not support secure path resolution")
+
+    return sandbox.resolve_path(raw)
+
+
+def _to_display_path(path: Path, sandbox=None) -> str:
+    """Convert an absolute sandbox path to a sandbox-relative display path."""
+    if sandbox is None:
+        return str(path)
+
+    try:
+        relative = path.resolve().relative_to(Path(sandbox.root).resolve())
+        return str(relative)
+    except Exception:
+        return str(path)
+
+
 def kaggle_get_competition_info(query: str = "", **kwargs) -> Dict[str, Any]:
     """
     Get information about a Kaggle competition
@@ -41,7 +69,7 @@ def kaggle_get_competition_info(query: str = "", **kwargs) -> Dict[str, Any]:
     if not query:
         return {"success": False, "error": "Competition query is required"}
 
-    client = get_kaggle_mcp_client()
+    client = get_kaggle_mcp_client(sandbox=kwargs.get("sandbox"))
     if not client:
         return {"success": False, "error": KAGGLE_CLIENT_ERROR}
 
@@ -70,20 +98,36 @@ def kaggle_download_data(
     if not query:
         return {"success": False, "error": "Competition query is required"}
 
-    client = get_kaggle_mcp_client()
+    sandbox = kwargs.get("sandbox")
+    client = get_kaggle_mcp_client(sandbox=sandbox)
     if not client:
         return {"success": False, "error": KAGGLE_CLIENT_ERROR}
 
     try:
+        if sandbox is None:
+            destination = Path(path)
+            destination_arg = path
+        else:
+            destination = _resolve_path_in_sandbox(path, sandbox)
+            destination.mkdir(parents=True, exist_ok=True)
+            destination_arg = str(destination)
+
         file_list = files.split(",") if files else None
-        downloaded = client.download_competition_data(query, path, file_list)
+        downloaded = client.download_competition_data(query, destination_arg, file_list)
+
+        downloaded_paths = []
+        for item in downloaded:
+            item_path = Path(item)
+            downloaded_paths.append(_to_display_path(item_path, sandbox))
 
         return {
             "success": True,
             "data": {
                 "competition": query,
-                "downloaded_files": downloaded,
-                "path": path,
+                "downloaded_files": downloaded_paths,
+                "path": _to_display_path(destination, sandbox)
+                if sandbox is not None
+                else path,
             },
         }
     except Exception as e:
@@ -110,12 +154,24 @@ def kaggle_submit(
     if not submission_file:
         return {"success": False, "error": "submission_file is required"}
 
-    client = get_kaggle_mcp_client()
+    sandbox = kwargs.get("sandbox")
+    client = get_kaggle_mcp_client(sandbox=sandbox)
     if not client:
         return {"success": False, "error": KAGGLE_CLIENT_ERROR}
 
     try:
-        result = client.submit_prediction(query, submission_file, message)
+        if sandbox is not None:
+            submission_path = _resolve_path_in_sandbox(submission_file, sandbox)
+            if not submission_path.exists() or not submission_path.is_file():
+                return {
+                    "success": False,
+                    "error": f"submission_file not found: {submission_file}",
+                }
+            submission_arg = str(submission_path)
+        else:
+            submission_arg = submission_file
+
+        result = client.submit_prediction(query, submission_arg, message)
         return {"success": True, "data": result}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -140,7 +196,7 @@ def kaggle_get_submission_status(
     if not submission_id:
         return {"success": False, "error": "submission_id is required"}
 
-    client = get_kaggle_mcp_client()
+    client = get_kaggle_mcp_client(sandbox=kwargs.get("sandbox"))
     if not client:
         return {"success": False, "error": KAGGLE_CLIENT_ERROR}
 
@@ -165,7 +221,7 @@ def kaggle_get_leaderboard(query: str = "", **kwargs) -> Dict[str, Any]:
     if not query:
         return {"success": False, "error": "Competition query is required"}
 
-    client = get_kaggle_mcp_client()
+    client = get_kaggle_mcp_client(sandbox=kwargs.get("sandbox"))
     if not client:
         return {"success": False, "error": KAGGLE_CLIENT_ERROR}
 
@@ -189,7 +245,7 @@ def kaggle_list_competitions(
     Returns:
         Dictionary with list of competitions
     """
-    client = get_kaggle_mcp_client()
+    client = get_kaggle_mcp_client(sandbox=kwargs.get("sandbox"))
     if not client:
         return {"success": False, "error": KAGGLE_CLIENT_ERROR}
 
@@ -225,9 +281,13 @@ def kaggle_validate_submission(
     try:
         import pandas as pd
 
+        sandbox = kwargs.get("sandbox")
+        submission_path = _resolve_path_in_sandbox(submission_file, sandbox)
+        sample_path = _resolve_path_in_sandbox(sample_file, sandbox)
+
         # Read files
-        submission_df = pd.read_csv(submission_file)
-        sample_df = pd.read_csv(sample_file)
+        submission_df = pd.read_csv(submission_path)
+        sample_df = pd.read_csv(sample_path)
 
         issues = []
 
@@ -306,9 +366,15 @@ def kaggle_prepare_submission(
     try:
         import pandas as pd
 
+        sandbox = kwargs.get("sandbox")
+        predictions_path = _resolve_path_in_sandbox(predictions_file, sandbox)
+        sample_path = _resolve_path_in_sandbox(sample_file, sandbox)
+        output_path = _resolve_path_in_sandbox(output_file, sandbox)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
         # Read files
-        predictions_df = pd.read_csv(predictions_file)
-        sample_df = pd.read_csv(sample_file)
+        predictions_df = pd.read_csv(predictions_path)
+        sample_df = pd.read_csv(sample_path)
 
         # Ensure columns are in the same order as sample
         submission_df = predictions_df[sample_df.columns].copy()
@@ -320,12 +386,12 @@ def kaggle_prepare_submission(
         submission_df = pd.DataFrame(submission_records, columns=sample_df.columns)
 
         # Save to CSV
-        submission_df.to_csv(output_file, index=False)
+        submission_df.to_csv(output_path, index=False)
 
         return {
             "success": True,
             "data": {
-                "output_file": output_file,
+                "output_file": _to_display_path(output_path, sandbox),
                 "rows": len(submission_df),
                 "columns": list(submission_df.columns),
             },

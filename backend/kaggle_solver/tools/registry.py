@@ -90,11 +90,33 @@ class ToolRegistry:
                 if query and "query" not in passthrough_kwargs:
                     passthrough_kwargs["query"] = query
                 result = func(**passthrough_kwargs, **tool_kwargs)
-            return ToolResult(
-                True,
-                output=str(result) if result is not None else "",
-                metadata={"tool": name},
-            )
+
+            if isinstance(result, dict) and isinstance(result.get("success"), bool):
+                if result["success"]:
+                    return ToolResult(
+                        True,
+                        output=str(result),
+                        metadata={"tool": name, "payload": result},
+                    )
+
+                error_text = str(result.get("error") or result)
+                return ToolResult(
+                    False,
+                    output=str(result),
+                    error=error_text,
+                    metadata={"tool": name, "payload": result},
+                )
+
+            output = str(result) if result is not None else ""
+            if output.startswith("Error:"):
+                return ToolResult(
+                    False,
+                    output=output,
+                    error=output,
+                    metadata={"tool": name},
+                )
+
+            return ToolResult(True, output=output, metadata={"tool": name})
         except Exception as e:
             logger.error(f"Tool execution error: {name} - {e}")
             return ToolResult(False, error=str(e))

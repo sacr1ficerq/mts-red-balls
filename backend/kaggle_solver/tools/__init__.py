@@ -11,11 +11,11 @@ import kaggle_solver.tools.kaggle
 
 def get_rag_tool():
     from kaggle_solver.rag import rag_instance
-    
+
     def rag_tool(query: str, **kwargs) -> str:
         context = rag_instance.get_context(query)
         return context if context else "No relevant context found."
-    
+
     return rag_tool
 
 
@@ -29,6 +29,6 @@ __all__ = [
     "ToolRegistry",
     "ToolResult",
     "console_tool",
-    "files_tool", 
+    "files_tool",
     "search_tool",
 ]

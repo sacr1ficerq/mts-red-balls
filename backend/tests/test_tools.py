@@ -88,6 +88,11 @@ class TestConsoleTool:
         result = console_tool(query="echo test", sandbox=None)
         assert "Error" in result
 
+    def test_console_tool_returns_process_output_on_failure(self):
+        self.sandbox.write("broken.py", 'print("oops"')
+        result = console_tool(query="python3 broken.py", sandbox=self.sandbox)
+        assert "SyntaxError" in result
+
 
 class TestFilesTool:
     def setup_method(self):
@@ -128,6 +133,33 @@ class TestFilesTool:
     def test_files_tool_no_sandbox(self):
         result = files_tool(op="read", path="test.txt", sandbox=None)
         assert "Error" in result
+
+    def test_files_tool_write_unescapes_double_escaped_newlines(self):
+        files_tool(
+            op="write",
+            path="script.py",
+            content=r"print('hi')\nprint('bye')",
+            sandbox=self.sandbox,
+        )
+        assert self.sandbox.read("script.py") == "print('hi')\nprint('bye')"
+
+    def test_files_tool_write_preserves_valid_python_with_literal_escape(self):
+        files_tool(
+            op="write",
+            path="script.py",
+            content='print(r"\\n")',
+            sandbox=self.sandbox,
+        )
+        assert self.sandbox.read("script.py") == 'print(r"\\n")'
+
+    def test_files_tool_write_does_not_unescape_non_python_files(self):
+        files_tool(
+            op="write",
+            path="config.json",
+            content=r'{"pattern":"\\n"}',
+            sandbox=self.sandbox,
+        )
+        assert self.sandbox.read("config.json") == r'{"pattern":"\\n"}'
 
 
 class TestRAG:
@@ -177,6 +209,24 @@ class TestToolRegistry:
         result = ToolRegistry.execute("test", query="hello")
         assert result.success is True
         assert "processed: hello" in result.output
+
+    def test_execute_tool_treats_error_prefix_as_failure(self):
+        def failing_tool(query: str) -> str:
+            return "Error: boom"
+
+        ToolRegistry.register("failing", failing_tool)
+        result = ToolRegistry.execute("failing", query="hello")
+        assert result.success is False
+        assert result.error == "Error: boom"
+
+    def test_execute_tool_uses_structured_success_flag(self):
+        def structured_tool(query: str) -> dict:
+            return {"success": False, "error": "boom"}
+
+        ToolRegistry.register("structured", structured_tool)
+        result = ToolRegistry.execute("structured", query="hello")
+        assert result.success is False
+        assert result.error == "boom"
 
     def test_execute_unknown_tool(self):
         result = ToolRegistry.execute("unknown_tool", query="test")
