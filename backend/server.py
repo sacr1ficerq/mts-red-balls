@@ -660,35 +660,24 @@ def get_settings_manager() -> SettingsManager:
 class SettingsUpdate(BaseModel):
     """Model for settings update request."""
     api_key: Optional[str] = None
-    kaggle_key: Optional[str] = None
-    kaggle_username: Optional[str] = None
     agent_models: Optional[Dict[str, Dict[str, Any]]] = None
 
 
 @app.get("/api/settings")
 def get_settings():
-    """Get current settings (API keys are masked for security)."""
+    """Get current settings (API key is masked for security)."""
     manager = get_settings_manager()
     settings = manager.get_settings()
     
-    # Mask OpenRouter API key for security (show only last 4 chars)
+    # Mask API key for security (show only last 4 chars)
     api_key = settings.api_key
     masked_key = ""
     if api_key:
         masked_key = "*" * (len(api_key) - 4) + api_key[-4:] if len(api_key) > 4 else "****"
     
-    # Mask Kaggle API key for security
-    kaggle_key = settings.kaggle_api_key
-    kaggle_masked = ""
-    if kaggle_key:
-        kaggle_masked = "*" * (len(kaggle_key) - 4) + kaggle_key[-4:] if len(kaggle_key) > 4 else "****"
-    
     return {
         "api_key_masked": masked_key,
         "has_api_key": bool(api_key),
-        "kaggle_key_masked": kaggle_masked,
-        "has_kaggle_key": bool(kaggle_key),
-        "kaggle_username": settings.kaggle_username,
         "agent_models": settings.agent_models,
         "default_model": DEFAULT_MODEL,
     }
@@ -696,36 +685,25 @@ def get_settings():
 
 @app.put("/api/settings")
 def update_settings(update: SettingsUpdate):
-    """Update settings (API keys and/or agent models)."""
+    """Update settings (API key and/or agent models)."""
     manager = get_settings_manager()
     
     try:
         updated = manager.update_settings(
             api_key=update.api_key,
-            kaggle_key=update.kaggle_key,
-            kaggle_username=update.kaggle_username,
             agent_models=update.agent_models
         )
         
-        # Mask OpenRouter API key in response
+        # Mask API key in response
         api_key = updated.api_key
         masked_key = ""
         if api_key:
             masked_key = "*" * (len(api_key) - 4) + api_key[-4:] if len(api_key) > 4 else "****"
         
-        # Mask Kaggle API key in response
-        kaggle_key = updated.kaggle_api_key
-        kaggle_masked = ""
-        if kaggle_key:
-            kaggle_masked = "*" * (len(kaggle_key) - 4) + kaggle_key[-4:] if len(kaggle_key) > 4 else "****"
-        
         return {
             "success": True,
             "api_key_masked": masked_key,
             "has_api_key": bool(api_key),
-            "kaggle_key_masked": kaggle_masked,
-            "has_kaggle_key": bool(kaggle_key),
-            "kaggle_username": updated.kaggle_username,
             "agent_models": updated.agent_models,
         }
     except Exception as e:

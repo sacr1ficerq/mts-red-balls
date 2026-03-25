@@ -11,4 +11,3 @@ numpy
 pandas
 slowapi
 requests
-kaggle

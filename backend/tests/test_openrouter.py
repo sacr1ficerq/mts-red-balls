@@ -337,7 +337,6 @@ class TestModelAccess:
             "openrouter/free",
             "google/gemma-3n-e5b-it",
             "meta-llama/llama-3.2-3b-instruct",
-            "xiaomi/mimo-v2-flash",
         ], f"Unexpected model: {model}"
 
     def test_model_responds(self, api_key):

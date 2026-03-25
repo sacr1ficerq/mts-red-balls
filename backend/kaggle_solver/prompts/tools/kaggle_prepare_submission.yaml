@@ -1,8 +1,39 @@
-# kaggle_prepare_submission
+name: kaggle_prepare_submission
 description: |
-  Prepare a submission file from predictions.
-  Input: query (competition name), predictions_file (path), sample_file (path)
-  Output: path to the prepared submission file
+  Prepare a submission file from predictions by matching the format of the sample submission. 
+  Ensures columns are in the correct order and rows are sorted by ID. Use this to create 
+  properly formatted submission files from model predictions.
 
-usage: |
-  {"action": "tool", "tool": "kaggle_prepare_submission", "query": "titanic", "predictions_file": "preds.csv", "sample_file": "gender_submission.csv"}
+parameters:
+  query:
+    type: string
+    required: true
+    description: Competition name (for context)
+  predictions_file:
+    type: string
+    required: true
+    description: Path to file with predictions
+  sample_file:
+    type: string
+    required: true
+    description: Path to sample submission file for format reference
+  output_file:
+    type: string
+    required: false
+    description: Output submission file path (default: 'submission.csv')
+
+examples:
+  - query: "Prepare submission from predictions.csv"
+    parameters:
+      query: "titanic"
+      predictions_file: "predictions.csv"
+      sample_file: "sample_submission.csv"
+      output_file: "submission.csv"
+
+output_format: |
+  Returns a JSON object with preparation results:
+  {
+    "output_file": "submission.csv",
+    "rows": 418,
+    "columns": ["PassengerId", "Survived"]
+  }

@@ -6,12 +6,12 @@
 
 llm:
   # Default model (overridden by SettingsManager per-agent config)
-  model: "xiaomi/mimo-v2-flash"
+  model: "openai/gpt-4o-mini"
   temperature: 0.7
   max_tokens: 4096
   max_retries: 5
   retry_delay: 5.0
-  requests_per_minute: 60
+  requests_per_minute: 30
 
 sandbox:
   root: "./workspace"

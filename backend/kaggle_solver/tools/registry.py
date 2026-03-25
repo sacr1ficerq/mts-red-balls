@@ -84,27 +84,9 @@ class ToolRegistry:
                 result = func(**tool_kwargs)
             else:
                 result = func(query=query, **tool_kwargs)
-            
-            # Check if the tool returned a failure dictionary
-            success = True
-            error_msg = ""
-            output_str = ""
-            
-            if isinstance(result, dict):
-                success = result.get('success', True)
-                error_msg = result.get('error', "")
-                # If it's a success dict, we might want to stringify the 'data' or the whole dict
-                if success and 'data' in result:
-                    output_str = json.dumps(result['data'], ensure_ascii=False)
-                else:
-                    output_str = str(result)
-            else:
-                output_str = str(result) if result is not None else ""
-            
             return ToolResult(
-                success,
-                output=output_str,
-                error=error_msg,
+                True,
+                output=str(result) if result is not None else "",
                 metadata={"tool": name}
             )
         except Exception as e:

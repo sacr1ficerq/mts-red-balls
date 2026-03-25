@@ -10,16 +10,8 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 
 from kaggle_solver.mcp.kaggle_mcp import get_kaggle_mcp_client, KaggleMCPClient
-from kaggle_solver.tools.registry import create_tool
 
 
-@create_tool(
-    name="kaggle_get_competition_info",
-    description="Get information about a Kaggle competition",
-    parameters={
-        "query": {"type": "string", "description": "Competition name (e.g., 'titanic')"}
-    }
-)
 def kaggle_get_competition_info(query: str, **kwargs) -> Dict[str, Any]:
     """
     Get information about a Kaggle competition
@@ -34,7 +26,7 @@ def kaggle_get_competition_info(query: str, **kwargs) -> Dict[str, Any]:
     if not client:
         return {
             'success': False,
-            'error': 'Kaggle API credentials are not configured. Please go to Settings in the UI and enter your Kaggle Username and API Key before starting a competition task.'
+            'error': 'Kaggle MCP client not available. Please install kaggle package and set KAGGLE_API_KEY and KAGGLE_USERNAME environment variables.'
         }
     
     try:
@@ -50,15 +42,6 @@ def kaggle_get_competition_info(query: str, **kwargs) -> Dict[str, Any]:
         }
 
 
-@create_tool(
-    name="kaggle_download_data",
-    description="Download competition data files",
-    parameters={
-        "query": {"type": "string", "description": "Competition name"},
-        "path": {"type": "string", "description": "Directory to save files", "default": "./"},
-        "files": {"type": "string", "description": "Comma-separated list of specific files", "optional": True}
-    }
-)
 def kaggle_download_data(query: str, path: str = './', files: Optional[str] = None, **kwargs) -> Dict[str, Any]:
     """
     Download competition data files
@@ -75,26 +58,19 @@ def kaggle_download_data(query: str, path: str = './', files: Optional[str] = No
     if not client:
         return {
             'success': False,
-            'error': 'Kaggle API credentials are not configured. Please go to Settings in the UI and enter your Kaggle Username and API Key before starting a competition task.'
+            'error': 'Kaggle MCP client not available. Please install kaggle package and set KAGGLE_API_KEY and KAGGLE_USERNAME environment variables.'
         }
     
-    # Resolve path relative to sandbox root if available
-    sandbox = kwargs.get('sandbox')
-    if sandbox:
-        target_path = Path(sandbox.root) / path
-    else:
-        target_path = Path(path)
-
     try:
         file_list = files.split(',') if files else None
-        downloaded = client.download_competition_data(query, str(target_path), file_list)
+        downloaded = client.download_competition_data(query, path, file_list)
         
         return {
             'success': True,
             'data': {
                 'competition': query,
                 'downloaded_files': downloaded,
-                'path': str(target_path)
+                'path': path
             }
         }
     except Exception as e:
@@ -104,15 +80,6 @@ def kaggle_download_data(query: str, path: str = './', files: Optional[str] = No
         }
 
 
-@create_tool(
-    name="kaggle_submit",
-    description="Submit predictions to a Kaggle competition",
-    parameters={
-        "query": {"type": "string", "description": "Competition name"},
-        "submission_file": {"type": "string", "description": "Path to submission file"},
-        "message": {"type": "string", "description": "Submission message", "default": ""}
-    }
-)
 def kaggle_submit(query: str, submission_file: str, message: str = '', **kwargs) -> Dict[str, Any]:
     """
     Submit predictions to a Kaggle competition
@@ -129,18 +96,11 @@ def kaggle_submit(query: str, submission_file: str, message: str = '', **kwargs)
     if not client:
         return {
             'success': False,
-            'error': 'Kaggle API credentials are not configured. Please go to Settings in the UI and enter your Kaggle Username and API Key before starting a competition task.'
+            'error': 'Kaggle MCP client not available. Please install kaggle package and set KAGGLE_API_KEY and KAGGLE_USERNAME environment variables.'
         }
     
-    # Resolve path relative to sandbox root if available
-    sandbox = kwargs.get('sandbox')
-    if sandbox:
-        target_file = Path(sandbox.root) / submission_file
-    else:
-        target_file = Path(submission_file)
-
     try:
-        result = client.submit_prediction(query, str(target_file), message)
+        result = client.submit_prediction(query, submission_file, message)
         return {
             'success': True,
             'data': result
@@ -152,14 +112,6 @@ def kaggle_submit(query: str, submission_file: str, message: str = '', **kwargs)
         }
 
 
-@create_tool(
-    name="kaggle_get_submission_status",
-    description="Get status of a submission",
-    parameters={
-        "query": {"type": "string", "description": "Competition name"},
-        "submission_id": {"type": "string", "description": "Submission ID"}
-    }
-)
 def kaggle_get_submission_status(query: str, submission_id: str, **kwargs) -> Dict[str, Any]:
     """
     Get status of a submission
@@ -175,7 +127,7 @@ def kaggle_get_submission_status(query: str, submission_id: str, **kwargs) -> Di
     if not client:
         return {
             'success': False,
-            'error': 'Kaggle API credentials are not configured. Please go to Settings in the UI and enter your Kaggle Username and API Key before starting a competition task.'
+            'error': 'Kaggle MCP client not available. Please install kaggle package and set KAGGLE_API_KEY and KAGGLE_USERNAME environment variables.'
         }
     
     try:
@@ -191,13 +143,6 @@ def kaggle_get_submission_status(query: str, submission_id: str, **kwargs) -> Di
         }
 
 
-@create_tool(
-    name="kaggle_get_leaderboard",
-    description="Get competition leaderboard",
-    parameters={
-        "query": {"type": "string", "description": "Competition name"}
-    }
-)
 def kaggle_get_leaderboard(query: str, **kwargs) -> Dict[str, Any]:
     """
     Get competition leaderboard
@@ -212,7 +157,7 @@ def kaggle_get_leaderboard(query: str, **kwargs) -> Dict[str, Any]:
     if not client:
         return {
             'success': False,
-            'error': 'Kaggle API credentials are not configured. Please go to Settings in the UI and enter your Kaggle Username and API Key before starting a competition task.'
+            'error': 'Kaggle MCP client not available. Please install kaggle package and set KAGGLE_API_KEY and KAGGLE_USERNAME environment variables.'
         }
     
     try:
@@ -228,14 +173,6 @@ def kaggle_get_leaderboard(query: str, **kwargs) -> Dict[str, Any]:
         }
 
 
-@create_tool(
-    name="kaggle_list_competitions",
-    description="List Kaggle competitions",
-    parameters={
-        "query": {"type": "string", "description": "Search query", "default": ""},
-        "category": {"type": "string", "description": "Competition category", "default": ""}
-    }
-)
 def kaggle_list_competitions(query: str = '', category: str = '', **kwargs) -> Dict[str, Any]:
     """
     List Kaggle competitions
@@ -251,7 +188,7 @@ def kaggle_list_competitions(query: str = '', category: str = '', **kwargs) -> D
     if not client:
         return {
             'success': False,
-            'error': 'Kaggle API credentials are not configured. Please go to Settings in the UI and enter your Kaggle Username and API Key before starting a competition task.'
+            'error': 'Kaggle MCP client not available. Please install kaggle package and set KAGGLE_API_KEY and KAGGLE_USERNAME environment variables.'
         }
     
     try:
@@ -267,15 +204,6 @@ def kaggle_list_competitions(query: str = '', category: str = '', **kwargs) -> D
         }
 
 
-@create_tool(
-    name="kaggle_validate_submission",
-    description="Validate submission file against sample submission format",
-    parameters={
-        "query": {"type": "string", "description": "Competition name"},
-        "submission_file": {"type": "string", "description": "Path to submission file"},
-        "sample_file": {"type": "string", "description": "Path to sample submission file"}
-    }
-)
 def kaggle_validate_submission(query: str, submission_file: str, sample_file: str, **kwargs) -> Dict[str, Any]:
     """
     Validate submission file against sample submission format
@@ -288,21 +216,12 @@ def kaggle_validate_submission(query: str, submission_file: str, sample_file: st
     Returns:
         Dictionary with validation results
     """
-    # Resolve paths relative to sandbox root if available
-    sandbox = kwargs.get('sandbox')
-    if sandbox:
-        sub_path = Path(sandbox.root) / submission_file
-        sample_path = Path(sandbox.root) / sample_file
-    else:
-        sub_path = Path(submission_file)
-        sample_path = Path(sample_file)
-
     try:
         import pandas as pd
         
         # Read files
-        submission_df = pd.read_csv(str(sub_path))
-        sample_df = pd.read_csv(str(sample_path))
+        submission_df = pd.read_csv(submission_file)
+        sample_df = pd.read_csv(sample_file)
         
         issues = []
         
@@ -347,16 +266,6 @@ def kaggle_validate_submission(query: str, submission_file: str, sample_file: st
         }
 
 
-@create_tool(
-    name="kaggle_prepare_submission",
-    description="Prepare submission file from predictions",
-    parameters={
-        "query": {"type": "string", "description": "Competition name"},
-        "predictions_file": {"type": "string", "description": "Path to file with predictions"},
-        "sample_file": {"type": "string", "description": "Path to sample submission file"},
-        "output_file": {"type": "string", "description": "Output submission file path", "default": "submission.csv"}
-    }
-)
 def kaggle_prepare_submission(query: str, predictions_file: str, sample_file: str, output_file: str = 'submission.csv', **kwargs) -> Dict[str, Any]:
     """
     Prepare submission file from predictions
@@ -370,23 +279,12 @@ def kaggle_prepare_submission(query: str, predictions_file: str, sample_file: st
     Returns:
         Dictionary with preparation results
     """
-    # Resolve paths relative to sandbox root if available
-    sandbox = kwargs.get('sandbox')
-    if sandbox:
-        preds_path = Path(sandbox.root) / predictions_file
-        sample_path = Path(sandbox.root) / sample_file
-        out_path = Path(sandbox.root) / output_file
-    else:
-        preds_path = Path(predictions_file)
-        sample_path = Path(sample_file)
-        out_path = Path(output_file)
-
     try:
         import pandas as pd
         
         # Read files
-        predictions_df = pd.read_csv(str(preds_path))
-        sample_df = pd.read_csv(str(sample_path))
+        predictions_df = pd.read_csv(predictions_file)
+        sample_df = pd.read_csv(sample_file)
         
         # Ensure columns are in the same order as sample
         submission_df = predictions_df[sample_df.columns].copy()
@@ -396,7 +294,7 @@ def kaggle_prepare_submission(query: str, predictions_file: str, sample_file: st
         submission_df = submission_df.sort_values(id_col)
         
         # Save to CSV
-        submission_df.to_csv(str(out_path), index=False)
+        submission_df.to_csv(output_file, index=False)
         
         return {
             'success': True,
@@ -433,7 +331,3 @@ def register_kaggle_tools():
         ToolRegistry.register(name, func)
     
     return tools
-
-
-# Auto-register on import
-register_kaggle_tools()

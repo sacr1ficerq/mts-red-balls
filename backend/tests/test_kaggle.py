@@ -19,8 +19,7 @@ class TestMultiModelSelection:
         "openrouter/free",
         "google/gemma-3n-e5b-it",
         "meta-llama/llama-3.2-3b-instruct",
-        "openai/gpt-oss-20b:free",
-        "xiaomi/mimo-v2-flash"
+        "openai/gpt-oss-20b:free"
     ]
     
     def test_free_models_defined(self):
@@ -59,7 +58,7 @@ class TestStructuredOutput:
     
     def test_json_output_parsing(self):
         """System should output valid JSON for submissions"""
-        from kaggle_solver.utils.json_parser import parse_json_output
+        from kaggle_solver.agents.base import parse_json_output
         
         # Valid JSON
         result = parse_json_output('{"action": "done", "result": "OK"}')

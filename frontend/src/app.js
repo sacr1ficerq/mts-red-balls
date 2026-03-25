@@ -89,27 +89,6 @@ function buildPlanFromEvents(events = []) {
             }
         }
 
-        if (event.type === 'tool' && plan && event.data?.tool_name === 'delegate' && event.data?.success === true) {
-            // Try to find step_id from the delegate event if it was emitted separately
-            // or if we can infer it from the context.
-            // Actually, the delegate event already sets it to 'active'.
-            // When the tool 'delegate' returns success, we can mark the corresponding step as completed.
-            // We need to find which step was being executed.
-            // The 'delegate' event (type: delegate) usually precedes the 'tool' event (type: tool, tool_name: delegate).
-            
-            // Find the most recent delegate event for this plan
-            for (let i = events.indexOf(event) - 1; i >= 0; i--) {
-                const prevEvent = events[i];
-                if (prevEvent.type === 'delegate' && prevEvent.data?.step_id) {
-                    const step = plan.steps.find((item) => item.id === Number(prevEvent.data.step_id));
-                    if (step) {
-                        step.status = 'completed';
-                    }
-                    break;
-                }
-            }
-        }
-
         if (event.type === 'delegate' && plan && event.data?.step_id) {
             const step = plan.steps.find((item) => item.id === Number(event.data.step_id));
             if (step && step.status !== 'completed') {
@@ -147,7 +126,6 @@ window.dashboard = function() {
             has_api_key: false,
             kaggle_key_masked: '',
             has_kaggle_key: false,
-            kaggle_username: '',
             agent_models: {},
             default_model: 'openai/gpt-4o-mini'
         },
@@ -157,7 +135,6 @@ window.dashboard = function() {
         },
         newApiKey: '',
         newKaggleKey: '',
-        newKaggleUsername: '',
         settingsSaving: false,
         settingsError: null,
         settingsSuccess: null,
@@ -774,26 +751,17 @@ window.dashboard = function() {
                 return;
             }
 
-            if (!this.newKaggleUsername.trim()) {
-                this.settingsError = 'Kaggle username cannot be empty';
-                return;
-            }
-
             this.settingsSaving = true;
             this.settingsError = null;
 
             try {
-                const result = await window.API.updateSettings({
-                    kaggle_key: this.newKaggleKey,
-                    kaggle_username: this.newKaggleUsername
-                });
+                const result = await window.API.updateSettings({ kaggle_key: this.newKaggleKey });
                 this.settings = result;
                 this.newKaggleKey = '';
-                this.newKaggleUsername = '';
-                this.settingsSuccess = 'Kaggle credentials saved successfully';
+                this.settingsSuccess = 'Kaggle key saved successfully';
                 setTimeout(() => { this.settingsSuccess = null; }, 3000);
             } catch (err) {
-                this.settingsError = err.message || 'Failed to save Kaggle credentials';
+                this.settingsError = err.message || 'Failed to save Kaggle key';
             } finally {
                 this.settingsSaving = false;
             }
