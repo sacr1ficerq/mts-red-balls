@@ -1,13 +1,13 @@
 .PHONY: install run build clean
 
 install:
-	npm install
+	bun install
 
 run:
-	npm run dev
+	bun run dev
 
 build:
-	npm run build
+	bun run build
 
 clean:
 	rm -rf node_modules dist

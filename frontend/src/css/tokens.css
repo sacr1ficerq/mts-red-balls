@@ -1,0 +1,61 @@
+/* ==========================================================================
+   1. DESIGN TOKENS - CSS Variables
+   ========================================================================== */
+
+:root {
+    /* Brand */
+    --mts-red: #E30613;
+    --mts-red-dark: #C40511;
+    --mts-red-light: #FDE8EA;
+    --mts-red-border: #F5B7BC;
+
+    /* User Sphere - Red */
+    --user-bg: #FEF2F2;
+    --user-bg-light: #FEE2E2;
+    --user-border: #FECACA;
+    --user-text: #DC2626;
+    --user-icon: #EF4444;
+
+    /* Agent Sphere - Blue */
+    --agent-bg: #EFF6FF;
+    --agent-bg-light: #DBEAFE;
+    --agent-border: #BFDBFE;
+    --agent-text: #2563EB;
+    --agent-icon: #3B82F6;
+
+    /* Tool Sphere - Green */
+    --tool-bg: #ECFDF5;
+    --tool-bg-light: #D1FAE5;
+    --tool-border: #A7F3D0;
+    --tool-text: #059669;
+    --tool-icon: #10B981;
+
+    /* Delegate Sphere - Purple */
+    --delegate-bg: #FAF5FF;
+    --delegate-bg-light: #F3E8FF;
+    --delegate-border: #E9D5FF;
+    --delegate-text: #7C3AED;
+    --delegate-icon: #8B5CF6;
+
+    /* Neutral */
+    --neutral-50: #F9FAFB;
+    --neutral-100: #F3F4F6;
+    --neutral-200: #E5E7EB;
+    --neutral-300: #D1D5DB;
+    --neutral-400: #9CA3AF;
+    --neutral-500: #6B7280;
+    --neutral-600: #4B5563;
+    --neutral-700: #374151;
+    --neutral-800: #1F2937;
+    --neutral-900: #111827;
+
+    /* Typography */
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+
+    /* Spacing & Radius */
+    --radius-sm: 0.25rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-full: 9999px;
+}

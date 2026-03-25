@@ -1,0 +1,42 @@
+/* ==========================================================================
+   2. BASE STYLES - Reset & Defaults
+   ========================================================================== */
+
+[x-cloak] { display: none !important; }
+
+body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--neutral-300);
+    border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { 
+    background: var(--neutral-400); 
+}
+
+/* Transitions */
+[x-show] { transition: all 0.2s ease; }
+
+.fade-in { animation: fadeIn 0.3s ease-out; }
+@keyframes fadeIn { 
+    from { opacity: 0; transform: translateY(8px); } 
+    to { opacity: 1; transform: translateY(0); } 
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .sidebar-collapsible {
+        width: 100% !important;
+        position: fixed;
+        z-index: 40;
+        height: 100%;
+    }
+    .main-content-mobile { margin-left: 0 !important; }
+}

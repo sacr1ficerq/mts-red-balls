@@ -1,0 +1,291 @@
+import pytest
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from kaggle_solver.sandbox import Sandbox, Result
+from kaggle_solver.tools.registry import ToolRegistry
+from kaggle_solver.tools.console import console_tool
+from kaggle_solver.tools.files import files_tool
+from kaggle_solver.tools.pip_install import pip_install_tool
+from kaggle_solver.rag import RAG
+
+
+class TestSandbox:
+    def setup_method(self):
+        self.sandbox = Sandbox(Path("/tmp/test_sandbox"))
+        self.sandbox.cleanup()
+
+    def teardown_method(self):
+        self.sandbox.cleanup()
+
+    def test_sandbox_execute_echo(self):
+        result = self.sandbox.execute("echo hello")
+        assert result.success is True
+        assert "hello" in result.output
+
+    def test_sandbox_execute_date(self):
+        result = self.sandbox.execute("date")
+        assert result.success is True
+
+    def test_sandbox_execute_ls(self):
+        result = self.sandbox.execute("ls")
+        assert result.success is True
+
+    def test_sandbox_write_read_file(self):
+        self.sandbox.write("test.txt", "Hello World")
+        content = self.sandbox.read("test.txt")
+        assert content == "Hello World"
+
+    def test_sandbox_list_files(self):
+        self.sandbox.write("file1.txt", "content1")
+        self.sandbox.write("file2.txt", "content2")
+        files = self.sandbox.list(".")
+        assert "file1.txt" in files
+        assert "file2.txt" in files
+
+    def test_sandbox_delete_file(self):
+        self.sandbox.write("delete_me.txt", "content")
+        assert self.sandbox.exists("delete_me.txt")
+        self.sandbox.delete("delete_me.txt")
+        assert not self.sandbox.exists("delete_me.txt")
+
+    def test_sandbox_file_size(self):
+        self.sandbox.write("size_test.txt", "Hello")
+        size = self.sandbox.get_file_size("size_test.txt")
+        assert size == 5
+
+    def test_sandbox_security_path_traversal(self):
+        result = self.sandbox.execute("ls /etc")
+        assert result.success is False
+
+    def test_sandbox_security_blocked_pattern(self):
+        result = self.sandbox.execute("echo test; rm -rf /")
+        assert result.success is False
+
+
+class TestConsoleTool:
+    def setup_method(self):
+        self.sandbox = Sandbox(Path("/tmp/test_sandbox_console"))
+        self.sandbox.cleanup()
+
+    def teardown_method(self):
+        self.sandbox.cleanup()
+
+    def test_console_tool_echo(self):
+        result = console_tool(query="echo test", sandbox=self.sandbox)
+        assert "test" in result
+
+    def test_console_tool_ls(self):
+        result = console_tool(query="ls", sandbox=self.sandbox)
+        assert result is not None
+
+    def test_console_tool_date(self):
+        result = console_tool(query="date", sandbox=self.sandbox)
+        assert result is not None
+
+    def test_console_tool_no_sandbox(self):
+        result = console_tool(query="echo test", sandbox=None)
+        assert "Error" in result
+
+    def test_console_tool_returns_process_output_on_failure(self):
+        self.sandbox.write("broken.py", 'print("oops"')
+        result = console_tool(query="python3 broken.py", sandbox=self.sandbox)
+        assert "SyntaxError" in result
+
+
+class TestFilesTool:
+    def setup_method(self):
+        self.sandbox = Sandbox(Path("/tmp/test_sandbox_files"))
+        self.sandbox.cleanup()
+
+    def teardown_method(self):
+        self.sandbox.cleanup()
+
+    def test_files_tool_write(self):
+        result = files_tool(
+            op="write", path="test.txt", content="Hello", sandbox=self.sandbox
+        )
+        assert "Written" in result
+
+    def test_files_tool_read(self):
+        self.sandbox.write("read_test.txt", "Test content")
+        result = files_tool(op="read", path="read_test.txt", sandbox=self.sandbox)
+        assert "Test content" in result
+
+    def test_files_tool_list(self):
+        self.sandbox.write("file1.txt", "c1")
+        self.sandbox.write("file2.txt", "c2")
+        result = files_tool(op="list", path=".", sandbox=self.sandbox)
+        assert "file1.txt" in result
+        assert "file2.txt" in result
+
+    def test_files_tool_delete(self):
+        self.sandbox.write("to_delete.txt", "content")
+        result = files_tool(op="delete", path="to_delete.txt", sandbox=self.sandbox)
+        assert "Deleted" in result
+
+    def test_files_tool_exists(self):
+        self.sandbox.write("exists.txt", "content")
+        result = files_tool(op="exists", path="exists.txt", sandbox=self.sandbox)
+        assert "True" in result
+
+    def test_files_tool_no_sandbox(self):
+        result = files_tool(op="read", path="test.txt", sandbox=None)
+        assert "Error" in result
+
+    def test_files_tool_write_unescapes_double_escaped_newlines(self):
+        files_tool(
+            op="write",
+            path="script.py",
+            content=r"print('hi')\nprint('bye')",
+            sandbox=self.sandbox,
+        )
+        assert self.sandbox.read("script.py") == "print('hi')\nprint('bye')"
+
+    def test_files_tool_write_preserves_valid_python_with_literal_escape(self):
+        files_tool(
+            op="write",
+            path="script.py",
+            content='print(r"\\n")',
+            sandbox=self.sandbox,
+        )
+        assert self.sandbox.read("script.py") == 'print(r"\\n")'
+
+    def test_files_tool_write_does_not_unescape_non_python_files(self):
+        files_tool(
+            op="write",
+            path="config.json",
+            content=r'{"pattern":"\\n"}',
+            sandbox=self.sandbox,
+        )
+        assert self.sandbox.read("config.json") == r'{"pattern":"\\n"}'
+
+
+class TestPipInstallTool:
+    def setup_method(self):
+        self.sandbox = Sandbox(Path("/tmp/test_sandbox_pip_install"))
+        self.sandbox.cleanup()
+
+    def teardown_method(self):
+        self.sandbox.cleanup()
+
+    def test_pip_install_tool_runs_pip_command(self):
+        self.sandbox.execute = lambda command, timeout=None: Result(
+            success=True,
+            output=f"ran: {command} timeout={timeout}",
+        )
+
+        result = pip_install_tool(packages="pandas", sandbox=self.sandbox)
+
+        assert result["success"] is True
+        assert result["command"] == "python3 -m pip install pandas"
+        assert "timeout=180" in result["output"]
+
+    def test_pip_install_tool_requires_packages(self):
+        result = pip_install_tool(packages="", sandbox=self.sandbox)
+        assert result["success"] is False
+        assert "No packages provided" in result["error"]
+
+
+class TestRAG:
+    def setup_method(self):
+        self.rag = RAG()
+
+    def test_rag_add_document(self):
+        self.rag.add_document("doc1", "Python is a programming language")
+        assert len(self.rag.documents) == 1
+
+    def test_rag_search(self):
+        self.rag.add_document("doc1", "Python is a programming language")
+        results = self.rag.search("Python")
+        assert len(results) > 0
+        assert "Python" in results[0]["content"]
+
+    def test_rag_get_context(self):
+        self.rag.add_document(
+            "doc1", "Python is a programming language. It is widely used."
+        )
+        context = self.rag.get_context("What is Python?")
+        assert len(context) > 0
+
+    def test_rag_clear(self):
+        self.rag.add_document("doc1", "Test content")
+        self.rag.clear()
+        assert len(self.rag.documents) == 0
+
+
+class TestToolRegistry:
+    def setup_method(self):
+        ToolRegistry._tools = {}
+        ToolRegistry._tool_metadata = {}
+
+    def test_register_tool(self):
+        def dummy_tool(query: str) -> str:
+            return "result"
+
+        ToolRegistry.register("dummy", dummy_tool, "A dummy tool")
+        assert "dummy" in ToolRegistry.list_tools()
+
+    def test_execute_tool(self):
+        def test_tool(query: str) -> str:
+            return f"processed: {query}"
+
+        ToolRegistry.register("test", test_tool)
+        result = ToolRegistry.execute("test", query="hello")
+        assert result.success is True
+        assert "processed: hello" in result.output
+
+    def test_execute_tool_treats_error_prefix_as_failure(self):
+        def failing_tool(query: str) -> str:
+            return "Error: boom"
+
+        ToolRegistry.register("failing", failing_tool)
+        result = ToolRegistry.execute("failing", query="hello")
+        assert result.success is False
+        assert result.error == "Error: boom"
+
+    def test_execute_tool_uses_structured_success_flag(self):
+        def structured_tool(query: str) -> dict:
+            return {"success": False, "error": "boom"}
+
+        ToolRegistry.register("structured", structured_tool)
+        result = ToolRegistry.execute("structured", query="hello")
+        assert result.success is False
+        assert result.error == "boom"
+
+    def test_execute_unknown_tool(self):
+        result = ToolRegistry.execute("unknown_tool", query="test")
+        assert result.success is False
+        assert "Unknown tool" in result.error
+
+    def test_execute_tool_passes_additional_kwargs(self):
+        def custom_tool(query: str, extra: str) -> str:
+            return f"{query}|{extra}"
+
+        ToolRegistry.register("custom", custom_tool)
+        result = ToolRegistry.execute("custom", query="base", extra="value")
+        assert result.success is True
+        assert "base|value" in result.output
+
+    def test_execute_pip_install_passes_sandbox(self):
+        ToolRegistry.register("pip_install", pip_install_tool)
+        sandbox = Sandbox(Path("/tmp/test_registry_pip_install"))
+        sandbox.cleanup()
+        sandbox.execute = lambda command, timeout=None: Result(
+            success=True,
+            output=f"ran: {command} timeout={timeout}",
+        )
+
+        result = ToolRegistry.execute(
+            "pip_install",
+            packages="pandas",
+            sandbox=sandbox,
+        )
+        assert result.success is True
+        assert "python3 -m pip install pandas" in result.output
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

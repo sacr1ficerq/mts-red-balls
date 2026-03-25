@@ -1,0 +1,15 @@
+console_tool: |
+  console: Run shell commands in sandbox.
+  Input: command (python3, ls, cat, etc.)
+  Output: stdout/stderr
+  
+  Usage:
+  {"action": "tool", "tool": "console", "query": "python3 script.py"}
+
+files_tool: |
+  files: Read and write files in sandbox.
+  Input: operation (read/write), path, content (for write)
+  Output: success message or file content
+  
+  Usage:
+  {"action": "tool", "tool": "files", "op": "write", "path": "script.py", "content": "print('hello')"}

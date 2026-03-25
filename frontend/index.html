@@ -1,12 +1,609 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Svelte + FastAPI</title>
-    </head>
-    <body>
-        <div id="app"></div>
-        <script type="module" src="/src/main.js"></script>
-    </body>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>МТС агентство «Красные яйца»</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    
+    <!-- Local Styles -->
+    <link rel="stylesheet" href="src/css/styles.css">
+    <style>[x-cloak] { display: none !important; }</style>
+    
+    <!-- Local Scripts -->
+    <script type="module" src="src/services/api.js?v=41"></script>
+    <script type="module" src="src/utils/formatters.js?v=40"></script>
+    <script type="module" src="src/utils/styles.js?v=40"></script>
+    <script type="module" src="src/app.js?v=52"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-50 h-screen flex overflow-hidden text-sm" x-data="dashboard()" x-init="init()" x-cloak>
+    
+    <!-- Sidebar -->
+    <aside class="flex flex-col h-full bg-white border-r border-gray-200 w-64 flex-shrink-0 transition-all duration-300" 
+            :class="sidebarOpen ? 'w-64' : 'w-0 -ml-64 overflow-hidden'"
+            x-data="{ selectedFile: null, fileContent: '', loading: false }">
+        <!-- Header -->
+        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm">
+                    <i class="fas fa-brain text-white text-sm"></i>
+                </div>
+                <span class="font-bold text-gray-800 text-sm">МТС Агент</span>
+            </div>
+            <div class="flex items-center gap-1">
+                <button @click="sidebarOpen = false" class="text-gray-400 hover:text-gray-600 p-1.5 rounded hover:bg-gray-100">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Sessions List -->
+        <div class="flex-1 overflow-y-auto px-2 py-2 space-y-1 custom-scrollbar">
+            <!-- Active -->
+            <div x-show="sidebarOpen" class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 px-2 mt-2 flex items-center justify-between">
+                <span>Активные</span>
+                <span x-show="sortedActiveSessions.length > 0" class="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full" x-text="sortedActiveSessions.length"></span>
+            </div>
+            <template x-for="session in sortedActiveSessions" :key="session.id">
+                <div @click="selectSession(session.id)"
+                     class="cursor-pointer px-3 py-2 rounded-md transition-colors flex items-center gap-2"
+                     :class="currentSessionId === session.id ? 'bg-red-50 text-red-700' : 'hover:bg-gray-50 text-gray-600'">
+                    <div class="relative flex-shrink-0">
+                        <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                        <div class="absolute top-0 left-0 w-2 h-2 rounded-full bg-blue-500 animate-ping opacity-75"></div>
+                    </div>
+                    <div class="truncate text-xs font-medium" x-text="session.task || 'Новая задача'"></div>
+                </div>
+            </template>
+
+            <!-- History -->
+            <div x-show="sidebarOpen" class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 px-2 mt-4 flex items-center justify-between">
+                <span>История</span>
+                <div class="flex items-center gap-2">
+                    <span x-show="sortedHistoricalSessions.length > 0" class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full" x-text="sortedHistoricalSessions.length"></span>
+                    <button @click.stop="clearHistory()" x-show="sortedHistoricalSessions.length > 0" class="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-gray-100" title="Очистить историю">
+                        <i class="fas fa-trash-alt text-xs"></i>
+                    </button>
+                </div>
+            </div>
+            <template x-for="session in sortedHistoricalSessions" :key="session.id">
+                <div @click="selectSession(session.id)"
+                     class="cursor-pointer px-3 py-2 rounded-md transition-colors flex items-center gap-2"
+                     :class="currentSessionId === session.id ? 'bg-gray-100 text-gray-900' : 'hover:bg-gray-50 text-gray-500'">
+                    <i class="fas fa-history text-xs flex-shrink-0 opacity-50"></i>
+                    <div class="truncate text-xs" x-text="session.task || 'Без названия'"></div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Files Tree - 1/3 height when open, collapsed at bottom when closed -->
+        <div class="border-t border-gray-100 bg-gray-50 flex-shrink-0 transition-all duration-300" 
+             :class="fileTreeOpen ? 'h-1/3' : 'h-auto'"
+             :style="fileTreeOpen ? 'min-height: 120px;' : 'height: auto;'">
+            <div class="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-100 border-b border-gray-200" 
+                 @click="fileTreeOpen = !fileTreeOpen">
+                <span class="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                    <i class="fas fa-folder-tree"></i> Файлы
+                </span>
+                <i class="fas text-gray-400 text-xs" :class="fileTreeOpen ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+            </div>
+            <div x-show="fileTreeOpen" class="overflow-y-auto px-2 pb-2 text-xs custom-scrollbar"
+                 :style="'height: calc(100% - 36px); max-height: 200px;'">
+                <template x-if="fileTree && fileTree.length > 0">
+                    <div class="space-y-0.5">
+                        <template x-for="item in fileTree" :key="item.path">
+                            <div>
+                                <div class="flex items-center gap-1.5 py-1 px-2 cursor-pointer hover:bg-gray-200 rounded-md"
+                                     @click="if(item.type === 'folder') { toggleFolder(item.path); } else { loading=true; readFile(item.path).then(c => { selectedFile=item.path; fileContent=c; loading=false; }) }">
+                                    <i class="fas text-[10px]" :class="fileTreeOpenPaths[item.path] ? 'fa-folder-open text-amber-500' : (item.type === 'folder' ? 'fa-folder text-amber-500' : 'fa-file-code text-gray-400')"></i>
+                                    <span x-text="item.name" class="truncate text-gray-600"></span>
+                                </div>
+                                <div x-show="fileTreeOpenPaths[item.path] && item.children" class="pl-3 border-l border-gray-200 ml-2">
+                                    <template x-for="child in item.children" :key="child.path">
+                                        <div class="flex items-center gap-1.5 py-1 px-2 cursor-pointer hover:bg-gray-200 rounded-md"
+                                             @click="if(child.type === 'folder') { toggleFolder(child.path); } else { loading=true; readFile(child.path).then(c => { selectedFile=child.path; fileContent=c; loading=false; }) }">
+                                            <i class="fas text-[10px]" :class="fileTreeOpenPaths[child.path] ? 'fa-folder-open text-amber-500' : (child.type === 'folder' ? 'fa-folder text-amber-500' : 'fa-file-code text-gray-400')"></i>
+                                            <span x-text="child.name" class="truncate text-gray-600"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <template x-if="!fileTree || fileTree.length === 0">
+                    <div class="text-gray-400 text-xs px-2 py-1">Нет файлов</div>
+                </template>
+                
+                <!-- File Preview Modal -->
+                <div x-show="selectedFile" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="selectedFile = null">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col overflow-hidden" @click.stop>
+                        <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-file-code text-gray-400"></i>
+                                <span class="font-mono text-sm font-medium text-gray-700" x-text="selectedFile"></span>
+                            </div>
+                            <button @click="selectedFile = null" class="text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="p-0 overflow-auto flex-1 bg-gray-50">
+                            <div x-show="loading" class="flex items-center justify-center h-32 text-gray-400">
+                                <i class="fas fa-circle-notch fa-spin mr-2"></i> Загрузка...
+                            </div>
+                            <pre x-show="!loading" class="p-4 text-xs font-mono whitespace-pre-wrap" x-text="fileContent"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        
+        <!-- Header -->
+        <header class="h-14 bg-white border-b border-gray-100 px-4 flex items-center flex-shrink-0">
+            <button @click="sidebarOpen = true" x-show="!sidebarOpen" class="text-gray-500 hover:text-gray-700 p-2 rounded-md hover:bg-gray-100 mr-3">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="min-w-0 flex-1 flex items-center gap-3">
+                <h2 class="text-sm font-bold text-gray-800 truncate" 
+                    x-text="currentSession ? (currentSession.task || currentSession.id) : 'Новая задача'"></h2>
+                <div x-show="currentSession" class="flex items-center gap-2">
+                    <span class="px-2 py-0.5 text-xs rounded-full font-medium border uppercase"
+                          :class="{
+                              'bg-blue-50 text-blue-600 border-blue-100': currentSession?.status === 'running',
+                              'bg-emerald-50 text-emerald-600 border-emerald-100': currentSession?.status === 'completed',
+                              'bg-amber-50 text-amber-600 border-amber-100': currentSession?.status === 'cancelled',
+                              'bg-red-50 text-red-600 border-red-100': currentSession?.status === 'error'
+                          }"
+                          x-text="currentSession?.status === 'running' ? 'В работе' : 
+                                 currentSession?.status === 'completed' ? 'Готово' : 
+                                 currentSession?.status === 'cancelled' ? 'Отмена' : 'Ошибка'"></span>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <!-- Token Metrics -->
+                <div class="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-md text-xs">
+                    <i class="fas fa-coins text-gray-400"></i>
+                    <span x-text="metrics.total_tokens > 0 ? metrics.total_tokens.toLocaleString() : '0'" class="text-gray-600 font-medium"></span>
+                    <span class="text-gray-400">tokens</span>
+                </div>
+                <!-- Stop Session Button -->
+                <button @click="stopSession()" 
+                        class="text-gray-500 hover:text-red-600 p-2 rounded-md hover:bg-gray-100" 
+                        title="Остановить">
+                    <i class="fas fa-stop"></i>
+                </button>
+                <!-- New Session Button -->
+                <button @click="createNewSession()" class="text-gray-500 hover:text-red-600 p-2 rounded-md hover:bg-gray-100" title="Новая сессия">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <!-- Settings Button -->
+                <button @click="openSettings()" class="text-gray-500 hover:text-blue-600 p-2 rounded-md hover:bg-gray-100" title="Настройки">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Events Feed -->
+        <div x-show="currentSessionId" class="flex-1 flex flex-col overflow-hidden">
+            <div class="flex-1 overflow-y-auto px-4 py-6 space-y-4 custom-scrollbar max-w-3xl mx-auto w-full" id="events-feed">
+                
+                <!-- User Query - Красный -->
+                <template x-if="currentSession && currentSession.query">
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 mt-1">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center border"
+                                 :class="getUserStyle().bg + ' ' + getUserStyle().border">
+                                <i class="fas text-sm" :class="getUserStyle().icon + ' ' + getUserStyle().iconColor"></i>
+                            </div>
+                        </div>
+                        <div class="flex-1 bg-white border border-red-200 rounded-lg shadow-sm">
+                            <div class="px-4 py-2 border-b border-red-100" :class="getUserStyle().headerBg">
+                                <span class="text-sm font-bold" :class="getUserStyle().text">Запрос</span>
+                            </div>
+                            <div class="p-4 text-sm text-gray-800" x-text="currentSession.query"></div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Events -->
+                <template x-for="(event, index) in currentSessionEvents" :key="index">
+                    <div class="max-w-3xl mx-auto w-full">
+                        
+                        <!-- Event ID Badge -->
+                        <div class="flex items-center gap-2 mb-1 ml-12">
+                            <span class="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded" x-text="'#' + (event.event_id || index + 1)"></span>
+                        </div>
+                        
+                        <!-- System -->
+                        <template x-if="event.type === 'system' && event.data.message">
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
+                                        <i class="fas fa-sitemap text-sm text-gray-500"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="text-sm text-gray-500" x-text="event.data.message"></div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Thought/Agent -->
+                        <template x-if="event.type === 'thought' && event.data.content">
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center border"
+                                         :class="getAgentStyle(event.agent).bg + ' ' + getAgentStyle(event.agent).border">
+                                        <i class="fas text-sm" :class="getAgentStyle(event.agent).icon + ' ' + getAgentStyle(event.agent).iconColor"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-white border rounded-lg shadow-sm"
+                                     :class="getAgentStyle(event.agent).border">
+                                    <div class="px-4 py-2 flex justify-between items-center cursor-pointer"
+                                         :class="getAgentStyle(event.agent).bg"
+                                         @click="toggleEvent(currentSessionId, index)">
+                                        <span class="text-sm font-bold" :class="getAgentStyle(event.agent).text" 
+                                              x-text="getAgentDisplayName(event.agent)"></span>
+                                        <i class="fas text-xs" :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                    </div>
+                                    <div x-show="event.expanded && event.data.content" class="p-4 text-sm text-gray-700 border-t border-gray-100">
+                                        <div x-html="DOMPurify.sanitize(marked.parse(getThoughtContent(event)))"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Tool - Зеленый -->
+                        <template x-if="event.type === 'tool' && event.data.tool_name">
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center border"
+                                         :class="getToolStyle(event.data.tool_name).bg + ' ' + getToolStyle(event.data.tool_name).border">
+                                        <i class="fas text-sm" :class="getToolStyle(event.data.tool_name).icon + ' ' + getToolStyle(event.data.tool_name).iconColor"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-white border border-emerald-200 rounded-lg shadow-sm">
+                                    <div class="px-4 py-2 flex justify-between items-center cursor-pointer"
+                                         :class="getToolStyle(event.data.tool_name).bg"
+                                         @click="toggleEvent(currentSessionId, index)">
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-sm font-bold font-mono" :class="getToolStyle(event.data.tool_name).text" x-text="event.data.tool_name"></span>
+                                            <span class="tool-badge" x-text="getAgentDisplayName(event.agent)"></span>
+                                            <span x-show="event.data.success === false" class="error-badge">ОШИБКА</span>
+                                        </div>
+                                        <i class="fas text-xs" :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                    </div>
+                                    <div x-show="event.expanded" class="border-t border-emerald-100">
+                                        <div class="p-4 bg-gray-50">
+                                            <div class="text-xs font-bold text-gray-500 uppercase mb-2">Параметры</div>
+                                            <div class="bg-white rounded-lg p-3 border text-sm font-mono" x-html="formatToolInput(event.data.input)"></div>
+                                        </div>
+                                        <div class="p-4" x-show="event.data.output">
+                                            <div class="text-xs font-bold text-gray-500 uppercase mb-2">Результат</div>
+                                            <div class="bg-white rounded-lg p-3 border text-sm max-h-64 overflow-y-auto font-mono" 
+                                                 x-html="formatToolOutput(event.data.output, event.data.tool_name)"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Delegate -->
+                        <template x-if="event.type === 'delegate' && event.data.task">
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center border border-purple-200">
+                                        <i class="fas fa-share-alt text-sm text-purple-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-white border border-purple-200 rounded-lg shadow-sm">
+                                    <div class="px-4 py-2 bg-purple-50 flex justify-between items-center cursor-pointer"
+                                         @click="toggleEvent(currentSessionId, index)">
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-sm font-bold text-purple-700">Делегирование</span>
+                                            <span class="px-2 py-1 rounded text-xs bg-purple-100 text-purple-700" 
+                                                  x-text="getAgentDisplayName(event.data.target_agent)"></span>
+                                            <span x-show="event.data.step_id" class="px-2 py-1 rounded text-xs bg-gray-100 text-gray-600"
+                                                  x-text="'step ' + event.data.step_id"></span>
+                                        </div>
+                                        <i class="fas text-xs" :class="event.expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                    </div>
+                                    <div x-show="event.expanded" class="p-4 border-t border-purple-100">
+                                        <div class="text-xs font-bold text-gray-500 uppercase mb-2">Задача</div>
+                                        <div class="text-sm text-gray-700" x-text="event.data.task"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Plan Created -->
+                        <template x-if="event.type === 'plan' && event.data.steps && event.data.steps.length > 0">
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center border border-amber-200">
+                                        <i class="fas fa-tasks text-sm text-amber-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-white border border-amber-200 rounded-lg shadow-sm">
+                                    <div class="px-4 py-2 bg-amber-50 border-b border-amber-100">
+                                        <span class="text-sm font-bold text-amber-700">План создан</span>
+                                    </div>
+                                    <div class="p-4">
+                                        <template x-for="step in event.data.steps" :key="step.id">
+                                            <div class="flex items-center gap-2 py-1">
+                                                <span class="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs flex items-center justify-center font-bold" 
+                                                      x-text="step.id"></span>
+                                                <span class="text-sm text-gray-700" x-text="step.task"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Plan Updated -->
+                        <template x-if="event.type === 'update_plan' && event.data.update">
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center border border-orange-200">
+                                        <i class="fas fa-edit text-sm text-orange-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-white border border-orange-200 rounded-lg shadow-sm">
+                                    <div class="px-4 py-2 bg-orange-50 border-b border-orange-100">
+                                        <span class="text-sm font-bold text-orange-700">План обновлён</span>
+                                        <span class="ml-2 text-xs text-orange-600" x-text="event.data.update.type"></span>
+                                    </div>
+                                    <div class="p-4 text-sm text-gray-700" x-text="JSON.stringify(event.data.update)"></div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Button Options - Human-in-the-loop -->
+                        <template x-if="event.type === 'button_options' && event.data.question">
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center border border-amber-200">
+                                        <i class="fas fa-question text-sm text-amber-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-white border border-amber-200 rounded-lg shadow-sm">
+                                    <div class="px-4 py-2 bg-amber-50 border-b border-amber-100">
+                                        <span class="text-sm font-bold text-amber-700">Выберите опцию</span>
+                                    </div>
+                                    <div class="p-4">
+                                        <div class="text-sm text-gray-700 mb-3" x-text="event.data.question"></div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <template x-for="option in event.data.options" :key="option">
+                                                <button @click="selectOption(event, option)"
+                                                        class="px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-lg text-sm hover:bg-amber-50 hover:border-amber-400 transition-colors"
+                                                        x-text="option">
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Result -->
+                        <template x-if="event.type === 'result' && event.data.content">
+                            <div class="flex gap-4 mt-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center border border-emerald-200">
+                                        <i class="fas fa-check text-sm text-emerald-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-white border border-emerald-200 rounded-lg shadow-md">
+                                    <div class="px-4 py-3 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center">
+                                        <h3 class="text-sm font-bold text-emerald-800">Результат</h3>
+                                        <span class="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">Готово</span>
+                                    </div>
+                                    <div class="p-5 text-gray-800">
+                                        <div x-html="DOMPurify.sanitize(marked.parse(event.data.content || ''))"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Error -->
+                        <template x-if="event.type === 'error' && (event.data || event.message)">
+                            <div class="flex gap-4 mt-4">
+                                <div class="flex-shrink-0 mt-1">
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center border"
+                                         :class="getErrorStyle().bg + ' ' + getErrorStyle().border">
+                                        <i class="fas text-sm" :class="getErrorStyle().icon + ' ' + getErrorStyle().iconColor"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-white border rounded-lg shadow-sm"
+                                     :class="getErrorStyle().border">
+                                    <div class="px-4 py-3 border-b flex items-center justify-between"
+                                         :class="getErrorStyle().headerBg + ' ' + getErrorStyle().border">
+                                        <span class="text-sm font-bold" :class="getErrorStyle().text"
+                                              x-text="getAgentDisplayName(event.agent || 'Coordinator')"></span>
+                                        <span class="text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-700">Ошибка</span>
+                                    </div>
+                                     <div class="p-4 text-sm font-medium"
+                                          :class="getErrorStyle().bodyText"
+                                          x-text="getErrorContent(event)"></div>
+                                 </div>
+                             </div>
+                         </template>
+
+                    </div>
+                </template>
+
+                <!-- Loading -->
+                <div x-show="currentSession?.status === 'running'" class="flex justify-center py-4">
+                    <div class="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm border">
+                        <div class="flex space-x-1">
+                            <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce"></div>
+                            <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                            <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                        </div>
+                        <span class="text-xs font-medium text-gray-500">Агенты работают...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input -->
+            <div x-show="currentSessionId" class="flex-shrink-0 bg-white border-t border-gray-100 px-4 py-3">
+                <div class="max-w-3xl mx-auto">
+                    <div class="relative">
+                        <textarea x-model="newTaskInput"
+                                  @keydown.enter="if(!$event.shiftKey) { $event.preventDefault(); startTask(); }"
+                                  placeholder="Новая задача... (Shift+Enter для новой строки)"
+                                  class="w-full px-4 py-2 pr-10 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-red-300 focus:ring-1 focus:ring-red-200 resize-none"
+                                  rows="1"></textarea>
+                        <button @click="startTask()"
+                                :disabled="!newTaskInput.trim()"
+                                class="absolute right-2 bottom-2 p-1.5 text-gray-400 hover:text-red-600 disabled:opacity-50">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="!currentSessionId" class="flex-1 flex items-center justify-center">
+            <div class="text-center w-full max-w-3xl px-4">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg">
+                    <i class="fas fa-brain text-white text-2xl"></i>
+                </div>
+                <h2 class="text-xl font-bold text-gray-800 mb-2">МТС Агент</h2>
+                <p class="text-gray-500 mb-4">Напишите задачу для начала работы</p>
+                <div class="max-w-2xl mx-auto">
+                    <textarea x-model="newTaskInput"
+                              @keydown.enter="if(!$event.shiftKey) { $event.preventDefault(); startTask(); }"
+                              placeholder="На например: Найди информацию о последних моделях LLM (Shift+Enter для новой строки)"
+                              class="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-red-300 focus:ring-1 focus:ring-red-200 resize-none"
+                              rows="2"></textarea>
+                    <button @click="startTask()"
+                            :disabled="!newTaskInput.trim()"
+                            class="mt-3 w-full px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        Запустить
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Plan Panel (right side) -->
+    <template x-if="currentPlan && currentPlan.steps && currentPlan.steps.length > 0">
+        <aside class="hidden md:flex flex-col h-full bg-white border-l border-gray-200 w-72 flex-shrink-0">
+            <div class="px-4 py-3 border-b border-gray-100">
+                <span class="text-xs font-bold text-blue-600 uppercase flex items-center gap-2 tracking-wider">
+                    <i class="fas fa-tasks"></i> План
+                </span>
+            </div>
+            <div class="flex-1 overflow-y-auto px-3 py-3 custom-scrollbar space-y-1.5">
+                <template x-for="step in currentPlan.steps" :key="step.id">
+                    <div class="flex items-start gap-2.5 px-2 py-2 rounded-md border"
+                         :class="step.status === 'completed' ? 'bg-emerald-50 border-emerald-100' : (step.status === 'active' ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100')">
+                        <div class="w-7 flex-shrink-0 pt-0.5 text-sm font-semibold text-right"
+                             :class="step.status === 'completed' ? 'text-emerald-600' : (step.status === 'active' ? 'text-blue-700' : 'text-gray-500')"
+                             x-text="`${step.id}.`"></div>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-[10px] uppercase tracking-wide font-semibold flex items-center gap-2"
+                                 :class="step.status === 'completed' ? 'text-emerald-600' : (step.status === 'active' ? 'text-blue-700' : 'text-gray-500')">
+                                <span x-text="step.status === 'completed' ? 'Completed' : (step.status === 'active' ? 'In Progress' : 'Pending')"></span>
+                                <i x-show="step.status === 'active'" class="fas fa-spinner fa-spin text-[10px]"></i>
+                                <i x-show="step.status === 'completed'" class="fas fa-check text-[10px]"></i>
+                            </div>
+                            <div class="text-xs leading-5"
+                                 :class="step.status === 'completed' ? 'text-gray-500 line-through' : (step.status === 'active' ? 'text-gray-800 font-medium' : 'text-gray-600')"
+                                 x-text="step.task"></div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </aside>
+    </template>
+
+    <!-- Settings Modal -->
+    <div x-show="settingsOpen" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="closeSettings()">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] flex flex-col overflow-hidden" @click.stop>
+            <!-- Modal Header -->
+            <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-cog text-gray-500"></i>
+                    <h3 class="font-semibold text-gray-800">Настройки</h3>
+                </div>
+                <button @click="closeSettings()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Modal Content -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-6">
+                <!-- API Key Section -->
+                <div class="space-y-2">
+                    <label class="text-sm font-medium text-gray-700">OpenRouter API Key</label>
+                    <div class="flex gap-2">
+                        <input type="password"
+                               x-model="newApiKey"
+                               @input="onApiKeyInput()"
+                               :placeholder="settings.has_api_key ? '••••••••••••••••' : 'Введите API ключ'"
+                               class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200">
+                        <button @click="saveApiKey()"
+                                :disabled="!newApiKey.trim()"
+                                class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            Сохранить
+                        </button>
+                    </div>
+                    <div class="text-xs flex items-center gap-2 text-gray-500" x-show="openrouterChecking">
+                        <i class="fas fa-circle-notch fa-spin"></i>
+                        <span>Checking OpenRouter token...</span>
+                    </div>
+                    <div class="text-xs flex items-center gap-2" x-show="!openrouterChecking && settings.openrouter_health" :class="getHealthClass(settings.openrouter_health)">
+                        <span class="font-semibold" x-text="settings.openrouter_health?.ok ? '●' : '●'"></span>
+                        <span x-text="formatHealthMessage(settings.openrouter_health)"></span>
+                    </div>
+                    <p class="text-xs text-gray-500">Получите API токен на <a href="https://openrouter.ai/keys" target="_blank" class="text-blue-500 hover:underline">openrouter.ai/keys</a></p>
+                </div>
+
+                <!-- Kaggle Key Section -->
+                <div class="space-y-2">
+                    <label class="text-sm font-medium text-gray-700">Kaggle API Token</label>
+                    <div class="flex gap-2">
+                        <input type="password"
+                               x-model="newKaggleKey"
+                               @input="onKaggleKeyInput()"
+                               :placeholder="settings.has_kaggle_key ? '••••••••••••••••' : 'Введите Kaggle API токен'"
+                               class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200">
+                        <button @click="saveKaggleKey()"
+                                :disabled="!newKaggleKey.trim()"
+                                class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            Сохранить
+                        </button>
+                    </div>
+                    <div class="text-xs flex items-center gap-2 text-gray-500" x-show="kaggleChecking">
+                        <i class="fas fa-circle-notch fa-spin"></i>
+                        <span>Checking Kaggle token...</span>
+                    </div>
+                    <div class="text-xs flex items-center gap-2" x-show="!kaggleChecking && settings.kaggle_health" :class="getHealthClass(settings.kaggle_health)">
+                        <span class="font-semibold" x-text="settings.kaggle_health?.ok ? '●' : '●'"></span>
+                        <span x-text="formatHealthMessage(settings.kaggle_health)"></span>
+                    </div>
+                    <p class="text-xs text-gray-500">Получите ключ на <a href="https://www.kaggle.com/settings" target="_blank" class="text-blue-500 hover:underline">kaggle.com/settings</a></p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+</body>
 </html>
