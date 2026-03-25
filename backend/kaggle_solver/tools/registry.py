@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from typing import Dict, Callable, Any, Optional, List
 import logging
@@ -62,6 +63,7 @@ class ToolRegistry:
 
         try:
             func = cls._tools[name]
+            logger.debug(f"Executing tool {name} with globals: {list(func.__globals__.keys())}")
             
             tool_kwargs = {}
             if name in TOOLS_REQUIRING_LLM:
@@ -83,7 +85,19 @@ class ToolRegistry:
                 tool_kwargs["query"] = search_query
                 result = func(**tool_kwargs)
             else:
-                result = func(query=query, **tool_kwargs)
+                # Filter out llm and sandbox from kwargs if they are not required
+                # and already handled in tool_kwargs
+                filtered_kwargs = {
+                    k: v for k, v in kwargs.items()
+                    if k not in ["llm", "sandbox"]
+                }
+                combined_kwargs = {**filtered_kwargs, **tool_kwargs}
+                
+                # Remove query from combined_kwargs if it's already passed as positional/named
+                if "query" in combined_kwargs:
+                    del combined_kwargs["query"]
+                    
+                result = func(query=query, **combined_kwargs)
             
             # Check if the tool returned a failure dictionary
             success = True
