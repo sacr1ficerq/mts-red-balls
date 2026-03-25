@@ -164,6 +164,16 @@ class Sandbox:
             "python"
         ) or command.strip().startswith("python3")
 
+        # Block shell operators for chaining
+        shell_operators = ["&&", "||", "|", ";"]
+
+        for op in shell_operators:
+            if op in command:
+                # Allow semicolons in Python -c commands
+                if op == ";" and is_python_cmd:
+                    continue
+                return False
+
         # Check blocked patterns (but skip semicolon for Python commands)
         for pattern in self.BLOCKED_PATTERNS:
             if pattern == ";" and is_python_cmd:

@@ -608,6 +608,13 @@ class BaseAgent(ABC):
                 continue
 
             elif action.get("action") == "done":
+                if self._plan_has_unresolved_steps():
+                    unresolved_msg = self._format_plan_progress_message()
+                    self.add_message("user", unresolved_msg)
+                    full.append({"role": "user", "content": unresolved_msg})
+                    logger.warning("Blocked premature done while plan is still active")
+                    continue
+
                 result_output = self._extract_artifacts(action.get("result", ""))
                 self._emit("result", {"content": result_output})
                 return AgentResult(

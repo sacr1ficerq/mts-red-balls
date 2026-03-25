@@ -216,10 +216,20 @@ class SandboxConstants:
     BLOCKED_PATTERNS = [
         # Shell operators
         "&",
+        "&&",
+        "||",
+        ";",
+        "|",
+        "&",
+        ">",
+        ">>",
+        "<",
         # Command substitution
         "`",
         "$(",
         # Network tools
+        "wget",
+        "curl",
         "nc",
         "netcat",
         "telnet",
