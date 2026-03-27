@@ -6,7 +6,7 @@
 
 llm:
   # Default model (overridden by SettingsManager per-agent config)
-  model: "minimax/minimax-m2.5"
+  model: "xiaomi/mimo-v2-flash"
   temperature: 0.7
   max_tokens: 4096
   max_retries: 5

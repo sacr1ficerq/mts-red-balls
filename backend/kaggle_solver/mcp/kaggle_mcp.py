@@ -48,7 +48,8 @@ class KaggleMCPClient:
             raise RuntimeError("Kaggle CLI is not installed or not in PATH")
 
         if self.api_key:
-            # Always overwrite to ensure token checks use the latest provided value.
+            # Kaggle CLI reads KAGGLE_KEY (not KAGGLE_API_KEY)
+            os.environ["KAGGLE_KEY"] = self.api_key
             os.environ["KAGGLE_API_TOKEN"] = self.api_key
             os.environ["KAGGLE_API_KEY"] = self.api_key
 
@@ -203,10 +204,25 @@ class KaggleMCPClient:
                     message,
                 ]
             )
+            
+            # Get the latest submission info
+            submission_info = None
+            try:
+                submissions_output = self._run_cli_command(
+                    ["competitions", "submissions", "-c", competition_name, "-v", "--csv"]
+                )
+                submissions = self._parse_csv_output(submissions_output)
+                if submissions:
+                    # Get the most recent submission (first one)
+                    submission_info = submissions[0]
+            except Exception:
+                pass  # If we can't get submission info, continue without it
+            
             return {
                 "status": "submitted",
                 "message": message,
-                "submission_id": None,
+                "submission_id": submission_info.get("fileName") if submission_info else None,
+                "submission_info": submission_info,
                 "raw_output": output,
             }
 
@@ -214,14 +230,14 @@ class KaggleMCPClient:
             raise RuntimeError(f"Failed to submit prediction: {str(e)}")
 
     def get_submission_status(
-        self, competition_name: str, submission_id: str
+        self, competition_name: str, submission_id: str = None
     ) -> Dict[str, Any]:
         """
-        Get status of a submission
+        Get status of a submission. If submission_id is None, returns the latest submission.
 
         Args:
             competition_name: Name of the competition
-            submission_id: Submission ID
+            submission_id: Submission ID (optional - if None, returns latest)
 
         Returns:
             Dictionary with submission status
@@ -232,9 +248,18 @@ class KaggleMCPClient:
             )
             submissions = self._parse_csv_output(output)
 
+            if not submissions:
+                raise ValueError("No submissions found for this competition")
+
+            # If no submission_id provided, return the first (latest) submission
+            if submission_id is None:
+                return submissions[0]
+
+            # Otherwise, search for the specific submission
             for submission in submissions:
                 ref = (
-                    submission.get("ref")
+                    submission.get("fileName")
+                    or submission.get("ref")
                     or submission.get("submissionId")
                     or submission.get("id")
                     or ""
@@ -261,14 +286,30 @@ class KaggleMCPClient:
             List of leaderboard entries
         """
         try:
+            # Try with --download flag first (newer Kaggle CLI versions)
+            try:
+                output = self._run_cli_command(
+                    [
+                        "competitions",
+                        "leaderboard",
+                        "-c",
+                        competition_name,
+                        "--download",
+                    ]
+                )
+                # The download flag creates a file, so we need to read it
+                # Try the --show flag as fallback
+            except Exception:
+                pass
+            
+            # Try with --show flag
             output = self._run_cli_command(
                 [
                     "competitions",
                     "leaderboard",
                     "-c",
                     competition_name,
-                    "-v",
-                    "--csv",
+                    "--show",
                 ]
             )
             return self._parse_csv_output(output)
@@ -498,6 +539,7 @@ def get_kaggle_mcp_client(sandbox=None) -> Optional[KaggleMCPClient]:
             logger.debug(f"Could not read Kaggle key from settings: {settings_error}")
 
         if api_key:
+            os.environ["KAGGLE_KEY"] = api_key
             os.environ["KAGGLE_API_KEY"] = api_key
             os.environ["KAGGLE_API_TOKEN"] = api_key
         if username:

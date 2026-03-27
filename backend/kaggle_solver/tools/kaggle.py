@@ -181,11 +181,11 @@ def kaggle_get_submission_status(
     query: str = "", submission_id: str = "", **kwargs
 ) -> Dict[str, Any]:
     """
-    Get status of a submission
+    Get status of a submission. If submission_id is not provided, returns the latest submission.
 
     Args:
         query: Competition name (e.g., 'titanic')
-        submission_id: Submission ID
+        submission_id: Submission ID (optional - if not provided, returns latest submission)
 
     Returns:
         Dictionary with submission status
@@ -193,15 +193,17 @@ def kaggle_get_submission_status(
     query = _resolve_query(query, **kwargs)
     if not query:
         return {"success": False, "error": "Competition query is required"}
-    if not submission_id:
-        return {"success": False, "error": "submission_id is required"}
 
     client = get_kaggle_mcp_client(sandbox=kwargs.get("sandbox"))
     if not client:
         return {"success": False, "error": KAGGLE_CLIENT_ERROR}
 
     try:
-        status = client.get_submission_status(query, submission_id)
+        # If no submission_id provided, get the latest submission
+        if not submission_id:
+            status = client.get_submission_status(query, submission_id=None)
+        else:
+            status = client.get_submission_status(query, submission_id)
         return {"success": True, "data": status}
     except Exception as e:
         return {"success": False, "error": str(e)}

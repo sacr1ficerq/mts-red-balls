@@ -728,26 +728,20 @@ class BaseAgent(ABC):
                     elif "feature" in file_path.lower():
                         self.session.set_artifact("feature_script_path", file_path)
 
-        if not result.success:
-            logger.error(
-                f">>> TOOL FAILED: {action.get('tool')}, output: {output[:200]}"
-            )
-            return AgentResult(
-                success=False,
-                error=output,
-                output=output,
-                duration=time.time() - start,
-            )
-
         # Add tool result as user message to guide LLM to next step
         # This prevents LLM from thinking the tool result is its own response
-        tool_feedback = f"Tool {action.get('tool')} executed successfully. Output: {output}\n\nContinue with the next step of your workflow."
+        if result.success:
+            tool_feedback = f"Tool {action.get('tool')} executed successfully. Output: {output}\n\nContinue with the next step of your workflow."
+            logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
+        else:
+            tool_feedback = f"Tool {action.get('tool')} FAILED. Error: {output}\n\nFix the issue and retry, or try an alternative approach."
+            logger.error(f">>> TOOL FAILED: {action.get('tool')}, output: {output[:200]}")
+
         tool_msg = {"role": "user", "content": tool_feedback}
         self.add_message("user", tool_feedback)
         # Also add to full for current iteration
         full.append(tool_msg)
 
-        logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
         logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
         return None
 

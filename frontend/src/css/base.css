@@ -8,6 +8,28 @@ body {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+}
+
+/* Prevent content overflow */
+* {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Agent/Event blocks - word wrap */
+.agent-block, .event-content, .thought-content {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+/* Pre/code inside blocks */
+.agent-block pre, .event-content pre, .thought-content pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-width: 100%;
+    overflow-x: auto;
 }
 
 /* Scrollbar */

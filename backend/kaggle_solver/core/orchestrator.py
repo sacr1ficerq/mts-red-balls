@@ -155,9 +155,9 @@ class Orchestrator:
             name=name,
             role=role,
             tools=tools,
-            model=self.config.llm.model,
+            model=model,
             max_iterations=max_iterations,
-            temperature=self.config.llm.temperature,
+            temperature=temperature,
         )
 
         return DynamicAgent(

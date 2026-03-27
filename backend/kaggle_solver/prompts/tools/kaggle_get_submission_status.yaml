@@ -1,7 +1,8 @@
 name: kaggle_get_submission_status
 description: |
-  Get the status and score of a submitted prediction. Use this to check if a submission has been 
+  Get the status and score of a submitted prediction. Use this to check if a submission has been
   scored and to retrieve the public score. The private score is only available after the competition ends.
+  If submission_id is not provided, returns the latest submission status.
 
 parameters:
   query:
@@ -10,10 +11,14 @@ parameters:
     description: Competition name (e.g., 'titanic', 'house-prices-advanced-regression-techniques')
   submission_id:
     type: string
-    required: true
-    description: Submission ID returned by kaggle_submit
+    required: false
+    description: Submission ID returned by kaggle_submit. If not provided, returns the latest submission.
 
 examples:
+  - query: "Check status of my latest submission"
+    parameters:
+      query: "titanic"
+      submission_id: ""
   - query: "Check status of submission 12345678"
     parameters:
       query: "titanic"

@@ -3,6 +3,19 @@ console_tool: |
   Input: command (python3, ls, cat, etc.)
   Output: stdout/stderr
   
+  ALLOWED COMMANDS: python, python3, pip, kaggle, ls, cat, head, mkdir, rm, cp, mv, echo, date, unzip
+  
+  BLOCKED PATTERNS: & (ampersand), ` (backticks), $(command substitution), nc, netcat, telnet, ssh, ftp, chmod, chown, su, sudo, eval, exec, | (pipe), > (redirect), < (redirect), &&, ||, ; (semicolon)
+  
+  IMPORTANT: Do NOT use shell operators like &, |, ;, &&, ||, >, <, $(...), `...`, or command substitution.
+  Use simple commands only. For example:
+  - GOOD: "python3 train.py"
+  - GOOD: "ls -la"
+  - GOOD: "cat data.csv"
+  - BAD: "python3 train.py &" (uses &)
+  - BAD: "ls | head" (uses pipe)
+  - BAD: "echo $(whoami)" (uses command substitution)
+  
   Usage:
   {"action": "tool", "tool": "console", "query": "python3 script.py"}
 
