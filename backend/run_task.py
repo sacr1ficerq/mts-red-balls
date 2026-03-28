@@ -116,11 +116,8 @@ async def run_task(query: str):
 
 def main():
     """Main entry point."""
-    # Get competition from command line or use default
-    competition = "mws-ai-agents-2026"
-    
-    if len(sys.argv) > 1:
-        competition = sys.argv[1]
+    # Get query from command line - use as-is without adding Kaggle-specific prefix
+    query = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "Help me with a task"
     
     # DEBUG MODE: Stop on first error to identify issues quickly
     DEBUG_STOP_ON_ERROR = False
@@ -131,14 +128,7 @@ def main():
     else:
         os.environ.pop("DEBUG_STOP_ON_ERROR", None)
     
-    if DEBUG_STOP_ON_ERROR:
-        # Fast baseline with debug mode - stop on first error
-        query = f"[DEBUG MODE: Stop and report error immediately if any step fails] Solve the Kaggle competition {competition} as fast as possible. Use ONLY a CatBoost baseline model. No feature engineering, no hypotheses, no complex solutions. SKIP competition verification - just try to download the data directly using kaggle_download_data. If ANY step fails, STOP and report the exact error message."
-    else:
-        # Normal mode
-        query = f"Solve the Kaggle competition {competition} as fast as possible. Use ONLY a CatBoost baseline model. No feature engineering, no hypotheses, no complex solutions. Just download data, train a simple CatBoost model, and submit."
-    
-    # Run async task
+    # Run async task with the user's query as-is
     asyncio.run(run_task(query))
 
 

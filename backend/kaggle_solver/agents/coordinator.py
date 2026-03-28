@@ -77,7 +77,7 @@ class CodeAgentPrompts:
 class SearchAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("search.yaml", "", tools=["search", "result"])
+        return load_prompt("search.yaml", "", tools=["rag", "search", "result"])
 
 
 class CriticAgentPrompts:

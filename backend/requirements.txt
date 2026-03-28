@@ -11,3 +11,5 @@ numpy
 pandas
 slowapi
 requests
+sentence-transformers
+faiss-cpu

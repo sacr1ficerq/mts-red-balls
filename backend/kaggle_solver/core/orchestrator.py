@@ -196,7 +196,7 @@ class Orchestrator:
                 logger.info(f"  Input: {str(data.get('input', {}))[:100]}")
                 logger.info(f"  Output: {str(data.get('output', ''))[:100]}")
             elif event_type == "delegate":
-                target = data.get("agent", "unknown")
+                target = data.get("target_agent", data.get("agent", "unknown"))
                 logger.info(f"[{agent_name}] DELEGATE -> {target}")
             elif event_type == "result":
                 logger.info(

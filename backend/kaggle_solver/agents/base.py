@@ -93,17 +93,21 @@ class BaseAgent(ABC):
         return BaseAgent.AGENT_TOOLS.get(agent_name, ["tool"])
 
     def _resolve_delegate_target(self, target: str) -> str:
-        """Restrict coordinator delegation to the active runtime pipeline."""
-        if (
-            self.config.name == AgentType.COORDINATOR.value
-            and target != AgentType.CODE.value
-        ):
-            logger.info(
-                "Coordinator requested delegate target %s; rerouting to %s",
-                target,
-                AgentType.CODE.value,
-            )
-            return AgentType.CODE.value
+        """Resolve delegate target - allow all registered agents."""
+        # Allow all agents that are registered in AgentRegistry
+        from kaggle_solver.agents import AgentRegistry
+        
+        normalized_target = target.lower().strip()
+        
+        # Check if the target agent is registered
+        available_agents = AgentRegistry.list_agents()
+        for agent_name in available_agents:
+            if agent_name.lower() == normalized_target:
+                return agent_name
+        
+        # If not found, log warning and return original target
+        if target:
+            logger.warning(f"Unknown agent '{target}', attempting to use anyway")
         return target
 
     def __init__(

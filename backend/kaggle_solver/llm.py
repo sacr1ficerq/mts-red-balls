@@ -77,10 +77,14 @@ class LLM:
     def __init__(self, api_key: Optional[str] = None, requests_per_minute: int = 8):
         # Try to get API key from multiple sources in order of priority:
         # 1. Explicitly passed api_key parameter
-        # 2. SettingsManager (user settings)
-        # 3. Environment variables
-        if not api_key:
-            # Try to get from SettingsManager
+        # 2. Environment variables (from .env file) - higher priority than settings
+        # 3. SettingsManager (user settings)
+        
+        # First check environment variables (loaded from .env)
+        env_api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
+        
+        if not api_key and not env_api_key:
+            # Fall back to SettingsManager if no env key
             try:
                 from kaggle_solver.core.settings import SettingsManager
 
@@ -89,9 +93,8 @@ class LLM:
             except Exception as e:
                 logger.debug(f"Could not get API key from settings: {e}")
 
-        self.api_key = (
-            api_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
-        )
+        # Priority: param > env > settings
+        self.api_key = api_key or env_api_key
         if not self.api_key:
             logger.warning("No API key found for LLM. Requests will fail.")
             self.client = None
