@@ -40,6 +40,9 @@ class Sandbox:
     ALLOWED_COMMANDS = SandboxConstants.ALLOWED_COMMANDS
     BLOCKED_PATTERNS = SandboxConstants.BLOCKED_PATTERNS
     BLOCKED_ESCAPE_SEQUENCES = SandboxConstants.BLOCKED_ESCAPE_SEQUENCES
+    
+    # Use simple python3 command (packages already installed globally)
+    PYTHON_PATH = "python3"
     BLOCKED_PATH_PREFIXES = SandboxConstants.BLOCKED_PATH_PREFIXES
     MAX_FILE_SIZE = SandboxConstants.MAX_WRITE_FILE_SIZE
 
@@ -164,9 +167,15 @@ class Sandbox:
             "python"
         ) or command.strip().startswith("python3")
 
-        # Check blocked patterns (but skip semicolon for Python commands)
+        # Check if this is a head command (for special handling)
+        is_head_cmd = command.strip().startswith("head")
+
+        # Check blocked patterns (but skip semicolon for Python commands, skip -n for head)
         for pattern in self.BLOCKED_PATTERNS:
             if pattern == ";" and is_python_cmd:
+                continue
+            if pattern == "n" and is_head_cmd:
+                # Allow -n flag for head command
                 continue
             if pattern in cmd_lower:
                 return False
@@ -193,11 +202,28 @@ class Sandbox:
 
         return True
 
-    def read(self, path: str, encoding: str = "utf-8") -> str:
+    def read(self, path: str, encoding: str = "utf-8", limit: str = "100") -> str:
         p = self._secure_path(path)
         if p.is_dir():
             return f"Error: Path is a directory: {path}. Use list to see contents."
-        return p.read_text(encoding=encoding)
+        
+        content = p.read_text(encoding=encoding)
+        
+        # Apply limit: "all" returns up to 30K chars, number = lines
+        MAX_CHARS = 30000
+        if limit == "all":
+            if len(content) > MAX_CHARS:
+                return content[:MAX_CHARS] + f"\n... [truncated, total {len(content)} chars]"
+            return content
+        else:
+            try:
+                lines = int(limit)
+                all_lines = content.split('\n')
+                if len(all_lines) > lines:
+                    return '\n'.join(all_lines[:lines]) + f"\n... [truncated to {lines} lines, total {len(all_lines)} lines]"
+                return content
+            except ValueError:
+                return content
 
     def write(self, path: str, content: str, encoding: str = "utf-8"):
         if len(content.encode(encoding)) > self.MAX_FILE_SIZE:

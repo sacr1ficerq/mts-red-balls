@@ -309,6 +309,10 @@ class BaseAgent(ABC):
         return pattern.sub("", output).strip()
 
     def _should_defer_subagent_failure(self) -> bool:
+        # DEBUG MODE: Stop immediately on any error for faster debugging
+        import os
+        if os.environ.get("DEBUG_STOP_ON_ERROR", "").lower() in ("1", "true", "yes"):
+            return False
         return self.config.name == AgentType.COORDINATOR.value
 
     def _build_subagent_failure_feedback(
@@ -422,10 +426,6 @@ class BaseAgent(ABC):
                     context_msg = f"[Context #{e['event_id']}] {event_type}: {content}"
                     self.messages.insert(0, {"role": "system", "content": context_msg})
 
-        system = self.system_prompt()
-
-        full = [{"role": "system", "content": system}] + self.messages
-
         # Track consecutive plans to prevent infinite loop
         consecutive_plans = 0
 
@@ -434,6 +434,10 @@ class BaseAgent(ABC):
             self._emit("system", {"message": f"Starting: {user_input}"})
 
         for self._iteration in range(1, self.config.max_iterations + 1):
+            # Recreate full from self.messages to avoid duplicates
+            system = self.system_prompt()
+            full = [{"role": "system", "content": system}] + self.messages
+            
             # Check timeout
             if time.time() > execution_timeout:
                 logger.error(f"Agent execution timeout after {timeout}s")
@@ -730,12 +734,25 @@ class BaseAgent(ABC):
 
         # Add tool result as user message to guide LLM to next step
         # This prevents LLM from thinking the tool result is its own response
+        # Truncate output to prevent context overflow
+        MAX_TOOL_OUTPUT = 500
+        if len(output) > MAX_TOOL_OUTPUT:
+            output_truncated = output[:MAX_TOOL_OUTPUT] + f"\n... [truncated, total {len(output)} chars]"
+        else:
+            output_truncated = output
+            
         if result.success:
-            tool_feedback = f"Tool {action.get('tool')} executed successfully. Output: {output}\n\nContinue with the next step of your workflow."
+            tool_feedback = f"Tool {action.get('tool')} executed successfully. Output: {output_truncated}\n\nContinue with the next step of your workflow."
             logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
         else:
-            tool_feedback = f"Tool {action.get('tool')} FAILED. Error: {output}\n\nFix the issue and retry, or try an alternative approach."
+            tool_feedback = f"Tool {action.get('tool')} FAILED. Error: {output_truncated}\n\nFix the issue and retry, or try an alternative approach."
             logger.error(f">>> TOOL FAILED: {action.get('tool')}, output: {output[:200]}")
+            
+            # DEBUG MODE: Stop immediately on tool failure
+            import os
+            if os.environ.get("DEBUG_STOP_ON_ERROR", "").lower() in ("1", "true", "yes"):
+                logger.error(f">>> DEBUG STOP ON ERROR: Tool {action.get('tool')} failed, raising exception")
+                raise RuntimeError(f"DEBUG_STOP_ON_ERROR: Tool {action.get('tool')} failed with error: {output_truncated[:500]}")
 
         tool_msg = {"role": "user", "content": tool_feedback}
         self.add_message("user", tool_feedback)

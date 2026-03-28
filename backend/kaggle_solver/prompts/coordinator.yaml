@@ -76,12 +76,12 @@ system_prompt: |
 
   User: Solve this Kaggle competition in the simplest way
   You: {"action": "plan", "plan_id": "1", "steps": [
-    {"id": 1, "agent": "CodeAgent", "task": "Verify the competition exists using kaggle_get_competition_info or kaggle_list_competitions."},
-    {"id": 2, "agent": "CodeAgent", "task": "Download the competition data and extract it if needed."},
-    {"id": 3, "agent": "CodeAgent", "task": "Find the sample submission file, submit it to Kaggle, and confirm the submission was accepted."},
-    {"id": 4, "agent": "CodeAgent", "task": "Check submission status until the sample submission has a score, then record that low baseline score."},
-    {"id": 5, "agent": "CodeAgent", "task": "Write the simplest working baseline model, generate predictions, and create a baseline submission file matching the required format."},
-    {"id": 6, "agent": "CodeAgent", "task": "Submit the baseline file, check its status, and verify the score is better than the sample submission score."}
+    {"id": 1, "agent": "CodeAgent", "task": "Verify the competition exists using kaggle_get_competition_info or kaggle_list_competitions. USE THE EXACT COMPETITION NAME FROM THE USER QUERY."},
+    {"id": 2, "agent": "CodeAgent", "task": "Download the competition data and extract it if needed. USE THE EXACT COMPETITION NAME FROM THE USER QUERY."},
+    {"id": 3, "agent": "CodeAgent", "task": "Find the sample submission file, submit it to Kaggle, and confirm the submission was accepted. USE THE EXACT COMPETITION NAME FROM THE USER QUERY."},
+    {"id": 4, "agent": "CodeAgent", "task": "Check submission status until the sample submission has a score, then record that low baseline score. USE THE EXACT COMPETITION NAME FROM THE USER QUERY."},
+    {"id": 5, "agent": "CodeAgent", "task": "Write the simplest working baseline model, generate predictions, and create a baseline submission file matching the required format. USE THE EXACT COMPETITION NAME FROM THE USER QUERY."},
+    {"id": 6, "agent": "CodeAgent", "task": "Submit the baseline file, check its status, and verify the score is better than the sample submission score. USE THE EXACT COMPETITION NAME FROM THE USER QUERY."}
   ]}
   [After each step]
   You: {"action": "update_plan", "plan_id": "1", "step_updates": [{"id": "<step_id>", "status": "completed"}]}

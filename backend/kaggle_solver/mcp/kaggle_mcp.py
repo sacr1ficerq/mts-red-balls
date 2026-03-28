@@ -36,7 +36,8 @@ class KaggleMCPClient:
             api_key: Kaggle API key (if None, reads from KAGGLE_API_KEY env var)
             username: Kaggle username (if None, reads from KAGGLE_USERNAME env var)
         """
-        self.api_key = api_key or os.getenv("KAGGLE_API_KEY")
+        # Check both KAGGLE_API_KEY and KAGGLE_API_TOKEN (from .env file)
+        self.api_key = api_key or os.getenv("KAGGLE_API_KEY") or os.getenv("KAGGLE_API_TOKEN")
         self.username = username or os.getenv("KAGGLE_USERNAME")
         self.kaggle_cmd = shutil.which("kaggle") or "kaggle"
         self.working_dir = working_dir
@@ -104,6 +105,7 @@ class KaggleMCPClient:
             Dictionary with competition information
         """
         try:
+            # First try public competition list
             output = self._run_cli_command(
                 ["competitions", "list", "-s", competition_name, "-v", "--csv"]
             )
@@ -115,7 +117,17 @@ class KaggleMCPClient:
 
             if competitions:
                 return competitions[0]
-            raise ValueError(f"Competition '{competition_name}' not found")
+                
+            # For private competitions, try to get files (this will fail if no access)
+            files_output = self._run_cli_command(
+                ["competitions", "files", competition_name, "-v"]
+            )
+            # If we get here, competition exists but is private
+            return {
+                "ref": competition_name,
+                "status": "private",
+                "files": files_output
+            }
         except Exception as e:
             raise RuntimeError(f"Failed to get competition info: {str(e)}")
 
@@ -524,7 +536,8 @@ def get_kaggle_mcp_client(sandbox=None) -> Optional[KaggleMCPClient]:
             return None
 
         username = os.getenv("KAGGLE_USERNAME")
-        api_key = os.getenv("KAGGLE_API_KEY")
+        # Check both KAGGLE_API_KEY and KAGGLE_API_TOKEN (from .env file)
+        api_key = os.getenv("KAGGLE_API_KEY") or os.getenv("KAGGLE_API_TOKEN")
 
         try:
             from kaggle_solver.core.settings import SettingsManager

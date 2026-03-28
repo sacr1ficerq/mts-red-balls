@@ -29,7 +29,9 @@ def pip_install_tool(packages: str, upgrade: bool = False, sandbox=None) -> dict
     if not package_list:
         return {"success": False, "error": "No packages provided"}
 
-    command_parts = ["python3", "-m", "pip", "install"]
+    # Use the sandbox's Python path to avoid externally-managed-environment error
+    from kaggle_solver.sandbox import Sandbox
+    command_parts = [Sandbox.PYTHON_PATH, "-m", "pip", "install", "--break-system-packages"]
     if upgrade:
         command_parts.append("--upgrade")
     command_parts.extend(package_list.split())

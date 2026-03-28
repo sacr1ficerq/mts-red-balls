@@ -61,7 +61,7 @@ agents:
   CodeAgent:
     role: "Write and execute Python code in sandbox"
     tools: ["console", "files", "pip_install"]
-    max_iterations: 10
+    max_iterations: 50
 
 search:
   model: "z-ai/glm-4.5-air"

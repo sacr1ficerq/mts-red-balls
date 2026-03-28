@@ -55,16 +55,21 @@ def _to_display_path(path: Path, sandbox=None) -> str:
         return str(path)
 
 
-def kaggle_get_competition_info(query: str = "", **kwargs) -> Dict[str, Any]:
+def kaggle_get_competition_info(query: str = "", name: str = "", **kwargs) -> Dict[str, Any]:
     """
     Get information about a Kaggle competition
 
     Args:
         query: Competition name (e.g., 'titanic', 'house-prices-advanced-regression-techniques')
+        name: Alias for query (for compatibility)
 
     Returns:
         Dictionary with competition information
     """
+    # Handle 'name' parameter as alias for 'query'
+    if not query and name:
+        query = name
+    
     query = _resolve_query(query, **kwargs)
     if not query:
         return {"success": False, "error": "Competition query is required"}

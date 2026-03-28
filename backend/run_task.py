@@ -122,7 +122,21 @@ def main():
     if len(sys.argv) > 1:
         competition = sys.argv[1]
     
-    query = f"Solve the Kaggle competition {competition}"
+    # DEBUG MODE: Stop on first error to identify issues quickly
+    DEBUG_STOP_ON_ERROR = False
+    
+    # Set environment variable so agents can check it
+    if DEBUG_STOP_ON_ERROR:
+        os.environ["DEBUG_STOP_ON_ERROR"] = "1"
+    else:
+        os.environ.pop("DEBUG_STOP_ON_ERROR", None)
+    
+    if DEBUG_STOP_ON_ERROR:
+        # Fast baseline with debug mode - stop on first error
+        query = f"[DEBUG MODE: Stop and report error immediately if any step fails] Solve the Kaggle competition {competition} as fast as possible. Use ONLY a CatBoost baseline model. No feature engineering, no hypotheses, no complex solutions. SKIP competition verification - just try to download the data directly using kaggle_download_data. If ANY step fails, STOP and report the exact error message."
+    else:
+        # Normal mode
+        query = f"Solve the Kaggle competition {competition} as fast as possible. Use ONLY a CatBoost baseline model. No feature engineering, no hypotheses, no complex solutions. Just download data, train a simple CatBoost model, and submit."
     
     # Run async task
     asyncio.run(run_task(query))
