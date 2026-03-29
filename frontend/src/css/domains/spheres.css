@@ -1,0 +1,137 @@
+/* ==========================================================================
+   3. SPHERES - Event cards by domain (inherits from tokens)
+   ========================================================================== */
+
+/* --- Base Event Card Template --- */
+.event-card {
+    display: flex;
+    gap: 1rem;
+}
+
+.event-icon {
+    flex-shrink: 0;
+    margin-top: 0.25rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-width: 1px;
+    font-size: 0.875rem;
+}
+
+.event-content {
+    flex: 1;
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    border-width: 1px;
+    overflow: hidden;
+}
+
+.event-header {
+    padding: 0.5rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    border-bottom-width: 1px;
+}
+
+.event-title {
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.event-body {
+    padding: 1rem;
+    font-size: 0.875rem;
+    color: var(--neutral-700);
+    border-top-width: 1px;
+}
+
+/* --- User Sphere (Red) --- */
+.sphere-user .event-icon {
+    background-color: var(--user-bg);
+    border-color: var(--user-border);
+    color: var(--user-icon);
+}
+.sphere-user .event-content {
+    border-color: var(--user-border);
+}
+.sphere-user .event-header {
+    background-color: var(--user-bg-light);
+    border-color: var(--user-border);
+}
+.sphere-user .event-title {
+    color: var(--user-text);
+}
+
+/* --- Agent Sphere (Blue) --- */
+.sphere-agent .event-icon {
+    background-color: var(--agent-bg);
+    border-color: var(--agent-border);
+    color: var(--agent-icon);
+}
+.sphere-agent .event-content {
+    border-color: var(--agent-border);
+}
+.sphere-agent .event-header {
+    background-color: var(--agent-bg-light);
+    border-color: var(--agent-border);
+}
+.sphere-agent .event-title {
+    color: var(--agent-text);
+}
+
+/* --- Tool Sphere (Green) --- */
+.sphere-tool .event-icon {
+    background-color: var(--tool-bg);
+    border-color: var(--tool-border);
+    color: var(--tool-icon);
+}
+.sphere-tool .event-content {
+    border-color: var(--tool-border);
+}
+.sphere-tool .event-header {
+    background-color: var(--tool-bg-light);
+    border-color: var(--tool-border);
+}
+.sphere-tool .event-title {
+    color: var(--tool-text);
+}
+
+/* --- Delegate Sphere (Purple) --- */
+.sphere-delegate .event-icon {
+    background-color: var(--delegate-bg);
+    border-color: var(--delegate-border);
+    color: var(--delegate-icon);
+}
+.sphere-delegate .event-content {
+    border-color: var(--delegate-border);
+}
+.sphere-delegate .event-header {
+    background-color: var(--delegate-bg-light);
+    border-color: var(--delegate-border);
+}
+.sphere-delegate .event-title {
+    color: var(--delegate-text);
+}
+
+/* --- Result (Special - Green) --- */
+.sphere-result .event-icon {
+    background-color: #D1FAE5;
+    border-color: #A7F3D0;
+    color: #10B981;
+}
+.sphere-result .event-content {
+    border-color: #A7F3D0;
+}
+.sphere-result .event-header {
+    background-color: #ECFDF5;
+    border-color: #A7F3D0;
+}
+.sphere-result .event-title {
+    color: #059669;
+}

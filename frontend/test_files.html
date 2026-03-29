@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Files API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .file {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+        .folder {
+            background: #e0e0ff;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Files API</h1>
+    <div id="loading">Loading...</div>
+    <div id="files"></div>
+    <div id="error" class="error"></div>
+
+    <script>
+        async function loadFiles() {
+            const sessionId = 'dfe00adb-a728-4319-9be3-aae90a8fdc21';
+            const url = `/api/workspace/files?session_id=${sessionId}`;
+            
+            console.log('Fetching:', url);
+            
+            try {
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Data:', data);
+                
+                document.getElementById('loading').style.display = 'none';
+                
+                if (data.files && data.files.length > 0) {
+                    const filesDiv = document.getElementById('files');
+                    filesDiv.innerHTML = `<h2>Files (${data.files.length})</h2>`;
+                    
+                    function renderFiles(files, level = 0) {
+                        let html = '';
+                        for (const file of files) {
+                            const indent = level * 20;
+                            const className = file.type === 'folder' ? 'file folder' : 'file';
+                            html += `<div class="${className}" style="margin-left: ${indent}px">`;
+                            html += `<strong>${file.name}</strong> (${file.type})`;
+                            html += ` <small>${file.path}</small>`;
+                            html += '</div>';
+                            
+                            if (file.children && file.children.length > 0) {
+                                html += renderFiles(file.children, level + 1);
+                            }
+                        }
+                        return html;
+                    }
+                    
+                    filesDiv.innerHTML += renderFiles(data.files);
+                } else {
+                    document.getElementById('files').innerHTML = '<p>No files found</p>';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        loadFiles();
+    </script>
+</body>
+</html>

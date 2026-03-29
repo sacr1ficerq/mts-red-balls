@@ -1,0 +1,7 @@
+update_plan_tool: |
+  update_plan: Update a specific step in the plan.
+  Input: plan_id, step_id, new_task/new_agent
+  Output: none
+  
+  Usage:
+  {"action": "update_plan", "plan_id": "1", "step_id": 1, "task": "new task"}

@@ -1,0 +1,37 @@
+name: kaggle_download_data
+description: |
+  Download competition data files from Kaggle. Can download all files or specific files. 
+  Files are saved to the specified directory. Use this to get training data, test data, 
+  and sample submissions for a competition.
+
+parameters:
+  query:
+    type: string
+    required: true
+    description: Competition name (e.g., 'titanic', 'house-prices-advanced-regression-techniques')
+  path:
+    type: string
+    required: false
+    description: Directory to save files (default: './')
+  files:
+    type: string
+    required: false
+    description: Comma-separated list of specific files to download (optional, downloads all if not specified)
+
+examples:
+  - query: "Download all data for Titanic competition"
+    parameters:
+      query: "titanic"
+      path: "./data"
+  - query: "Download specific files for House Prices competition"
+    parameters:
+      query: "house-prices-advanced-regression-techniques"
+      files: "train.csv,test.csv,sample_submission.csv"
+
+output_format: |
+  Returns a JSON object with download information:
+  {
+    "competition": "titanic",
+    "downloaded_files": ["./data/train.csv", "./data/test.csv", "./data/gender_submission.csv"],
+    "path": "./data"
+  }

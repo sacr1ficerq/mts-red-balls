@@ -1,0 +1,4 @@
+code_tool: |
+  code: Write and execute Python code in sandbox.
+  Input: Python code
+  Output: execution result

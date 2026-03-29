@@ -1,0 +1,72 @@
+/* ==========================================================================
+   6. SEARCH STYLES - Search results display
+   ========================================================================== */
+
+.search-results {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.search-card {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+    border: 1px solid #E2E8F0;
+    border-radius: 0.625rem;
+    transition: all 0.2s ease;
+}
+
+.search-card:hover {
+    border-color: #CBD5E1;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.search-number {
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+    color: white;
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6875rem;
+    font-weight: 600;
+}
+
+.search-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.search-title {
+    font-weight: 600;
+    color: #1E2937;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    margin-bottom: 0.25rem;
+}
+
+.search-body {
+    font-size: 0.75rem;
+    color: #64748B;
+    line-height: 1.5;
+    margin-bottom: 0.375rem;
+}
+
+.search-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.6875rem;
+    color: #3B82F6;
+    text-decoration: none;
+}
+
+.search-source:hover {
+    color: #1D4ED8;
+    text-decoration: underline;
+}

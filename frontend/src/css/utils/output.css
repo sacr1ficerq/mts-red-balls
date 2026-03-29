@@ -1,0 +1,49 @@
+/* ==========================================================================
+   5. OUTPUT STYLES - Console, Files, Search results
+   ========================================================================== */
+
+/* --- Code Output Base --- */
+.output-code {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* --- Console Output (dark) --- */
+.output-console {
+    background: #1E293B;
+    color: #E2E8F0;
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+}
+
+/* --- Files Output (light) --- */
+.output-files {
+    background: var(--neutral-50);
+    border: 1px solid var(--neutral-200);
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+}
+
+/* --- Tool Parameters --- */
+.tool-params .param-row {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--neutral-100);
+}
+.tool-params .param-row:last-child { 
+    border-bottom: none; 
+}
+.tool-params .param-key {
+    font-weight: 600;
+    color: var(--neutral-500);
+    min-width: 5rem;
+}
+.tool-params .param-value {
+    color: var(--neutral-800);
+    word-break: break-all;
+}
