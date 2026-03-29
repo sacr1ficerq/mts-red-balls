@@ -51,12 +51,13 @@ def files_tool(
     content: str = "",
     search: str = "",
     replace: str = "",
+    limit: str = "100",
     sandbox=None,
 ) -> str:
     """File operations in sandbox.
 
     Operations:
-    - read: Read file content. Args: path="filename"
+    - read: Read file content. Args: path="filename", limit="100" (lines), "all" (up to 30K chars)
     - write: Write full content to file. Args: path="filename", content="text"
     - edit: Search & Replace in file. Args: path="filename", search="text to find", replace="new text"
     - edit_regex: Replace using regex. Args: path="filename", search="pattern", replace="replacement"
@@ -68,6 +69,9 @@ def files_tool(
 
     Returns:
         File content, success message, or error"""
+    # Hard limit for file reads to prevent context overflow
+    MAX_FILE_READ = 30000
+    
     if sandbox is None:
         return "Error: Sandbox not provided"
 
@@ -75,7 +79,7 @@ def files_tool(
         if op == "read":
             if sandbox.is_dir(path):
                 return f"Error: {path} is a directory. Use list to see contents."
-            return sandbox.read(path)
+            return sandbox.read(path, limit=limit)
 
         elif op == "write":
             sandbox.write(path, _normalize_write_content(path, content))

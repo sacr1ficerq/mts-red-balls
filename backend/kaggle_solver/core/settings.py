@@ -5,6 +5,7 @@ Settings are stored in a local JSON file and persist across restarts.
 
 import json
 import logging
+import os
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Optional, Any
@@ -13,7 +14,7 @@ from threading import Lock
 logger = logging.getLogger(__name__)
 
 # Default model for all agents
-DEFAULT_MODEL = "openai/gpt-oss-120b"
+DEFAULT_MODEL = "xiaomi/mimo-v2-flash"
 
 # Default models for each agent type (can be customized per agent)
 DEFAULT_AGENT_MODELS = {
@@ -152,19 +153,34 @@ class SettingsManager:
         return data_dir / "settings.json"
 
     def _load(self) -> Settings:
-        """Load settings from storage."""
+        """Load settings from storage, with env var fallback."""
+        # First try to load from environment variables
+        api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+        kaggle_key = os.getenv("KAGGLE_API_TOKEN") or os.getenv("KAGGLE_KEY") or ""
+        
+        # Then try to load from file (file takes precedence if it has real values)
         try:
             if self._storage_path.exists():
                 with open(self._storage_path, "r") as f:
                     data = json.load(f)
+                file_api_key = data.get("api_key", "")
+                file_kaggle_key = data.get("kaggle_key", "")
+                
+                # Use file values only if they are not placeholders
+                if file_api_key and file_api_key != "YOUR_OPENROUTER_API_KEY":
+                    api_key = file_api_key
+                if file_kaggle_key and file_kaggle_key != "YOUR_KAGGLE_USERNAME:YOUR_KAGGLE_KEY":
+                    kaggle_key = file_kaggle_key
+                    
                 return Settings(
-                    api_key=data.get("api_key", ""),
-                    kaggle_key=data.get("kaggle_key", ""),
+                    api_key=api_key,
+                    kaggle_key=kaggle_key,
                     agent_models=data.get("agent_models", {}),
                 )
         except Exception as e:
             logger.warning(f"Failed to load settings: {e}")
-        return Settings()
+        
+        return Settings(api_key=api_key, kaggle_key=kaggle_key)
 
     def _save(self, settings: Settings):
         """Save settings to storage."""

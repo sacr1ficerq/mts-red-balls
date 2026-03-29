@@ -1,0 +1,6 @@
+rag_tool: |
+  rag: Query the internal Kaggle knowledge base for expert information.
+  Input: search query about ML, feature engineering, Kaggle, data science
+  Output: relevant context from the knowledge base with expert techniques
+  Use FIRST for: feature engineering, model architectures, hyperparameter tuning,
+  preprocessing, ensembling, Kaggle strategies, time series, NLP, CV

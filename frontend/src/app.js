@@ -146,6 +146,11 @@ window.dashboard = function() {
         currentPlan: null,
         error: null,
 
+        // File preview state
+        selectedFile: null,
+        fileContent: '',
+        loading: false,
+
         // Settings state
         settingsOpen: false,
         settings: {
@@ -173,7 +178,17 @@ window.dashboard = function() {
         settingsSuccess: null,
 
         init() {
-            this.fetchSessions();
+            // Restore current session from localStorage
+            const savedSessionId = localStorage.getItem('currentSessionId');
+            if (savedSessionId) {
+                this.currentSessionId = savedSessionId;
+            }
+            this.fetchSessions().then(() => {
+                // After fetching sessions, restore the current session if it exists
+                if (this.currentSessionId) {
+                    this.selectSession(this.currentSessionId);
+                }
+            });
             this.loadSettings();
         },
 
@@ -320,9 +335,16 @@ window.dashboard = function() {
                 this.activeSessions = nextActiveSessions;
                 this.historicalSessions = data.historical || [];
 
-                if (this.currentSessionId && this.activeSessions[this.currentSessionId]) {
-                    this.syncMetrics(this.activeSessions[this.currentSessionId]);
-                    this.syncCurrentPlan();
+                // Restore current session - check both active and historical
+                if (this.currentSessionId) {
+                    const activeSession = this.activeSessions[this.currentSessionId];
+                    const historicalSession = this.historicalSessions.find(s => s.id === this.currentSessionId);
+                    const currentSession = activeSession || historicalSession;
+                    
+                    if (currentSession) {
+                        this.syncMetrics(currentSession);
+                        this.syncCurrentPlan();
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching sessions:', error);
@@ -355,6 +377,7 @@ window.dashboard = function() {
         createNewSession() {
             this.closeEventSource();
             this.currentSessionId = null;
+            localStorage.removeItem('currentSessionId');
             this.newTaskInput = '';
             this.historicalSessionData = null;
             this.currentPlan = null;
@@ -385,6 +408,8 @@ window.dashboard = function() {
         async selectSession(id) {
             console.log('selectSession called with id:', id);
             this.currentSessionId = id;
+            // Persist current session to localStorage
+            localStorage.setItem('currentSessionId', id);
             this.currentPlan = null;
 
             const session = this.activeSessions[id];

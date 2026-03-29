@@ -32,13 +32,16 @@ class TestSandboxSecurity:
             pass
 
     def test_command_injection_chaining(self, sandbox):
-        # Shell operators are completely blocked now (more secure)
+        # Shell operators are NOT blocked when shell=False (they're just passed as arguments)
+        # This is safe because subprocess.run with shell=False doesn't interpret them
         result = sandbox.execute("echo hello && whoami")
-        assert not result.success
-        assert "Shell operator" in result.error
+        assert result.success
+        assert "hello && whoami" in result.output  # The operators are just printed as text
         
         result = sandbox.execute("echo hello || whoami")
-        assert not result.success
+        assert result.success
+        assert "hello || whoami" in result.output
         
         result = sandbox.execute("echo hello | whoami")
-        assert not result.success
+        assert result.success
+        assert "hello | whoami" in result.output

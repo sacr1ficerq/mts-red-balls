@@ -31,14 +31,15 @@ window.Formatters = {
     },
 
     formatToolInput(input) {
-        if (!input) return '';
+        if (!input) return '<div class="text-gray-400 italic">Нет входных данных</div>';
         try {
             const obj = typeof input === 'string' ? JSON.parse(input) : input;
             let html = '<div class="tool-params">';
             for (const [key, value] of Object.entries(obj)) {
                 let valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-                if (valStr.length > 200) valStr = valStr.substring(0, 200) + '...';
-                html += `<div class="param-row"><span class="param-key">${key}:</span> <span class="param-value">${this.escapeHtml(valStr)}</span></div>`;
+                // Truncate long values but show more than before
+                if (valStr.length > 500) valStr = valStr.substring(0, 500) + '...';
+                html += `<div class="param-row"><span class="param-key">${key}:</span> <span class="param-value whitespace-pre-wrap break-all">${this.escapeHtml(valStr)}</span></div>`;
             }
             html += '</div>';
             return html;
@@ -48,10 +49,19 @@ window.Formatters = {
     },
 
     formatToolOutput(output, toolName) {
-        if (!output) return '';
+        if (!output) return '<div class="text-gray-400 italic">Пустой вывод</div>';
+        
+        // Truncate very long output to prevent UI issues
+        const MAX_LENGTH = 50000;
+        let displayOutput = output;
+        let truncated = false;
+        if (output.length > MAX_LENGTH) {
+            displayOutput = output.substring(0, MAX_LENGTH) + '\n\n... (вывод обрезан)';
+            truncated = true;
+        }
         
         if (toolName === 'search') {
-            const lines = output.split('\n');
+            const lines = displayOutput.split('\n');
             let html = '<div class="search-results-container">';
             let inResult = false, resultNum = 0, currentTitle = '', currentSource = '', currentBody = [];
             
@@ -72,13 +82,16 @@ window.Formatters = {
             }
             if (inResult && currentTitle) html += this.buildSearchResultCard(resultNum, currentTitle, currentSource, currentBody);
             html += '</div>';
+            if (truncated) html += '<div class="text-yellow-600 text-xs mt-2">⚠️ Вывод был обрезан из-за большого размера</div>';
             return html;
         }
         
-        if (toolName === 'console') return '<pre class="console-output">' + this.escapeHtml(output) + '</pre>';
-        if (toolName === 'files') return '<pre class="files-output">' + this.escapeHtml(output) + '</pre>';
+        if (toolName === 'console') return '<pre class="console-output">' + this.escapeHtml(displayOutput) + '</pre>';
+        if (toolName === 'files') return '<pre class="files-output">' + this.escapeHtml(displayOutput) + '</pre>';
         
-        return '<pre class="text-xs font-mono">' + this.escapeHtml(output) + '</pre>';
+        let result = '<pre class="text-xs font-mono whitespace-pre-wrap break-all">' + this.escapeHtml(displayOutput) + '</pre>';
+        if (truncated) result += '<div class="text-yellow-600 text-xs mt-2">⚠️ Вывод был обрезан из-за большого размера</div>';
+        return result;
     },
 
     buildSearchResultCard(num, title, source, body) {

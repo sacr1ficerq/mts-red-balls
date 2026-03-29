@@ -25,9 +25,8 @@
 <body class="bg-gray-50 h-screen flex overflow-hidden text-sm" x-data="dashboard()" x-init="init()" x-cloak>
     
     <!-- Sidebar -->
-    <aside class="flex flex-col h-full bg-white border-r border-gray-200 w-64 flex-shrink-0 transition-all duration-300" 
-            :class="sidebarOpen ? 'w-64' : 'w-0 -ml-64 overflow-hidden'"
-            x-data="{ selectedFile: null, fileContent: '', loading: false }">
+    <aside class="flex flex-col h-full bg-white border-r border-gray-200 w-64 flex-shrink-0 transition-all duration-300"
+            :class="sidebarOpen ? 'w-64' : 'w-0 -ml-64 overflow-hidden'">
         <!-- Header -->
         <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <div class="flex items-center gap-2">
@@ -93,8 +92,8 @@
                 </span>
                 <i class="fas text-gray-400 text-xs" :class="fileTreeOpen ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
             </div>
-            <div x-show="fileTreeOpen" class="overflow-y-auto px-2 pb-2 text-xs custom-scrollbar"
-                 :style="'height: calc(100% - 36px); max-height: 200px;'">
+            <div x-show="fileTreeOpen" class="overflow-y-auto px-2 pt-1 text-xs custom-scrollbar"
+                 :style="'height: calc(100% - 36px);'">
                 <template x-if="fileTree && fileTree.length > 0">
                     <div class="space-y-0.5">
                         <template x-for="item in fileTree" :key="item.path">
@@ -120,30 +119,30 @@
                 <template x-if="!fileTree || fileTree.length === 0">
                     <div class="text-gray-400 text-xs px-2 py-1">Нет файлов</div>
                 </template>
-                
-                <!-- File Preview Modal -->
-                <div x-show="selectedFile" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="selectedFile = null">
-                    <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col overflow-hidden" @click.stop>
-                        <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <div class="flex items-center gap-2">
-                                <i class="fas fa-file-code text-gray-400"></i>
-                                <span class="font-mono text-sm font-medium text-gray-700" x-text="selectedFile"></span>
-                            </div>
-                            <button @click="selectedFile = null" class="text-gray-400 hover:text-gray-600">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="p-0 overflow-auto flex-1 bg-gray-50">
-                            <div x-show="loading" class="flex items-center justify-center h-32 text-gray-400">
-                                <i class="fas fa-circle-notch fa-spin mr-2"></i> Загрузка...
-                            </div>
-                            <pre x-show="!loading" class="p-4 text-xs font-mono whitespace-pre-wrap" x-text="fileContent"></pre>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </aside>
+    
+    <!-- File Preview Modal - moved outside aside -->
+    <div x-show="selectedFile" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="selectedFile = null">
+        <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col overflow-hidden" @click.stop>
+            <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-file-code text-gray-400"></i>
+                    <span class="font-mono text-sm font-medium text-gray-700" x-text="selectedFile"></span>
+                </div>
+                <button @click="selectedFile = null" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-0 overflow-y-auto flex-1 bg-gray-50" style="max-height: 60vh;">
+                <div x-show="loading" class="flex items-center justify-center h-32 text-gray-400">
+                    <i class="fas fa-circle-notch fa-spin mr-2"></i> Загрузка...
+                </div>
+                <pre x-show="!loading" class="p-4 text-xs font-mono whitespace-pre-wrap" x-text="fileContent"></pre>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main class="flex-1 flex flex-col min-w-0 overflow-hidden relative">
@@ -195,7 +194,7 @@
 
         <!-- Events Feed -->
         <div x-show="currentSessionId" class="flex-1 flex flex-col overflow-hidden">
-            <div class="flex-1 overflow-y-auto px-4 py-6 space-y-4 custom-scrollbar max-w-3xl mx-auto w-full" id="events-feed">
+            <div class="flex-1 overflow-y-auto px-4 py-3 space-y-3 custom-scrollbar max-w-3xl mx-auto w-full" id="events-feed">
                 
                 <!-- User Query - Красный -->
                 <template x-if="currentSession && currentSession.query">
@@ -206,7 +205,7 @@
                                 <i class="fas text-sm" :class="getUserStyle().icon + ' ' + getUserStyle().iconColor"></i>
                             </div>
                         </div>
-                        <div class="flex-1 bg-white border border-red-200 rounded-lg shadow-sm">
+                        <div class="flex-1 bg-white border border-red-200 rounded-lg shadow-sm agent-block">
                             <div class="px-4 py-2 border-b border-red-100" :class="getUserStyle().headerBg">
                                 <span class="text-sm font-bold" :class="getUserStyle().text">Запрос</span>
                             </div>
@@ -247,7 +246,7 @@
                                         <i class="fas text-sm" :class="getAgentStyle(event.agent).icon + ' ' + getAgentStyle(event.agent).iconColor"></i>
                                     </div>
                                 </div>
-                                <div class="flex-1 bg-white border rounded-lg shadow-sm"
+                                <div class="flex-1 bg-white border rounded-lg shadow-sm agent-block"
                                      :class="getAgentStyle(event.agent).border">
                                     <div class="px-4 py-2 flex justify-between items-center cursor-pointer"
                                          :class="getAgentStyle(event.agent).bg"
@@ -272,7 +271,7 @@
                                         <i class="fas text-sm" :class="getToolStyle(event.data.tool_name).icon + ' ' + getToolStyle(event.data.tool_name).iconColor"></i>
                                     </div>
                                 </div>
-                                <div class="flex-1 bg-white border border-emerald-200 rounded-lg shadow-sm">
+                                <div class="flex-1 bg-white border border-emerald-200 rounded-lg shadow-sm agent-block">
                                     <div class="px-4 py-2 flex justify-between items-center cursor-pointer"
                                          :class="getToolStyle(event.data.tool_name).bg"
                                          @click="toggleEvent(currentSessionId, index)">
@@ -306,7 +305,7 @@
                                         <i class="fas fa-share-alt text-sm text-purple-600"></i>
                                     </div>
                                 </div>
-                                <div class="flex-1 bg-white border border-purple-200 rounded-lg shadow-sm">
+                                <div class="flex-1 bg-white border border-purple-200 rounded-lg shadow-sm agent-block">
                                     <div class="px-4 py-2 bg-purple-50 flex justify-between items-center cursor-pointer"
                                          @click="toggleEvent(currentSessionId, index)">
                                         <div class="flex items-center gap-3">
@@ -334,7 +333,7 @@
                                         <i class="fas fa-tasks text-sm text-amber-600"></i>
                                     </div>
                                 </div>
-                                <div class="flex-1 bg-white border border-amber-200 rounded-lg shadow-sm">
+                                <div class="flex-1 bg-white border border-amber-200 rounded-lg shadow-sm agent-block">
                                     <div class="px-4 py-2 bg-amber-50 border-b border-amber-100">
                                         <span class="text-sm font-bold text-amber-700">План создан</span>
                                     </div>
@@ -359,7 +358,7 @@
                                         <i class="fas fa-edit text-sm text-orange-600"></i>
                                     </div>
                                 </div>
-                                <div class="flex-1 bg-white border border-orange-200 rounded-lg shadow-sm">
+                                <div class="flex-1 bg-white border border-orange-200 rounded-lg shadow-sm agent-block">
                                     <div class="px-4 py-2 bg-orange-50 border-b border-orange-100">
                                         <span class="text-sm font-bold text-orange-700">План обновлён</span>
                                         <span class="ml-2 text-xs text-orange-600" x-text="event.data.update.type"></span>
@@ -377,7 +376,7 @@
                                         <i class="fas fa-question text-sm text-amber-600"></i>
                                     </div>
                                 </div>
-                                <div class="flex-1 bg-white border border-amber-200 rounded-lg shadow-sm">
+                                <div class="flex-1 bg-white border border-amber-200 rounded-lg shadow-sm agent-block">
                                     <div class="px-4 py-2 bg-amber-50 border-b border-amber-100">
                                         <span class="text-sm font-bold text-amber-700">Выберите опцию</span>
                                     </div>
@@ -404,7 +403,7 @@
                                         <i class="fas fa-check text-sm text-emerald-600"></i>
                                     </div>
                                 </div>
-                                <div class="flex-1 bg-white border border-emerald-200 rounded-lg shadow-md">
+                                <div class="flex-1 bg-white border border-emerald-200 rounded-lg shadow-md agent-block">
                                     <div class="px-4 py-3 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center">
                                         <h3 class="text-sm font-bold text-emerald-800">Результат</h3>
                                         <span class="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">Готово</span>
@@ -425,7 +424,7 @@
                                         <i class="fas text-sm" :class="getErrorStyle().icon + ' ' + getErrorStyle().iconColor"></i>
                                     </div>
                                 </div>
-                                <div class="flex-1 bg-white border rounded-lg shadow-sm"
+                                <div class="flex-1 bg-white border rounded-lg shadow-sm agent-block"
                                      :class="getErrorStyle().border">
                                     <div class="px-4 py-3 border-b flex items-center justify-between"
                                          :class="getErrorStyle().headerBg + ' ' + getErrorStyle().border">

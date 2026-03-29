@@ -11,16 +11,16 @@ hello-world-backend:
 	$(MAKE) -C backend hello-world
 
 test:
-	cd backend && python3 -m pytest tests/ -v
+	cd backend && python3 -m pytest --break-system-packages tests/ -v
 
 test-openrouter:
-	cd backend && python3 -m pytest tests/test_openrouter.py -v -s
+	cd backend && python3 -m pytest --break-system-packages tests/test_openrouter.py -v -s
 
 test-model-access:
-	cd backend && python3 -m pytest tests/test_openrouter.py::TestModelAccess -v -s
+	cd backend && python3 -m pytest --break-system-packages tests/test_openrouter.py::TestModelAccess -v -s
 
 test-all:
-	cd backend && python3 -m pytest tests/ -v --tb=short
+	cd backend && python3 -m pytest --break-system-packages tests/ -v --tb=short
 
 test-titanic:
 	@BACKEND_PID=""; \

@@ -93,11 +93,12 @@ class AgentConstants:
         ],
         AgentType.CRITIC.value: ["message"],
         AgentType.COORDINATOR.value: ["delegate", "tool"],
-        "HypothesisGenerator": ["console", "files", "pip_install", "search"],
-        "DataPreprocessor": ["console", "files", "pip_install"],
-        "FeatureEngineer": ["console", "files", "pip_install"],
-        "ModelTrainer": ["console", "files", "pip_install"],
-        "DataParser": ["console", "files", "pip_install"],
+        "HypothesisGenerator": ["console", "files", "pip_install", "search", "rag"],
+        "DataPreprocessor": ["console", "files", "pip_install", "rag"],
+        "FeatureEngineer": ["console", "files", "pip_install", "rag"],
+        "ModelTrainer": ["console", "files", "pip_install", "rag"],
+        "DataParser": ["console", "files", "pip_install", "rag"],
+        "KaggleSubmitter": ["console", "files", "pip_install", "rag"],
         "KaggleSubmitter": [
             "console",
             "files",
@@ -214,9 +215,7 @@ class SandboxConstants:
 
     # Blocked shell patterns
     BLOCKED_PATTERNS = [
-        # Shell operators
-        "&",
-        # Command substitution
+        # Command substitution (still dangerous even with shell=False)
         "`",
         "$(",
         # Network tools

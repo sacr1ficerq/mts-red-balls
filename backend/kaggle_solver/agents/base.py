@@ -93,17 +93,21 @@ class BaseAgent(ABC):
         return BaseAgent.AGENT_TOOLS.get(agent_name, ["tool"])
 
     def _resolve_delegate_target(self, target: str) -> str:
-        """Restrict coordinator delegation to the active runtime pipeline."""
-        if (
-            self.config.name == AgentType.COORDINATOR.value
-            and target != AgentType.CODE.value
-        ):
-            logger.info(
-                "Coordinator requested delegate target %s; rerouting to %s",
-                target,
-                AgentType.CODE.value,
-            )
-            return AgentType.CODE.value
+        """Resolve delegate target - allow all registered agents."""
+        # Allow all agents that are registered in AgentRegistry
+        from kaggle_solver.agents import AgentRegistry
+        
+        normalized_target = target.lower().strip()
+        
+        # Check if the target agent is registered
+        available_agents = AgentRegistry.list_agents()
+        for agent_name in available_agents:
+            if agent_name.lower() == normalized_target:
+                return agent_name
+        
+        # If not found, log warning and return original target
+        if target:
+            logger.warning(f"Unknown agent '{target}', attempting to use anyway")
         return target
 
     def __init__(
@@ -309,6 +313,10 @@ class BaseAgent(ABC):
         return pattern.sub("", output).strip()
 
     def _should_defer_subagent_failure(self) -> bool:
+        # DEBUG MODE: Stop immediately on any error for faster debugging
+        import os
+        if os.environ.get("DEBUG_STOP_ON_ERROR", "").lower() in ("1", "true", "yes"):
+            return False
         return self.config.name == AgentType.COORDINATOR.value
 
     def _build_subagent_failure_feedback(
@@ -348,7 +356,7 @@ class BaseAgent(ABC):
         user_input: str,
         context: Optional[Dict[str, Any]] = None,
         is_sub_call: bool = False,
-        timeout: int = 300,
+        timeout: int = 900,
     ) -> AgentResult:
         """Execute the agent loop to accomplish the user's task.
 
@@ -362,7 +370,7 @@ class BaseAgent(ABC):
             user_input: User's request or task description
             context: Optional context including session, event IDs, etc.
             is_sub_call: Whether this is a delegated sub-call
-            timeout: Maximum execution time in seconds (default: 300)
+            timeout: Maximum execution time in seconds (default: 900)
 
         Returns:
             AgentResult with success status, output, and execution duration
@@ -422,10 +430,6 @@ class BaseAgent(ABC):
                     context_msg = f"[Context #{e['event_id']}] {event_type}: {content}"
                     self.messages.insert(0, {"role": "system", "content": context_msg})
 
-        system = self.system_prompt()
-
-        full = [{"role": "system", "content": system}] + self.messages
-
         # Track consecutive plans to prevent infinite loop
         consecutive_plans = 0
 
@@ -434,6 +438,10 @@ class BaseAgent(ABC):
             self._emit("system", {"message": f"Starting: {user_input}"})
 
         for self._iteration in range(1, self.config.max_iterations + 1):
+            # Recreate full from self.messages to avoid duplicates
+            system = self.system_prompt()
+            full = [{"role": "system", "content": system}] + self.messages
+            
             # Check timeout
             if time.time() > execution_timeout:
                 logger.error(f"Agent execution timeout after {timeout}s")
@@ -608,6 +616,14 @@ class BaseAgent(ABC):
                 continue
 
             elif action.get("action") == "done":
+                # Check if there are unresolved plan steps
+                if self._plan_has_unresolved_steps():
+                    feedback = self._format_plan_progress_message()
+                    logger.warning(f"Agent tried to call done but plan has unfinished work: {feedback}")
+                    self.add_message("user", feedback)
+                    full.append({"role": "user", "content": feedback})
+                    continue
+                
                 result_output = self._extract_artifacts(action.get("result", ""))
                 self._emit("result", {"content": result_output})
                 return AgentResult(
@@ -728,26 +744,33 @@ class BaseAgent(ABC):
                     elif "feature" in file_path.lower():
                         self.session.set_artifact("feature_script_path", file_path)
 
-        if not result.success:
-            logger.error(
-                f">>> TOOL FAILED: {action.get('tool')}, output: {output[:200]}"
-            )
-            return AgentResult(
-                success=False,
-                error=output,
-                output=output,
-                duration=time.time() - start,
-            )
-
         # Add tool result as user message to guide LLM to next step
         # This prevents LLM from thinking the tool result is its own response
-        tool_feedback = f"Tool {action.get('tool')} executed successfully. Output: {output}\n\nContinue with the next step of your workflow."
+        # Truncate output to prevent context overflow
+        MAX_TOOL_OUTPUT = 500
+        if len(output) > MAX_TOOL_OUTPUT:
+            output_truncated = output[:MAX_TOOL_OUTPUT] + f"\n... [truncated, total {len(output)} chars]"
+        else:
+            output_truncated = output
+            
+        if result.success:
+            tool_feedback = f"Tool {action.get('tool')} executed successfully. Output: {output_truncated}\n\nContinue with the next step of your workflow."
+            logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
+        else:
+            tool_feedback = f"Tool {action.get('tool')} FAILED. Error: {output_truncated}\n\nFix the issue and retry, or try an alternative approach."
+            logger.error(f">>> TOOL FAILED: {action.get('tool')}, output: {output[:200]}")
+            
+            # DEBUG MODE: Stop immediately on tool failure
+            import os
+            if os.environ.get("DEBUG_STOP_ON_ERROR", "").lower() in ("1", "true", "yes"):
+                logger.error(f">>> DEBUG STOP ON ERROR: Tool {action.get('tool')} failed, raising exception")
+                raise RuntimeError(f"DEBUG_STOP_ON_ERROR: Tool {action.get('tool')} failed with error: {output_truncated[:500]}")
+
         tool_msg = {"role": "user", "content": tool_feedback}
         self.add_message("user", tool_feedback)
         # Also add to full for current iteration
         full.append(tool_msg)
 
-        logger.info(f">>> TOOL EXECUTED: {action.get('tool')}, output: {output[:100]}")
         logger.info(f">>> CONTINUING LOOP, iteration: {self._iteration}")
         return None
 

@@ -6,7 +6,7 @@
 
 llm:
   # Default model (overridden by SettingsManager per-agent config)
-  model: "minimax/minimax-m2.5"
+  model: "xiaomi/mimo-v2-flash"
   temperature: 0.7
   max_tokens: 4096
   max_retries: 5
@@ -16,6 +16,9 @@ llm:
 sandbox:
   root: "./workspace"
   timeout: 120
+
+agents:
+  timeout: 1800  # Maximum execution time in seconds (30 minutes)
   allowed_commands:
     - python
     - python3
@@ -61,7 +64,7 @@ agents:
   CodeAgent:
     role: "Write and execute Python code in sandbox"
     tools: ["console", "files", "pip_install"]
-    max_iterations: 10
+    max_iterations: 50
 
 search:
   model: "z-ai/glm-4.5-air"

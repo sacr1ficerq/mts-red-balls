@@ -155,9 +155,9 @@ class Orchestrator:
             name=name,
             role=role,
             tools=tools,
-            model=self.config.llm.model,
+            model=model,
             max_iterations=max_iterations,
-            temperature=self.config.llm.temperature,
+            temperature=temperature,
         )
 
         return DynamicAgent(
@@ -196,7 +196,7 @@ class Orchestrator:
                 logger.info(f"  Input: {str(data.get('input', {}))[:100]}")
                 logger.info(f"  Output: {str(data.get('output', ''))[:100]}")
             elif event_type == "delegate":
-                target = data.get("agent", "unknown")
+                target = data.get("target_agent", data.get("agent", "unknown"))
                 logger.info(f"[{agent_name}] DELEGATE -> {target}")
             elif event_type == "result":
                 logger.info(
@@ -370,12 +370,33 @@ class Orchestrator:
         return {"active": active, "historical": historical}
 
     def clear_sessions(self):
+        """Clear all historical sessions and their files."""
         historical = [
             sid for sid, s in self.state.sessions.items() if s.status != "running"
         ]
         for sid in historical:
-            del self.state.sessions[sid]
+            self.delete_session(sid)
         self.state.save()
+    
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session and all its files."""
+        session = self.state.get_session(session_id)
+        if not session:
+            return False
+        
+        # Delete session files from workspace
+        session_workspace = self.base_sandbox_path / session_id
+        if session_workspace.exists():
+            try:
+                import shutil
+                shutil.rmtree(session_workspace)
+                logger.info(f"Deleted session workspace: {session_workspace}")
+            except Exception as e:
+                logger.warning(f"Failed to delete session workspace {session_workspace}: {e}")
+        
+        # Delete session from state
+        del self.state.sessions[session_id]
+        return True
 
     def stop_session(self, session_id: str) -> bool:
         session = self.state.get_session(session_id)
