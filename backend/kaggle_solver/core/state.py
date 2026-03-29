@@ -202,6 +202,29 @@ class StateManager:
                     session.messages = sess_data.get("messages", [])
                     session.artifacts = sess_data.get("artifacts", {})
                     
+                    # Restore steps
+                    steps_data = sess_data.get("steps", [])
+                    session.steps = [
+                        Step(
+                            id=s.get("id", i+1),
+                            agent=s.get("agent", ""),
+                            action=s.get("action", ""),
+                            input=s.get("input", ""),
+                            output=s.get("output", ""),
+                            success=s.get("success", True)
+                        )
+                        for i, s in enumerate(steps_data)
+                    ]
+                    
+                    # Restore event counter to avoid duplicate IDs
+                    if events:
+                        max_event_id = max((e.get("event_id", 0) for e in events), default=0)
+                        session._event_counter = max_event_id
+                    
+                    # Restore token usage
+                    session.total_tokens = sess_data.get("total_tokens", 0)
+                    session.total_cost = sess_data.get("total_cost", 0.0)
+                    
                     # Fix: if session was "running" but old, mark as completed/error
                     if session.status == "running":
                         try:

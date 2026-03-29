@@ -16,6 +16,9 @@ llm:
 sandbox:
   root: "./workspace"
   timeout: 120
+
+agents:
+  timeout: 1800  # Maximum execution time in seconds (30 minutes)
   allowed_commands:
     - python
     - python3

@@ -1,40 +1,7 @@
-name: kaggle_submit
-description: |
-  Submit predictions to a Kaggle competition. The submission file must match the required format 
-  (use kaggle_validate_submission to check before submitting). Include a descriptive message to 
-  track different submissions. Be aware of daily submission limits.
+kaggle_submit_tool: |
+  kaggle_submit: Submit a CSV file to a Kaggle competition.
+  Input: query = competition name (required), submission_file = path to CSV, message = optional submission message
+  Output: JSON with submission_id, status, submitted_at
 
-parameters:
-  query:
-    type: string
-    required: true
-    description: Competition name (e.g., 'titanic', 'house-prices-advanced-regression-techniques')
-  submission_file:
-    type: string
-    required: true
-    description: Path to submission file (CSV format)
-  message:
-    type: string
-    required: false
-    description: Submission message/description to track what this submission represents
-
-examples:
-  - query: "Submit predictions to Titanic competition"
-    parameters:
-      query: "titanic"
-      submission_file: "submission.csv"
-      message: "XGBoost with 350 trees, tuned hyperparameters"
-  - query: "Submit ensemble predictions"
-    parameters:
-      query: "house-prices-advanced-regression-techniques"
-      submission_file: "submission_ensemble.csv"
-      message: "Ensemble of top 3 models"
-
-output_format: |
-  Returns a JSON object with submission information:
-  {
-    "status": "complete",
-    "message": "XGBoost with 350 trees, tuned hyperparameters",
-    "submitted_at": "2024-01-15 14:30:00",
-    "submission_id": "12345678"
-  }
+  Usage:
+  {"action": "tool", "tool": "kaggle_submit", "query": "titanic", "submission_file": "submission.csv", "message": "CatBoost v1 CV=0.82"}

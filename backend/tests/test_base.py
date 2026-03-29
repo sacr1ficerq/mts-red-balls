@@ -353,7 +353,8 @@ class TestBaseAgentRun:
         mock_tool_registry.execute.assert_called_once()
 
     def test_run_tool_action_failure(self, agent, mock_llm, mock_tool_registry):
-        """Agent should stop immediately when a tool returns an error."""
+        """Agent should handle tool errors gracefully and continue working."""
+        # LLM keeps trying the same failing command
         mock_llm.chat = AsyncMock(
             return_value='{"action": "tool", "tool": "console", "query": "bad"}'
         )
@@ -363,9 +364,13 @@ class TestBaseAgentRun:
 
         result = asyncio.run(agent.run("run command"))
 
+        # Agent should fail after max iterations (not immediately)
         assert result.success is False
-        assert "Error: command failed" in result.error
-        assert mock_llm.chat.await_count == 1
+        assert "Max iterations" in result.error
+        # Tool should have been called multiple times as agent tried to recover
+        assert mock_tool_registry.execute.call_count > 1
+        # LLM should have been called multiple times as agent tried to recover
+        assert mock_llm.chat.await_count > 1
 
     def test_run_delegate_action(self, agent, mock_llm, mock_event_callback):
         """Agent should handle delegation and continue loop."""

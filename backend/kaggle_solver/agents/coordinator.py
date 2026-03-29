@@ -23,6 +23,48 @@ def _resolve_prompts_dir() -> Path:
 PROMPTS_DIR = _resolve_prompts_dir()
 TOOLS_DIR = PROMPTS_DIR / "tools"
 
+# Canonical tool file names (without .yaml) for each agent.
+# These map to files in prompts/tools/ whose top-level YAML keys become
+# {key} placeholders substituted into the agent's system_prompt.
+_KAGGLE_TOOLS = [
+    "kaggle_get_competition_info",
+    "kaggle_download_data",
+    "kaggle_submit",
+    "kaggle_get_submission_status",
+    "kaggle_get_leaderboard",
+    "kaggle_list_competitions",
+    "kaggle_validate_submission",
+    "kaggle_prepare_submission",
+]
+
+AGENT_TOOL_FILES = {
+    AgentType.COORDINATOR.value: ["plan", "delegate", "result", "pip_install"],
+    AgentType.CODE.value: [
+        "console",
+        "files",
+        "pip_install",
+        "result",
+    ] + _KAGGLE_TOOLS,
+    AgentType.SEARCH.value: ["rag", "search", "result"],
+    AgentType.CRITIC.value: ["console", "files", "result"],
+    "HypothesisGenerator": ["console", "files", "pip_install", "rag", "search", "result"],
+    "DataPreprocessor": ["console", "files", "pip_install", "result"],
+    "FeatureEngineer": ["console", "files", "pip_install", "rag", "result"],
+    "ModelTrainer": ["console", "files", "pip_install", "rag", "result"],
+    "DataParser": ["console", "files", "pip_install", "result"],
+    "KaggleSubmitter": [
+        "console",
+        "files",
+        "pip_install",
+        "result",
+        "kaggle_validate_submission",
+        "kaggle_prepare_submission",
+        "kaggle_submit",
+        "kaggle_get_submission_status",
+        "kaggle_get_leaderboard",
+    ],
+}
+
 
 def load_tool_definitions(tools: list) -> dict:
     definitions = {}
@@ -52,98 +94,78 @@ def load_prompt(filename: str, default: str, tools: Optional[list] = None) -> st
                         tool_defs = load_tool_definitions(tools)
                         for placeholder, definition in tool_defs.items():
                             prompt = prompt.replace(f"{{{placeholder}}}", definition)
+                        # Remove any unresolved placeholders to avoid LLM confusion
+                        import re
+                        prompt = re.sub(r"\{[a-z_]+_tool\}", "", prompt)
                     return prompt
     except Exception as e:
         logger.warning(f"Failed to load prompt {filename}: {e}")
     return default
 
 
+def _load(filename: str, agent_name: str) -> str:
+    tools = AGENT_TOOL_FILES.get(agent_name, ["result"])
+    return load_prompt(filename, f"You are {agent_name}.", tools=tools)
+
+
 class CoordinatorAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt(
-            "coordinator.yaml", "", tools=["plan", "update_plan", "delegate", "result", "pip_install"]
-        )
+        return _load("coordinator.yaml", AgentType.COORDINATOR.value)
 
 
 class CodeAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt(
-            "code.yaml", "", tools=["console", "files", "pip_install", "result"]
-        )
+        return _load("code.yaml", AgentType.CODE.value)
 
 
 class SearchAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("search.yaml", "", tools=["rag", "search", "result"])
+        return _load("search.yaml", AgentType.SEARCH.value)
 
 
 class CriticAgentPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt("critic.yaml", "", tools=["console", "search", "result"])
+        return _load("critic.yaml", AgentType.CRITIC.value)
 
 
 class HypothesisGeneratorPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt(
-            "hypothesis.yaml",
-            "",
-            tools=["console", "files", "pip_install", "search", "result"],
-        )
+        return _load("hypothesis.yaml", "HypothesisGenerator")
 
 
 class DataPreprocessorPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt(
-            "data_preprocessor.yaml",
-            "",
-            tools=["console", "files", "pip_install", "result"],
-        )
+        return _load("data_preprocessor.yaml", "DataPreprocessor")
 
 
 class FeatureEngineerPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt(
-            "feature_engineer.yaml",
-            "",
-            tools=["console", "files", "pip_install", "result"],
-        )
+        return _load("feature_engineer.yaml", "FeatureEngineer")
 
 
 class ModelTrainerPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt(
-            "model_trainer.yaml",
-            "",
-            tools=["console", "files", "pip_install", "result"],
-        )
+        return _load("model_trainer.yaml", "ModelTrainer")
 
 
 class DataParserPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt(
-            "data_parser.yaml",
-            "",
-            tools=["console", "files", "pip_install", "result"],
-        )
+        return _load("data_parser.yaml", "DataParser")
 
 
 class KaggleSubmitterPrompts:
     @staticmethod
     def system_prompt() -> str:
-        return load_prompt(
-            "kaggle_submitter.yaml",
-            "",
-            tools=["console", "files", "pip_install", "result"],
-        )
+        return _load("kaggle_submitter.yaml", "KaggleSubmitter")
 
 
 def get_agent_prompts(agent_name: str) -> str:

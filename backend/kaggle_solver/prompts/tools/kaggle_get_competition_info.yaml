@@ -1,34 +1,7 @@
-name: kaggle_get_competition_info
-description: |
-  Get detailed information about a Kaggle competition including title, description, evaluation metric, 
-  submission limits, deadline, reward, and team statistics. Use this to understand competition requirements 
-  before starting work.
+kaggle_get_competition_info_tool: |
+  kaggle_get_competition_info: Get competition details (title, metric, deadline, submission limits).
+  Input: query = competition name (e.g. "titanic")
+  Output: JSON with name, title, evaluation_metric, max_daily_submissions, deadline
 
-parameters:
-  query:
-    type: string
-    required: true
-    description: Competition name (e.g., 'titanic', 'house-prices-advanced-regression-techniques')
-
-examples:
-  - query: "Get information about the Titanic competition"
-    parameters:
-      query: "titanic"
-  - query: "Get details about the House Prices competition"
-    parameters:
-      query: "house-prices-advanced-regression-techniques"
-
-output_format: |
-  Returns a JSON object with competition information:
-  {
-    "name": "titanic",
-    "title": "Titanic - Machine Learning from Disaster",
-    "description": "Competition description...",
-    "evaluation_metric": "accuracy",
-    "max_daily_submissions": 5,
-    "max_team_size": 3,
-    "reward": "None",
-    "deadline": "2024-12-31",
-    "total_teams": 15000,
-    "total_submissions": 50000
-  }
+  Usage:
+  {"action": "tool", "tool": "kaggle_get_competition_info", "query": "titanic"}

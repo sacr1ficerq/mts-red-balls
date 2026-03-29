@@ -215,9 +215,7 @@ class SandboxConstants:
 
     # Blocked shell patterns
     BLOCKED_PATTERNS = [
-        # Shell operators
-        "&",
-        # Command substitution
+        # Command substitution (still dangerous even with shell=False)
         "`",
         "$(",
         # Network tools

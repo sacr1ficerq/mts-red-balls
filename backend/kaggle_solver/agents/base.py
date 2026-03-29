@@ -356,7 +356,7 @@ class BaseAgent(ABC):
         user_input: str,
         context: Optional[Dict[str, Any]] = None,
         is_sub_call: bool = False,
-        timeout: int = 300,
+        timeout: int = 900,
     ) -> AgentResult:
         """Execute the agent loop to accomplish the user's task.
 
@@ -370,7 +370,7 @@ class BaseAgent(ABC):
             user_input: User's request or task description
             context: Optional context including session, event IDs, etc.
             is_sub_call: Whether this is a delegated sub-call
-            timeout: Maximum execution time in seconds (default: 300)
+            timeout: Maximum execution time in seconds (default: 900)
 
         Returns:
             AgentResult with success status, output, and execution duration
@@ -616,6 +616,14 @@ class BaseAgent(ABC):
                 continue
 
             elif action.get("action") == "done":
+                # Check if there are unresolved plan steps
+                if self._plan_has_unresolved_steps():
+                    feedback = self._format_plan_progress_message()
+                    logger.warning(f"Agent tried to call done but plan has unfinished work: {feedback}")
+                    self.add_message("user", feedback)
+                    full.append({"role": "user", "content": feedback})
+                    continue
+                
                 result_output = self._extract_artifacts(action.get("result", ""))
                 self._emit("result", {"content": result_output})
                 return AgentResult(

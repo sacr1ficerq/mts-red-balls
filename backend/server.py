@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from kaggle_solver.constants import ServerConstants, StateConstants, LoggingConstants
 from kaggle_solver.core.config import ConfigHolder, Config
 from kaggle_solver.core.orchestrator import Orchestrator
+from kaggle_solver.metrics import get_metrics
 import kaggle_solver.tools  # noqa: F401 - triggers tool registration
 
 
@@ -282,6 +283,38 @@ def health_check():
     return health
 
 
+@app.get("/api/metrics")
+def get_metrics_summary():
+    """Get metrics summary for monitoring and analysis."""
+    metrics = get_metrics()
+    return metrics.get_summary()
+
+
+@app.get("/api/metrics/events")
+def get_metrics_events(limit: int = 100):
+    """Get recent metric events."""
+    metrics = get_metrics()
+    return {"events": metrics.export_events(limit)}
+
+
+@app.get("/api/metrics/agent/{agent_name}")
+def get_agent_metrics(agent_name: str):
+    """Get metrics for a specific agent."""
+    metrics = get_metrics()
+    stats = metrics.get_agent_stats(agent_name)
+    if not stats or stats.get("total_runs", 0) == 0:
+        raise HTTPException(status_code=404, detail=f"No metrics found for agent: {agent_name}")
+    return stats
+
+
+@app.post("/api/metrics/clear")
+def clear_metrics():
+    """Clear all collected metrics (use with caution)."""
+    metrics = get_metrics()
+    metrics.clear()
+    return {"message": "Metrics cleared"}
+
+
 @app.get("/api/sse/{session_id}")
 async def sse_session_events(session_id: str):
     """Server-Sent Events stream for session events."""
@@ -525,9 +558,20 @@ def list_sessions():
 
 @app.post("/api/sessions/clear")
 def clear_sessions():
+    """Clear all historical sessions and their files."""
     orch = get_orchestrator()
     orch.clear_sessions()
     return {"status": "cleared"}
+
+
+@app.delete("/api/session/{session_id}")
+def delete_session(session_id: str):
+    """Delete a specific session and all its files."""
+    orch = get_orchestrator()
+    success = orch.delete_session(session_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"status": "deleted", "session_id": session_id}
 
 
 @app.post("/api/session/{session_id}/stop")

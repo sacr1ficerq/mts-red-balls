@@ -1,28 +1,43 @@
 console_tool: |
-  console: Run shell commands in sandbox.
-  Input: command (python3, ls, cat, etc.)
-  Output: stdout/stderr
-  
+  console: Run shell commands in the sandbox (shell=False, no shell expansion).
+  Input: command string
+  Output: stdout + stderr, or error message explaining what was blocked
+
   ALLOWED COMMANDS: python, python3, pip, kaggle, ls, cat, head, mkdir, rm, cp, mv, echo, date, unzip
-  
-  BLOCKED PATTERNS: & (ampersand), ` (backticks), $(command substitution), nc, netcat, telnet, ssh, ftp, chmod, chown, su, sudo, eval, exec, | (pipe), > (redirect), < (redirect), &&, ||, ; (semicolon)
-  
-  IMPORTANT: Do NOT use shell operators like &, |, ;, &&, ||, >, <, $(...), `...`, or command substitution.
-  Use simple commands only. For example:
-  - GOOD: "python3 train.py"
-  - GOOD: "ls -la"
-  - GOOD: "cat data.csv"
-  - BAD: "python3 train.py &" (uses &)
-  - BAD: "ls | head" (uses pipe)
-  - BAD: "echo $(whoami)" (uses command substitution)
-  
-  Usage:
-  {"action": "tool", "tool": "console", "query": "python3 script.py"}
+
+  HOW IT WORKS: Commands run with shell=False via subprocess. This means:
+  - Shell operators (|, >, <, &&, ||, ;) are NOT interpreted — they are passed as literal arguments and will cause errors
+  - Environment variables ($VAR, $(cmd)) are NOT expanded
+  - To chain operations or use pipes, write a Python script instead
+
+  BLOCKED (will return error):
+  - Shell operators as command separators: &, |, ;, &&, ||, >, <
+  - Command substitution: $(...), `...`
+  - Environment variable expansion: $VAR
+  - Absolute paths in arguments: /etc/passwd
+  - Path traversal: ../secret
+  - Network tools: nc, netcat, telnet, ssh, ftp
+  - Privilege escalation: chmod, chown, su, sudo, eval, exec
+
+  WHEN YOU GET A BLOCKED ERROR: The error message tells you exactly what was blocked.
+  Fix by rewriting as a Python script that does the same thing.
+
+  GOOD examples:
+  {"action": "tool", "tool": "console", "query": "python3 train.py"}
+  {"action": "tool", "tool": "console", "query": "ls -la"}
+  {"action": "tool", "tool": "console", "query": "cat data.csv"}
+  {"action": "tool", "tool": "console", "query": "head -n 5 train.csv"}
+  {"action": "tool", "tool": "console", "query": "unzip data.zip"}
+
+  INSTEAD OF pipe (ls | head), write Python:
+  {"action": "tool", "tool": "files", "op": "write", "path": "check.py", "content": "import os; files = os.listdir('.'); print('\\n'.join(files[:10]))"}
+  {"action": "tool", "tool": "console", "query": "python3 check.py"}
 
 files_tool: |
-  files: Read and write files in sandbox.
-  Input: operation (read/write), path, content (for write)
-  Output: success message or file content
-  
+  files: Read and write files in the sandbox.
+  Input: op (read/write), path, content (for write)
+  Output: file content (read) or success confirmation (write)
+
   Usage:
   {"action": "tool", "tool": "files", "op": "write", "path": "script.py", "content": "print('hello')"}
+  {"action": "tool", "tool": "files", "op": "read", "path": "results.csv"}

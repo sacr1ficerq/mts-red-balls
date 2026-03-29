@@ -42,22 +42,24 @@ update_plan_tool: |
   {"action": "update_plan", "plan_id": "1", "update": {"step_id": 3, "agent": "SearchAgent"}}
 
 delegate_tool: |
-  delegate: Delegate task to an agent.
-  
-  When to use:
-  - For simple single-step tasks
-  - For executing individual steps from a plan
-  - When you don't need planning
-  
+  delegate: Delegate a task to a specialized agent.
+
   Available agents:
-  - CodeAgent: writes and executes Python code
-  
-  Input: agent name, task description
-  
-  Output: agent execution result
-  
+  - CodeAgent: Python code, file ops, console commands, ALL Kaggle tool calls
+  - SearchAgent: web search + RAG knowledge base (ML techniques, feature engineering)
+  - CriticAgent: code review, bug detection, quality check
+  - DataParser: parse data files, profile columns, publish data_profile artifact
+  - DataPreprocessor: EDA, cleaning, scaling, encoding
+  - FeatureEngineer: create new features; reads data_profile artifact
+  - HypothesisGenerator: generate ranked ML hypotheses; reads data_profile artifact
+  - ModelTrainer: train CatBoost models; reads features_train_path artifact
+  - KaggleSubmitter: validate + submit predictions; reads submission_file_path artifact
+
+  Optional: pass context_ids to share prior event results with the sub-agent.
+
   Usage:
   {"action": "delegate", "agent": "CodeAgent", "task": "write hello world"}
+  {"action": "delegate", "agent": "DataParser", "task": "profile train.csv", "context_ids": [3, 7]}
 
 result_tool: |
   done: Return final result to user.

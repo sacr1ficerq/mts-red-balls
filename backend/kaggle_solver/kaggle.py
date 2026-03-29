@@ -80,7 +80,7 @@ class KagglePipeline:
 
     def _train_model(self, competition: str, target_col: str = None) -> Dict:
         code = self._get_train_code(competition, target_col)
-        result = self.sandbox.execute_python(code, timeout=300)
+        result = self.sandbox.execute_python(code, timeout=600)
         
         if not result.success:
             raise Exception(f"Training failed: {result.error}")

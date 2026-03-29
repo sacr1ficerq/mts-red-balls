@@ -1,13 +1,19 @@
 delegate_tool: |
-  delegate: Delegate task to an agent.
+  delegate: Delegate a task to a specialized agent.
+
   Available agents:
-  - SearchAgent: searches web for information (task in English)
-  - CodeAgent: writes and executes Python code
-  - CriticAgent: reviews and validates results
-  
-  Input: agent name, task description
-  Output: agent execution result
-  
+  - CodeAgent: Python code, file ops, console commands, ALL Kaggle tool calls
+  - SearchAgent: web search + RAG knowledge base (ML techniques, feature engineering)
+  - CriticAgent: code review, bug detection, quality check
+  - DataParser: parse data files, profile columns, publish data_profile artifact
+  - DataPreprocessor: EDA, cleaning, scaling, encoding
+  - FeatureEngineer: create new features; reads data_profile artifact
+  - HypothesisGenerator: generate ranked ML hypotheses; reads data_profile artifact
+  - ModelTrainer: train CatBoost models; reads features_train_path artifact
+  - KaggleSubmitter: validate + submit predictions; reads submission_file_path artifact
+
+  Optional: pass context_ids to share prior event results with the sub-agent.
+
   Usage:
-  {"action": "delegate", "agent": "SearchAgent", "task": "what is Python"}
   {"action": "delegate", "agent": "CodeAgent", "task": "write hello world"}
+  {"action": "delegate", "agent": "DataParser", "task": "profile train.csv", "context_ids": [3, 7]}
